@@ -1,21 +1,18 @@
 grammar PigLatin;
 
 // GRAMÁTICA
-init: codex_latinus;
+init: pig_latin;
 
-codex_latinus: (structura_def | variables | munera)* maior;
+pig_latin: import_declaracion* variables? maior;
 
-structura_def: STRUCTURA VARIABLE LLAVE_IZQ miembro_structura* LLAVE_DER FINIS PUNTO_COMA;
+import_declaracion: IMPORT VARIABLE (PUNTO VARIABLE)+ PUNTO_COMA?;
 
-miembro_structura: ESTO VARIABLE DOS_PUNTOS (tipo_dato | VARIABLE) (COMA | PUNTO_COMA)?
-                 | SERIES VARIABLE DOS_PUNTOS (tipo_dato | VARIABLE) (COMA | PUNTO_COMA)?
-                 | SERIES VARIABLE CORCHETE_IZQ NUMERO_ENTERO CORCHETE_DER DOS_PUNTOS (tipo_dato | VARIABLE) (COMA | PUNTO_COMA)?;
-
-variables: VARIABILES MAYOR_QUE (declaracion | arreglo_declaracion | structura_def)+;
+variables: VARIABILES MAYOR_QUE (declaracion | arreglo_declaracion)+;
 
 declaracion: ESTO VARIABLE DOS_PUNTOS? tipo_dato expresion PUNTO_COMA
            | ESTO VARIABLE DOS_PUNTOS? TEXTUM CADENA_TEXTO PUNTO_COMA
            | ESTO VARIABLE DOS_PUNTOS? LITTERA CARACTER PUNTO_COMA
+           | ESTO VARIABLE DOS_PUNTOS? NOVUS VARIABLE PARENTESIS_IZQ argumentos? PARENTESIS_DER PUNTO_COMA
            | ESTO VARIABLE DOS_PUNTOS? VARIABLE structura_instanciacion PUNTO_COMA
            | ESTO VARIABLE DOS_PUNTOS? expresion PUNTO_COMA
            | arreglo_declaracion;
@@ -30,18 +27,9 @@ elemento_arreglo_struct: structura_instanciacion (COMA structura_instanciacion)*
 structura_instanciacion: (VARIABLE)? LLAVE_IZQ atributo_asignacion (COMA atributo_asignacion)* LLAVE_DER
                         | VARIABLE CORCHETE_IZQ NUMERO_ENTERO CORCHETE_DER;
 
-atributo_asignacion: VARIABLE DOS_PUNTOS? (expresion | structura_instanciacion | arreglo_literal);
+atributo_asignacion: VARIABLE DOS_PUNTOS? (expresion | structura_instanciacion | arreglo_literal | NOVUS VARIABLE PARENTESIS_IZQ argumentos? PARENTESIS_DER);
 
 arreglo_literal: LLAVE_IZQ elemento_arreglo? LLAVE_DER;
-
-munera: MUNERA MAYOR_QUE funcion+;
-
-funcion: ratio_funcion
-       | actio_funcion;
-
-ratio_funcion: RATIO tipo_dato VARIABLE PARENTESIS_IZQ parametros? PARENTESIS_DER LLAVE_IZQ variables_locales? sentencia* reddere_sentencia LLAVE_DER FINIS PUNTO_COMA;
-
-actio_funcion: ACTIO VARIABLE PARENTESIS_IZQ parametros? PARENTESIS_DER LLAVE_IZQ variables_locales? sentencia* LLAVE_DER FINIS PUNTO_COMA;
 
 tipo_dato: NUMERUS
          | TEXTUM
@@ -49,18 +37,6 @@ tipo_dato: NUMERUS
          | LITTERA
          | VERUM
          | FALSUS;
-
-parametros: parametro (COMA parametro)*;
-
-parametro: ESTO VARIABLE DOS_PUNTOS? (tipo_dato | VARIABLE);
-
-variables_locales: VARIABILES CORCHETE_IZQ declaracion_local+ CORCHETE_DER;
-
-declaracion_local: ESTO VARIABLE DOS_PUNTOS? tipo_dato expresion PUNTO_COMA
-                 | ESTO VARIABLE DOS_PUNTOS? TEXTUM CADENA_TEXTO PUNTO_COMA
-                 | ESTO VARIABLE DOS_PUNTOS? LITTERA CARACTER PUNTO_COMA
-                 | ESTO VARIABLE DOS_PUNTOS? VARIABLE structura_instanciacion PUNTO_COMA
-                 | ESTO VARIABLE DOS_PUNTOS? expresion PUNTO_COMA;
 
 expresion: termino (operacion_aritmetica termino)*;
 
@@ -72,15 +48,14 @@ termino: VARIABLE
        | CARACTER
        | VERUM
        | FALSUS
-       | llamada_funcion;
+       | llamada_funcion
+       | NOVUS VARIABLE PARENTESIS_IZQ argumentos? PARENTESIS_DER;
 
 acceso_miembro: VARIABLE (PUNTO VARIABLE | CORCHETE_IZQ expresion CORCHETE_DER)+;
 
 arreglo_acceso: VARIABLE CORCHETE_IZQ expresion CORCHETE_DER (PUNTO VARIABLE)*;
 
 operacion_aritmetica: MAS | MENOS | MULTIPLICACION | DIVISION;
-
-reddere_sentencia: REDDERE expresion PUNTO_COMA;
 
 maior: MAIOR MAYOR_QUE sentencia* FINIS PUNTO_COMA;
 
@@ -97,13 +72,12 @@ sentencia: imprimir_sentencia
 
 leer_sentencia: (VARIABLE | acceso_miembro)? LEER;
 
-asignacion_sentencia: (VARIABLE | acceso_miembro) ASIGNACION (expresion | condicion | structura_instanciacion | arreglo_literal) PUNTO_COMA?;
+asignacion_sentencia: (VARIABLE | acceso_miembro) ASIGNACION (expresion | condicion | structura_instanciacion | arreglo_literal | NOVUS VARIABLE PARENTESIS_IZQ argumentos? PARENTESIS_DER) PUNTO_COMA?;
 
 imprimir_sentencia: IMPRIMIR (CADENA_TEXTO | VARIABLE | acceso_miembro | llamada_funcion) (IMPRIMIR (CADENA_TEXTO | VARIABLE | acceso_miembro | llamada_funcion))* PUNTO_COMA?;
 
 si_sentencia: SI PARENTESIS_IZQ condicion PARENTESIS_DER LLAVE_IZQ sentencia* LLAVE_DER aliter_bloque* ((ALITER) LLAVE_IZQ sentencia* LLAVE_DER)? FINIS PUNTO_COMA;
 
-//aliter_bloque: ALITER SI PARENTESIS_IZQ condicion PARENTESIS_DER LLAVE_IZQ sentencia* LLAVE_DER;
 aliter_bloque: ALITER PARENTESIS_IZQ condicion PARENTESIS_DER LLAVE_IZQ sentencia* LLAVE_DER;
 
 ciclo_dum: DUM PARENTESIS_IZQ condicion PARENTESIS_DER LLAVE_IZQ sentencia* LLAVE_DER FINIS PUNTO_COMA;
@@ -152,6 +126,7 @@ argumentos: expresion (COMA expresion)*;
 
 // LEXER
 // Palabras clave
+IMPORT: 'import';
 ESTO: 'esto';
 SERIES: 'series';
 STRUCTURA: 'structura';
@@ -169,6 +144,7 @@ REDDERE: 'reddere';
 VARIABILES: 'VARIABILES';
 MUNERA: 'MUNERA';
 MAIOR: 'MAIOR';
+NOVUS: 'novus';
 
 // Palabras clave para tipos de datos
 NUMERUS: 'numerus';
@@ -189,7 +165,7 @@ PUNTO: '.';
 LEER: '<<';
 IMPRIMIR: '>>';
 
-// Delimitadores de arreglos y  bloques
+// Delimitadores de arreglos y bloques
 PARENTESIS_IZQ: '(';
 PARENTESIS_DER: ')';
 CORCHETE_IZQ: '[';
