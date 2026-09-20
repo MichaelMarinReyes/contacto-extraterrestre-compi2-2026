@@ -1,9 +1,5 @@
 package com.compi.frontend;
 
-import codex_latinus.backend.Compiler;
-import codex_latinus.backend.errors.CompilationError;
-import codex_latinus.backend.stack.StackState;
-import codex_latinus.backend.symbols.SymbolTable;
 import java.awt.BorderLayout;
 import java.awt.Color;
 import java.awt.Cursor;
@@ -43,7 +39,7 @@ public class EditorPanel extends javax.swing.JPanel {
     private JLabel statusLabel;
     private JButton compileButton;
     private LineNumberComponent lineNumberComponent;
-    private final Compiler compiler = new Compiler();
+    //private final Compiler compiler = new Compiler();
     private String result = "";
     private boolean isUpdatingHighlight = false;
     private Color colorSecciones;
@@ -191,6 +187,7 @@ public class EditorPanel extends javax.swing.JPanel {
 
         statusLabel = new JLabel("Línea: 1 | Columna: 1");
         statusLabel.setFont(new Font("SansSerif", Font.PLAIN, 12));
+        statusLabel.setForeground(Color.BLACK);
         statusPanel.add(statusLabel, BorderLayout.EAST);
 
         // SplitPane principal separando Editor y Consola Tabulada
@@ -294,7 +291,7 @@ public class EditorPanel extends javax.swing.JPanel {
     }
 
     private void compileButtonActionPerformed(ActionEvent evt) {
-        pigLatinConsole.setText("");
+      /*  pigLatinConsole.setText("");
         executionConsole.setText("");
         String codigoFuente = codeTextArea.getText();
 
@@ -329,14 +326,14 @@ public class EditorPanel extends javax.swing.JPanel {
 
             executionConsole.setForeground(Color.RED);
             executionConsole.setText("Error en la ejecución:\n" + ex.getMessage());
-        }
+        }*/
     }
 
     public void clearConsole() {
         pigLatinConsole.setText("");
         executionConsole.setText("");
     }
-
+/*
     public SymbolTable getSymbolTable() {
         return compiler.getSymbolTable();
     }
@@ -351,5 +348,5 @@ public class EditorPanel extends javax.swing.JPanel {
 
     public List<StackState> getLastStackSteps() {
         return compiler.getLastStackSteps();
-    }
+    }*/
 }

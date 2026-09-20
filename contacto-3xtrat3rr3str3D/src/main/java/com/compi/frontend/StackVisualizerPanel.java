@@ -1,6 +1,5 @@
 package com.compi.frontend;
 
-import codex_latinus.backend.stack.StackState;
 import java.awt.BorderLayout;
 import java.awt.Color;
 import java.awt.Dimension;
@@ -23,7 +22,7 @@ import javax.swing.JTextArea;
  */
 public class StackVisualizerPanel extends javax.swing.JPanel {
 
-    private List<StackState> stackStates = new ArrayList<>();
+    //private List<StackState> stackStates = new ArrayList<>();
     private JPanel stackDrawPanel;
     private JTextArea logTextArea;
     private JSplitPane splitPane;
@@ -67,7 +66,7 @@ public class StackVisualizerPanel extends javax.swing.JPanel {
             @Override
             protected void paintComponent(Graphics g) {
                 super.paintComponent(g);
-                drawAllSteps(g);
+                //drawAllSteps(g);
             }
         };
         stackDrawPanel.setBackground(Color.WHITE);
@@ -102,7 +101,7 @@ public class StackVisualizerPanel extends javax.swing.JPanel {
 
         this.add(splitPane, BorderLayout.CENTER);
     }
-
+/*
     public void loadStates(List<StackState> states) {
         this.stackStates = states != null ? states : new ArrayList<>();
 
@@ -246,5 +245,5 @@ public class StackVisualizerPanel extends javax.swing.JPanel {
 
             startX += colWidth;
         }
-    }
+    }*/
 }

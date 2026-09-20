@@ -1,6 +1,5 @@
 package com.compi.frontend;
 
-import codex_latinus.backend.errors.CompilationError;
 import java.awt.BorderLayout;
 import java.awt.Font;
 import java.util.List;
@@ -28,7 +27,7 @@ public class ErrorTablePanel extends javax.swing.JPanel {
     public ErrorTablePanel() {
         initComponents();
         initCustomComponents();
-        loadErrors(null);
+        //loadErrors(null);
     }
 
     /**
@@ -87,7 +86,7 @@ public class ErrorTablePanel extends javax.swing.JPanel {
     /**
      * Carga o actualiza la lista de errores en el modelo de la tabla.
      * Si no hay errores, muestra un mensaje creativo en lugar de una tabla vacía.
-     */
+     *//*
     public void loadErrors(List<CompilationError> errors) {
         removeAll(); // Limpia el panel actual
 
@@ -113,5 +112,5 @@ public class ErrorTablePanel extends javax.swing.JPanel {
 
         revalidate();
         repaint();
-    }
+    }*/
 }

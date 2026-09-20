@@ -1,11 +1,5 @@
 package com.compi.frontend;
 
-import codex_latinus.backend.Compiler;
-import codex_latinus.backend.errors.CompilationError;
-import codex_latinus.backend.stack.StackState;
-import codex_latinus.backend.symbols.Scope;
-import codex_latinus.backend.symbols.Symbol;
-import codex_latinus.backend.symbols.SymbolTable;
 import java.awt.Color;
 import java.awt.Dimension;
 import java.io.File;
@@ -13,9 +7,6 @@ import java.io.FileWriter;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.stream.Collectors;
 import javax.swing.JFileChooser;
 import javax.swing.JFrame;
 import javax.swing.JOptionPane;
@@ -31,7 +22,7 @@ public class MainWindow extends javax.swing.JFrame {
 
     private static final String navText = "Codex Latinus";
     private final EditorPanel editorPanel = new EditorPanel();
-    private Compiler compiler = new Compiler();
+   // private Compiler compiler = new Compiler();
     private ParserTreePanel treePanel = new ParserTreePanel();
     private final StackVisualizerPanel stackVisualizerPanel = new StackVisualizerPanel();
 
@@ -248,7 +239,7 @@ public class MainWindow extends javax.swing.JFrame {
         editorPanel.setCodeText("");
         editorPanel.setConsoleTextArea("");
         editorPanel.setResult("");
-        compiler = new Compiler();
+        //compiler = new Compiler();
 
         paintPanel(editorPanel);
         navText("Editor de código");
@@ -290,7 +281,7 @@ public class MainWindow extends javax.swing.JFrame {
             try {
                 String contenido = new String(Files.readAllBytes(fileToOpen.toPath()), StandardCharsets.UTF_8);
 
-                compiler = new Compiler();
+                //compiler = new Compiler();
                 editorPanel.setResult("");
 
                 paintPanel(editorPanel);
@@ -309,15 +300,15 @@ public class MainWindow extends javax.swing.JFrame {
     }//GEN-LAST:event_openFileButtonActionPerformed
 
     private void astButtonActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_astButtonActionPerformed
-        String dotContent = editorPanel.getLastDotCode();
+        /*String dotContent = editorPanel.getLastDotCode();
 
         treePanel.renderGraph(dotContent);
         paintPanel(treePanel);
-        navText("Árbol AST");
+        navText("Árbol AST");*/
     }//GEN-LAST:event_astButtonActionPerformed
 
     private void symbolTableButtonActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_symbolTableButtonActionPerformed
-        SymbolTable table = editorPanel.getSymbolTable();
+        /*SymbolTable table = editorPanel.getSymbolTable();
         List<Symbol> allSymbols = new ArrayList<>();
 
         if (table != null && table.getCurrentScope() != null) {
@@ -327,11 +318,11 @@ public class MainWindow extends javax.swing.JFrame {
         SymbolTablePanel panel = new SymbolTablePanel();
         panel.loadSymbols(allSymbols);
         paintPanel(panel);
-        navText("Tabla de símbolos");
+        navText("Tabla de símbolos");*/
     }//GEN-LAST:event_symbolTableButtonActionPerformed
 
     private void lexerErrorButtonActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_lexerErrorButtonActionPerformed
-        List<CompilationError> allErrors = editorPanel.getCompilationErrors();
+       /* List<CompilationError> allErrors = editorPanel.getCompilationErrors();
         List<CompilationError> lexicalErrors = new ArrayList<>();
 
         if (allErrors != null) {
@@ -343,11 +334,11 @@ public class MainWindow extends javax.swing.JFrame {
         ErrorTablePanel panel = new ErrorTablePanel();
         panel.loadErrors(lexicalErrors);
         paintPanel(panel);
-        navText("Tabla de errores léxicos");
+        navText("Tabla de errores léxicos");*/
     }//GEN-LAST:event_lexerErrorButtonActionPerformed
 
     private void sintaxErrorButton1ActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_sintaxErrorButton1ActionPerformed
-        List<CompilationError> allErrors = editorPanel.getCompilationErrors();
+        /*List<CompilationError> allErrors = editorPanel.getCompilationErrors();
         List<CompilationError> syntaxErrors = new ArrayList<>();
 
         if (allErrors != null) {
@@ -359,11 +350,11 @@ public class MainWindow extends javax.swing.JFrame {
         ErrorTablePanel panel = new ErrorTablePanel();
         panel.loadErrors(syntaxErrors);
         paintPanel(panel);
-        navText("Tabla de errores sintácticos");
+        navText("Tabla de errores sintácticos");*/
     }//GEN-LAST:event_sintaxErrorButton1ActionPerformed
 
     private void semanticErrorButton1ActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_semanticErrorButton1ActionPerformed
-        List<CompilationError> allErrors = editorPanel.getCompilationErrors();
+       /* List<CompilationError> allErrors = editorPanel.getCompilationErrors();
         List<CompilationError> semanticErrors = new ArrayList<>();
 
         if (allErrors != null) {
@@ -375,15 +366,15 @@ public class MainWindow extends javax.swing.JFrame {
         ErrorTablePanel panel = new ErrorTablePanel();
         panel.loadErrors(semanticErrors);
         paintPanel(panel);
-        navText("Tabla errores semánticos");
+        navText("Tabla errores semánticos");*/
     }//GEN-LAST:event_semanticErrorButton1ActionPerformed
 
     private void stackButtonActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_stackButtonActionPerformed
-        List<StackState> steps = editorPanel.getLastStackSteps();
+       /* List<StackState> steps = editorPanel.getLastStackSteps();
 
         stackVisualizerPanel.loadStates(steps);
         paintPanel(stackVisualizerPanel);
-        navText("Pila de procesos");
+        navText("Pila de procesos");*/
     }//GEN-LAST:event_stackButtonActionPerformed
 
     private void editTextButtonActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_editTextButtonActionPerformed
@@ -445,7 +436,7 @@ public class MainWindow extends javax.swing.JFrame {
         paintPanel(editorPanel);
         navText("Editor de código");
     }
-
+/*
     private void collectSymbolsRecursive(Scope scope, List<Symbol> list) {
         if (scope == null) {
             return;
@@ -454,7 +445,7 @@ public class MainWindow extends javax.swing.JFrame {
         if (scope.getSymbols() != null) {
             list.addAll(scope.getSymbols().values());
         }
-    }
+    }*/
 
     private boolean saveFilesAction() {
         JFileChooser fileChooser = new JFileChooser();
@@ -503,7 +494,7 @@ public class MainWindow extends javax.swing.JFrame {
                     writer.write(codeContent);
                 }
 
-                compiler.parseCode(codeContent);
+                //compiler.parseCode(codeContent);
                 String pigContent = editorPanel.getResult() != null ? editorPanel.getResult() : "";
 
                 try (FileWriter writerPig = new FileWriter(pigFile, StandardCharsets.UTF_8)) {

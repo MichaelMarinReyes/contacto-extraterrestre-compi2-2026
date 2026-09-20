@@ -1,8 +1,5 @@
 package com.compi.frontend;
 
-import codex_latinus.backend.symbols.Symbol;
-import codex_latinus.backend.symbols.TypeInfo;
-import codex_latinus.backend.symbols.TypeTable;
 import java.awt.BorderLayout;
 import java.util.List;
 import javax.swing.JScrollPane;
@@ -67,7 +64,7 @@ public class SymbolTablePanel extends javax.swing.JPanel {
 
         this.add(scrollPane, BorderLayout.CENTER);
     }
-
+/*
     public void loadSymbols(List<Symbol> symbols, TypeTable typeTable) {
         tableModel.setRowCount(0);
         if (symbols != null) {
@@ -100,9 +97,9 @@ public class SymbolTablePanel extends javax.swing.JPanel {
                 tableModel.addRow(row);
             }
         }
-    }
-
+    }*/
+/*
     public void loadSymbols(List<Symbol> symbols) {
         loadSymbols(symbols, null);
-    }
+    }*/
 }
