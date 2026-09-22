@@ -1,4 +1,28 @@
 package com.compi.backend.languages.piglatin.ast.sentence;
 
-public class ArrayDeclaration {
+import com.compi.backend.languages.piglatin.ast.NodeASTPig;
+import com.compi.backend.languages.piglatin.ast.PigLatinVisitorCustom;
+import lombok.Builder;
+import lombok.Getter;
+import lombok.Setter;
+
+@Getter
+@Setter
+public class ArrayDeclaration extends NodeASTPig {
+    private String name;       // Nombre o identificador del arreglo (ej: "miArreglo")
+    private String dataType;   // Tipo de dato que contendrá el arreglo (ej: "int", "string")
+    private NodeASTPig expression;// Expresión que define el tamaño inicial o los valores por defecto
+
+    @Builder
+    public ArrayDeclaration(String name, String dataType, NodeASTPig expression, int line, int column) {
+        super(line, column);
+        this.name = name;
+        this.dataType = dataType;
+        this.expression = expression;
+    }
+
+    @Override
+    public Object accept(PigLatinVisitorCustom visitor, Object arg) {
+        return visitor.visit(this, arg);
+    }
 }

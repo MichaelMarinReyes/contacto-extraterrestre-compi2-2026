@@ -1,24 +1,18 @@
-package com.compi.backend.languages.y.ast.definitions;
+package com.compi.backend.languages.y.ast.statements;
 
 import com.compi.backend.languages.y.ast.NodeASTY;
 import com.compi.backend.languages.y.ast.YVisitorCustom;
 import lombok.Builder;
-import lombok.Getter;
-import lombok.Setter;
 
-import java.util.List;
-
-@Getter
-@Setter
-public class StructDef extends NodeASTY {
+public class AssignmentY extends NodeASTY {
     private String name;
-    private List<NodeASTY> fields;
+    private NodeASTY expression;
 
     @Builder
-    public StructDef(String name, List<NodeASTY> fields, int line, int column) {
+    public AssignmentY(String name, NodeASTY expression, int line, int column) {
         super(line, column);
         this.name = name;
-        this.fields = fields;
+        this.expression = expression;
     }
 
     @Override

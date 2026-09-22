@@ -1,4 +1,4 @@
-package com.compi.backend.languages.piglatin.ast.sentence;
+package com.compi.backend.languages.piglatin.ast.expressions;
 
 import com.compi.backend.languages.piglatin.ast.NodeASTPig;
 import com.compi.backend.languages.piglatin.ast.PigLatinVisitorCustom;
@@ -10,15 +10,15 @@ import java.util.List;
 
 @Getter
 @Setter
-public class DumLoop extends NodeASTPig {
-    private NodeASTPig condition;
-    private List<NodeASTPig> body;
+@Builder
+public class FunctionCallPig extends NodeASTPig {
+    private String functionName;
+    private List<NodeASTPig> arguments;
 
-    @Builder
-    public DumLoop(NodeASTPig condition, List<NodeASTPig> body, int line, int column) {
+    public FunctionCallPig(String functionName, List<NodeASTPig> arguments, int line, int column) {
         super(line, column);
-        this.condition = condition;
-        this.body = body;
+        this.functionName = functionName;
+        this.arguments = arguments;
     }
 
     @Override

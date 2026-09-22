@@ -1,4 +1,4 @@
-package com.compi.backend.languages.piglatin.ast.sentence;
+package com.compi.backend.languages.piglatin.ast.expressions;
 
 import com.compi.backend.languages.piglatin.ast.NodeASTPig;
 import com.compi.backend.languages.piglatin.ast.PigLatinVisitorCustom;
@@ -6,19 +6,18 @@ import lombok.Builder;
 import lombok.Getter;
 import lombok.Setter;
 
-import java.util.List;
-
 @Getter
 @Setter
-public class DumLoop extends NodeASTPig {
-    private NodeASTPig condition;
-    private List<NodeASTPig> body;
+@Builder
+public class MemberAccessPig extends NodeASTPig {
+    private NodeASTPig object;
+    private String property;
 
     @Builder
-    public DumLoop(NodeASTPig condition, List<NodeASTPig> body, int line, int column) {
+    public MemberAccessPig(NodeASTPig object, String property, int line, int column) {
         super(line, column);
-        this.condition = condition;
-        this.body = body;
+        this.object = object;
+        this.property = property;
     }
 
     @Override

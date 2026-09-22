@@ -1,4 +1,4 @@
-package com.compi.backend.languages.y.ast.definitions;
+package com.compi.backend.languages.y.ast.statements;
 
 import com.compi.backend.languages.y.ast.NodeASTY;
 import com.compi.backend.languages.y.ast.YVisitorCustom;
@@ -10,18 +10,14 @@ import java.util.List;
 
 @Getter
 @Setter
-public class FunctionDef extends NodeASTY {
-    private String returnType;
-    private String name;
-    private List<NodeASTY> parameters;
+public class SwitchCaseY extends NodeASTY {
+    private NodeASTY value;
     private List<NodeASTY> body;
 
     @Builder
-    public FunctionDef(String returnType, String name, List<NodeASTY> parameters, List<NodeASTY> body, int line, int column) {
+    public SwitchCaseY(NodeASTY value, List<NodeASTY> body, int line, int column) {
         super(line, column);
-        this.returnType = returnType;
-        this.name = name;
-        this.parameters = parameters;
+        this.value = value;
         this.body = body;
     }
 
@@ -30,3 +26,4 @@ public class FunctionDef extends NodeASTY {
         return visitor.visit(this, arg);
     }
 }
+

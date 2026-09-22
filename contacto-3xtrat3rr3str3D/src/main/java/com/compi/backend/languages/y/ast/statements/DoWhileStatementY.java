@@ -1,4 +1,4 @@
-package com.compi.backend.languages.y.ast.definitions;
+package com.compi.backend.languages.y.ast.statements;
 
 import com.compi.backend.languages.y.ast.NodeASTY;
 import com.compi.backend.languages.y.ast.YVisitorCustom;
@@ -10,19 +10,15 @@ import java.util.List;
 
 @Getter
 @Setter
-public class FunctionDef extends NodeASTY {
-    private String returnType;
-    private String name;
-    private List<NodeASTY> parameters;
+public class DoWhileStatementY extends NodeASTY {
     private List<NodeASTY> body;
+    private NodeASTY condition;
 
     @Builder
-    public FunctionDef(String returnType, String name, List<NodeASTY> parameters, List<NodeASTY> body, int line, int column) {
+    public DoWhileStatementY(List<NodeASTY> body, NodeASTY condition, int line, int column) {
         super(line, column);
-        this.returnType = returnType;
-        this.name = name;
-        this.parameters = parameters;
         this.body = body;
+        this.condition = condition;
     }
 
     @Override
