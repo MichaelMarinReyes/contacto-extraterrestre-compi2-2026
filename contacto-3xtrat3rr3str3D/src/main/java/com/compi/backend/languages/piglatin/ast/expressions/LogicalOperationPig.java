@@ -8,7 +8,6 @@ import lombok.Setter;
 
 @Getter
 @Setter
-@Builder
 public class LogicalOperationPig extends NodeASTPig {
     private NodeASTPig left;
     private String operator;

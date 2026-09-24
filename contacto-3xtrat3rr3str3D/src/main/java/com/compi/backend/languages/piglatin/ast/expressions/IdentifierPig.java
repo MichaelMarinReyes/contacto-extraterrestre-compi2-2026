@@ -8,10 +8,10 @@ import lombok.Setter;
 
 @Getter
 @Setter
-@Builder
 public class IdentifierPig extends NodeASTPig {
     private String name;
 
+    @Builder
     public IdentifierPig(String name, int line, int column) {
         super(line, column);
         this.name = name;

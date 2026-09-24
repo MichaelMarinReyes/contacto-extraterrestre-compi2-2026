@@ -1,6 +1,7 @@
 package com.compi.backend.languages.piglatin.ast.expressions;
 
-import com.compi.backend.languages.piglatin.ast.NodeASTPig;
+import com.compi.backend.languages.base.ast.ArithmeticOperation;
+import com.compi.backend.languages.base.ast.NodeAST;
 import com.compi.backend.languages.piglatin.ast.PigLatinVisitorCustom;
 import lombok.Builder;
 import lombok.Getter;
@@ -8,20 +9,13 @@ import lombok.Setter;
 
 @Getter
 @Setter
-@Builder
-public class ArithmeticOperationPig extends NodeASTPig {
-    private NodeASTPig left;
-    private String operator;
-    private NodeASTPig right;
+public class ArithmeticOperationPig extends ArithmeticOperation {
 
-    public ArithmeticOperationPig(NodeASTPig left, String operator, NodeASTPig right, int line, int column) {
-        super(line, column);
-        this.left = left;
-        this.operator = operator;
-        this.right = right;
+    @Builder
+    public ArithmeticOperationPig(NodeAST left, String operator, NodeAST right, int line, int column) {
+        super(left, operator, right, line, column);
     }
 
-    @Override
     public Object accept(PigLatinVisitorCustom visitor, Object arg) {
         return visitor.visit(this, arg);
     }

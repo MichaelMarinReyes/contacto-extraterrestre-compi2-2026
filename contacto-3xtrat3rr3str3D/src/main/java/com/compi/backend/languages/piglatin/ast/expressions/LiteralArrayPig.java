@@ -1,6 +1,6 @@
 package com.compi.backend.languages.piglatin.ast.expressions;
-
 import com.compi.backend.languages.piglatin.ast.NodeASTPig;
+
 import com.compi.backend.languages.piglatin.ast.PigLatinVisitorCustom;
 import lombok.Builder;
 import lombok.Getter;
@@ -10,7 +10,6 @@ import java.util.List;
 
 @Getter
 @Setter
-@Builder
 public class LiteralArrayPig extends NodeASTPig {
     private List<NodeASTPig> elements;
 

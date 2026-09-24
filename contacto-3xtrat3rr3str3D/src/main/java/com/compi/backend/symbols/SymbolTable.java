@@ -11,10 +11,16 @@ public class SymbolTable {
     private final Map<String, Symbol> structs = new HashMap<>();
     private final Map<String, Symbol> classes = new HashMap<>();
     private final Map<String, Symbol> functions = new HashMap<>();
+    private final TypeTable typeTable;
 
     public SymbolTable() {
         this.globalScope = new Scope("global", null);
         this.currentScope = this.globalScope;
+        this.typeTable = new TypeTable();
+    }
+
+    public TypeTable getTypeTable() {
+        return typeTable;
     }
 
     public void enterScope(String name) {
@@ -41,6 +47,21 @@ public class SymbolTable {
 
     public boolean define(Symbol symbol) {
         return currentScope.define(symbol);
+    }
+
+    public boolean defineByTypeName(String name, String typeName, SymbolCategory category) {
+        Type type = typeTable.resolve(typeName);
+        if (type == null) {
+            // crear tipo personalizado si no está en la tabla
+            type = new Type(DataType.UNKNOWN, typeName);
+            typeTable.define(typeName, type);
+        }
+        Symbol symbol = new Symbol(name, type, category);
+        return currentScope.define(symbol);
+    }
+
+    public Type resolveType(String typeName) {
+        return typeTable.resolve(typeName);
     }
 
     public Symbol resolve(String name) {

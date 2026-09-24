@@ -1,6 +1,6 @@
 package com.compi.backend.languages.zetariano.ast.statements;
-
 import com.compi.backend.languages.zetariano.ast.NodeASTZet;
+
 import com.compi.backend.languages.zetariano.ast.ZetarianVisitorCustom;
 import lombok.Builder;
 import lombok.Getter;

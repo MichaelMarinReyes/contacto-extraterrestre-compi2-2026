@@ -8,11 +8,11 @@ import lombok.Setter;
 
 @Getter
 @Setter
-@Builder
 public class AccessArrayPig extends NodeASTPig {
     private NodeASTPig array;
     private NodeASTPig index;
 
+    @Builder
     public AccessArrayPig(NodeASTPig array, NodeASTPig index, int line, int column) {
         super(line, column);
         this.array = array;

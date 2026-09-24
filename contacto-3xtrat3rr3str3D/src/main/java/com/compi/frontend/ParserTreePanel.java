@@ -22,7 +22,7 @@ import javax.swing.SwingConstants;
  *
  * @author michael
  */
-public class ParserTreePanel extends javax.swing.JPanel {
+public class ParserTreePanel extends JPanel {
 
     private ZoomableImagePanel imagePanel;
     private JScrollPane scrollPane;

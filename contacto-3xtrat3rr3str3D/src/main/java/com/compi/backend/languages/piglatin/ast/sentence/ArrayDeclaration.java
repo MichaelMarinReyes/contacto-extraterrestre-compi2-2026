@@ -9,9 +9,9 @@ import lombok.Setter;
 @Getter
 @Setter
 public class ArrayDeclaration extends NodeASTPig {
-    private String name;       // Nombre o identificador del arreglo (ej: "miArreglo")
-    private String dataType;   // Tipo de dato que contendrá el arreglo (ej: "int", "string")
-    private NodeASTPig expression;// Expresión que define el tamaño inicial o los valores por defecto
+    private String name;
+    private String dataType;
+    private NodeASTPig expression;
 
     @Builder
     public ArrayDeclaration(String name, String dataType, NodeASTPig expression, int line, int column) {

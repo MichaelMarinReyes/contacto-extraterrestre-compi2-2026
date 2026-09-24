@@ -1,6 +1,7 @@
 package com.compi.backend.languages.y.ast.expressions;
 
-import com.compi.backend.languages.y.ast.NodeASTY;
+import com.compi.backend.languages.base.ast.ArithmeticOperation;
+import com.compi.backend.languages.base.ast.NodeAST;
 import com.compi.backend.languages.y.ast.YVisitorCustom;
 import lombok.Builder;
 import lombok.Getter;
@@ -8,20 +9,13 @@ import lombok.Setter;
 
 @Getter
 @Setter
-public class ArithmeticOperationY extends NodeASTY {
-    private NodeASTY left;
-    private String operator;
-    private NodeASTY right;
+public class ArithmeticOperationY extends ArithmeticOperation {
 
     @Builder
-    public ArithmeticOperationY(NodeASTY left, String operator, NodeASTY right, int line, int column) {
-        super(line, column);
-        this.left = left;
-        this.operator = operator;
-        this.right = right;
+    public ArithmeticOperationY(NodeAST left, String operator, NodeAST right, int line, int column) {
+        super(left, operator, right, line, column);
     }
 
-    @Override
     public Object accept(YVisitorCustom visitor, Object arg) {
         return visitor.visit(this, arg);
     }

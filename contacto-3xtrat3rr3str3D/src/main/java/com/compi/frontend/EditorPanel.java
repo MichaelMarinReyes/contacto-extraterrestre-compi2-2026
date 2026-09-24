@@ -30,11 +30,12 @@ import javax.swing.text.StyledDocument;
  *
  * @author michael
  */
-public class EditorPanel extends javax.swing.JPanel {
+public class EditorPanel extends JPanel {
 
     private JTextPane codeTextArea;
     private JTextArea pigLatinConsole;
     private JTextArea executionConsole;
+    private JTextArea c3dConsole;
     private JTabbedPane consoleTabbedPane;
     private JLabel statusLabel;
     private JButton compileButton;
@@ -96,6 +97,54 @@ public class EditorPanel extends javax.swing.JPanel {
         this.result = text;
     }
 
+    // ===== Terminal de salida =====
+
+    public String getTerminalText() {
+        return executionConsole != null ? executionConsole.getText() : "";
+    }
+
+    public void setTerminalText(String text) {
+        if (executionConsole != null) {
+            executionConsole.setText(text);
+        }
+    }
+
+    public void appendTerminal(String text) {
+        if (executionConsole != null) {
+            executionConsole.append(text + "\n");
+        }
+    }
+
+    // ===== Consola Código de 3 direcciones =====
+
+    public String getC3DText() {
+        return c3dConsole != null ? c3dConsole.getText() : "";
+    }
+
+    public void setC3DText(String text) {
+        if (c3dConsole != null) {
+            c3dConsole.setText(text);
+        }
+    }
+
+    public void appendC3D(String text) {
+        if (c3dConsole != null) {
+            c3dConsole.append(text + "\n");
+        }
+    }
+
+    /**
+     * Muestra la pestaña "Código 3D" en las consolas del editor.
+     */
+    public void showC3DTab() {
+        if (consoleTabbedPane != null) {
+            int index = consoleTabbedPane.indexOfTab("Código 3D");
+            if (index >= 0) {
+                consoleTabbedPane.setSelectedIndex(index);
+            }
+        }
+    }
+
     /**
      * Método de compatibilidad para establecer texto en las consolas desde
      * MainWindow.
@@ -155,7 +204,7 @@ public class EditorPanel extends javax.swing.JPanel {
         pigLatinConsole.setForeground(new Color(220, 220, 220));
         JScrollPane pigLatinScroll = new JScrollPane(pigLatinConsole);
 
-        // Consola Pestaña 2: Ejecución
+        // Consola Pestaña 2: Ejecución (terminal de salida del programa)
         executionConsole = new JTextArea();
         executionConsole.setFont(new Font("Monospaced", Font.PLAIN, 13));
         executionConsole.setEditable(false);
@@ -163,10 +212,19 @@ public class EditorPanel extends javax.swing.JPanel {
         executionConsole.setForeground(new Color(220, 220, 220));
         JScrollPane executionScroll = new JScrollPane(executionConsole);
 
+        // Consola Pestaña 3: Código de tres direcciones
+        c3dConsole = new JTextArea();
+        c3dConsole.setFont(new Font("Monospaced", Font.PLAIN, 13));
+        c3dConsole.setEditable(false);
+        c3dConsole.setBackground(new Color(25, 25, 35));
+        c3dConsole.setForeground(new Color(180, 220, 255));
+        JScrollPane c3dScroll = new JScrollPane(c3dConsole);
+
         // Panel con pestañas para la consola
         consoleTabbedPane = new JTabbedPane();
+        consoleTabbedPane.addTab("Terminal", executionScroll);
         consoleTabbedPane.addTab("PigLatin", pigLatinScroll);
-        consoleTabbedPane.addTab("Ejecución", executionScroll);
+        consoleTabbedPane.addTab("Código 3D", c3dScroll);
         consoleTabbedPane.setBorder(BorderFactory.createTitledBorder(" Consola de Resultados "));
 
         // Barra de estado y botón compilar (Área inferior)
@@ -177,7 +235,7 @@ public class EditorPanel extends javax.swing.JPanel {
         compileButton = new JButton("Compilar y Ejecutar");
         compileButton.setBackground(new Color(46, 139, 87));
         compileButton.setForeground(Color.WHITE);
-        compileButton.setCursor(new java.awt.Cursor(Cursor.HAND_CURSOR));
+        compileButton.setCursor(new Cursor(Cursor.HAND_CURSOR));
         compileButton.addActionListener(e -> compileButtonActionPerformed(e));
 
         JPanel leftStatusPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 0, 0));
@@ -332,6 +390,9 @@ public class EditorPanel extends javax.swing.JPanel {
     public void clearConsole() {
         pigLatinConsole.setText("");
         executionConsole.setText("");
+        if (c3dConsole != null) {
+            c3dConsole.setText("");
+        }
     }
 /*
     public SymbolTable getSymbolTable() {

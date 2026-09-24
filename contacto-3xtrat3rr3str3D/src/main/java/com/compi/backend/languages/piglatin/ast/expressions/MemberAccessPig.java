@@ -8,7 +8,6 @@ import lombok.Setter;
 
 @Getter
 @Setter
-@Builder
 public class MemberAccessPig extends NodeASTPig {
     private NodeASTPig object;
     private String property;

@@ -20,7 +20,7 @@ import javax.swing.JTextArea;
  *
  * @author michael
  */
-public class StackVisualizerPanel extends javax.swing.JPanel {
+public class StackVisualizerPanel extends JPanel {
 
     //private List<StackState> stackStates = new ArrayList<>();
     private JPanel stackDrawPanel;

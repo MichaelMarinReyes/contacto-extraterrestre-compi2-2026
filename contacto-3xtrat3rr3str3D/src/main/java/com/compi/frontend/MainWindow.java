@@ -18,25 +18,63 @@ import javax.swing.filechooser.FileNameExtensionFilter;
  *
  * @author michael
  */
-public class MainWindow extends javax.swing.JFrame {
+public class MainWindow extends JFrame {
 
-    private static final String navText = "Codex Latinus";
+    private static final String navText = "Contacto 3xtrat3rr3str3D";
     private final EditorPanel editorPanel = new EditorPanel();
    // private Compiler compiler = new Compiler();
-    private ParserTreePanel treePanel = new ParserTreePanel();
     private final StackVisualizerPanel stackVisualizerPanel = new StackVisualizerPanel();
+    private JPanel contentArea;
+    private File currentFile;
 
     /**
      * Creates new form MainWindow
      */
     public MainWindow() {
         initComponents();
-        setTitle("Codex Latinus");
+        setTitle("Contacto 3xtrat3rr3str3D");
         setMinimumSize(new Dimension(685, 461));
         setExtendedState(JFrame.MAXIMIZED_BOTH);
+        initContentLayout();
         initStyles();
         navText("");
         initialPanel();
+    }
+
+    /**
+     * Arma el área de contenido con el árbol de archivos a la izquierda y el
+     * panel activo (editor, AST, tablas, pila) a la derecha.
+     */
+    private void initContentLayout() {
+        contentArea = new JPanel(new java.awt.BorderLayout());
+        contentArea.setBackground(new Color(240, 240, 240));
+
+        contentPane.removeAll();
+        contentPane.setLayout(new java.awt.BorderLayout());
+        contentPane.add(contentArea, java.awt.BorderLayout.CENTER);
+        contentPane.revalidate();
+        contentPane.repaint();
+    }
+
+    /**
+     * Carga el archivo seleccionado en el árbol de archivos.
+     */
+    private void loadFileFromTree(File file) {
+        try {
+            String contenido = new String(Files.readAllBytes(file.toPath()), StandardCharsets.UTF_8);
+            currentFile = file;
+            editorPanel.setResult("");
+            editorPanel.setCodeText(contenido);
+            editorPanel.setConsoleTextArea("");
+            editorPanel.setC3DText("");
+            paintPanel(editorPanel);
+            navText("Editor de código / ");
+        } catch (IOException e) {
+            JOptionPane.showMessageDialog(this,
+                    "Error al leer el archivo: " + e.getMessage(),
+                    "Error",
+                    JOptionPane.ERROR_MESSAGE);
+        }
     }
 
     /**
@@ -47,10 +85,9 @@ public class MainWindow extends javax.swing.JFrame {
     @SuppressWarnings("unchecked")
     // <editor-fold defaultstate="collapsed" desc="Generated Code">//GEN-BEGIN:initComponents
     private void initComponents() {
+        java.awt.GridBagConstraints gridBagConstraints;
 
         sidebarPanel = new javax.swing.JPanel();
-        menuLabel = new javax.swing.JLabel();
-        jSeparator1 = new javax.swing.JSeparator();
         openFileButton = new javax.swing.JButton();
         saveFileButton = new javax.swing.JButton();
         astButton = new javax.swing.JButton();
@@ -58,157 +95,168 @@ public class MainWindow extends javax.swing.JFrame {
         stackButton = new javax.swing.JButton();
         newFileButton = new javax.swing.JButton();
         lexerErrorButton = new javax.swing.JButton();
-        sintaxErrorButton1 = new javax.swing.JButton();
-        semanticErrorButton1 = new javax.swing.JButton();
-        editTextButton = new javax.swing.JButton();
+        optionSelectedLabel = new javax.swing.JLabel();
+        jSeparator1 = new javax.swing.JSeparator();
         contentPane = new javax.swing.JPanel();
-        navTextLabel = new javax.swing.JLabel();
+        fileTreePanel = new javax.swing.JPanel();
 
         setDefaultCloseOperation(javax.swing.WindowConstants.EXIT_ON_CLOSE);
 
         sidebarPanel.setLayout(new org.netbeans.lib.awtextra.AbsoluteLayout());
 
-        menuLabel.setHorizontalAlignment(javax.swing.SwingConstants.CENTER);
-        menuLabel.setText("Menú de opciones");
-        menuLabel.setHorizontalTextPosition(javax.swing.SwingConstants.CENTER);
-        sidebarPanel.add(menuLabel, new org.netbeans.lib.awtextra.AbsoluteConstraints(2, 10, 180, -1));
-        sidebarPanel.add(jSeparator1, new org.netbeans.lib.awtextra.AbsoluteConstraints(10, 30, 160, 10));
-
-        openFileButton.setText("Abrir");
+        openFileButton.setIcon(new javax.swing.ImageIcon(getClass().getResource("/icons/open-file.png"))); // NOI18N
         openFileButton.setBorder(new javax.swing.border.MatteBorder(null));
         openFileButton.setBorderPainted(false);
         openFileButton.setHorizontalTextPosition(javax.swing.SwingConstants.CENTER);
+        openFileButton.addMouseListener(new java.awt.event.MouseAdapter() {
+            public void mouseEntered(java.awt.event.MouseEvent evt) {
+                openFileButtonMouseEntered(evt);
+            }
+        });
         openFileButton.addActionListener(new java.awt.event.ActionListener() {
             public void actionPerformed(java.awt.event.ActionEvent evt) {
                 openFileButtonActionPerformed(evt);
             }
         });
-        sidebarPanel.add(openFileButton, new org.netbeans.lib.awtextra.AbsoluteConstraints(0, 125, 180, 35));
+        sidebarPanel.add(openFileButton, new org.netbeans.lib.awtextra.AbsoluteConstraints(40, 0, 30, 30));
 
-        saveFileButton.setText("Guardar");
+        saveFileButton.setIcon(new javax.swing.ImageIcon(getClass().getResource("/icons/save-file.png"))); // NOI18N
         saveFileButton.setBorder(new javax.swing.border.MatteBorder(null));
         saveFileButton.setBorderPainted(false);
         saveFileButton.setHorizontalTextPosition(javax.swing.SwingConstants.CENTER);
+        saveFileButton.addMouseListener(new java.awt.event.MouseAdapter() {
+            public void mouseEntered(java.awt.event.MouseEvent evt) {
+                saveFileButtonMouseEntered(evt);
+            }
+        });
         saveFileButton.addActionListener(new java.awt.event.ActionListener() {
             public void actionPerformed(java.awt.event.ActionEvent evt) {
                 saveFileButtonActionPerformed(evt);
             }
         });
-        sidebarPanel.add(saveFileButton, new org.netbeans.lib.awtextra.AbsoluteConstraints(0, 160, 180, 35));
+        sidebarPanel.add(saveFileButton, new org.netbeans.lib.awtextra.AbsoluteConstraints(70, 0, 30, 30));
 
-        astButton.setText("AST");
+        astButton.setIcon(new javax.swing.ImageIcon(getClass().getResource("/icons/ast.png"))); // NOI18N
         astButton.setBorder(new javax.swing.border.MatteBorder(null));
         astButton.setBorderPainted(false);
         astButton.setHorizontalTextPosition(javax.swing.SwingConstants.CENTER);
+        astButton.addMouseListener(new java.awt.event.MouseAdapter() {
+            public void mouseEntered(java.awt.event.MouseEvent evt) {
+                astButtonMouseEntered(evt);
+            }
+        });
         astButton.addActionListener(new java.awt.event.ActionListener() {
             public void actionPerformed(java.awt.event.ActionEvent evt) {
                 astButtonActionPerformed(evt);
             }
         });
-        sidebarPanel.add(astButton, new org.netbeans.lib.awtextra.AbsoluteConstraints(0, 195, 180, 35));
+        sidebarPanel.add(astButton, new org.netbeans.lib.awtextra.AbsoluteConstraints(130, 0, 30, 30));
 
-        symbolTableButton.setText("Tabla de símbolos");
+        symbolTableButton.setIcon(new javax.swing.ImageIcon(getClass().getResource("/icons/symbol-table.png"))); // NOI18N
         symbolTableButton.setBorder(new javax.swing.border.MatteBorder(null));
         symbolTableButton.setBorderPainted(false);
         symbolTableButton.setHorizontalTextPosition(javax.swing.SwingConstants.CENTER);
+        symbolTableButton.addMouseListener(new java.awt.event.MouseAdapter() {
+            public void mouseEntered(java.awt.event.MouseEvent evt) {
+                symbolTableButtonMouseEntered(evt);
+            }
+        });
         symbolTableButton.addActionListener(new java.awt.event.ActionListener() {
             public void actionPerformed(java.awt.event.ActionEvent evt) {
                 symbolTableButtonActionPerformed(evt);
             }
         });
-        sidebarPanel.add(symbolTableButton, new org.netbeans.lib.awtextra.AbsoluteConstraints(0, 230, 180, 35));
+        sidebarPanel.add(symbolTableButton, new org.netbeans.lib.awtextra.AbsoluteConstraints(100, 0, 30, 30));
 
-        stackButton.setText("Pila de procesos");
+        stackButton.setIcon(new javax.swing.ImageIcon(getClass().getResource("/icons/stack.png"))); // NOI18N
         stackButton.setBorder(new javax.swing.border.MatteBorder(null));
         stackButton.setBorderPainted(false);
         stackButton.setHorizontalTextPosition(javax.swing.SwingConstants.CENTER);
+        stackButton.addMouseListener(new java.awt.event.MouseAdapter() {
+            public void mouseEntered(java.awt.event.MouseEvent evt) {
+                stackButtonMouseEntered(evt);
+            }
+        });
         stackButton.addActionListener(new java.awt.event.ActionListener() {
             public void actionPerformed(java.awt.event.ActionEvent evt) {
                 stackButtonActionPerformed(evt);
             }
         });
-        sidebarPanel.add(stackButton, new org.netbeans.lib.awtextra.AbsoluteConstraints(0, 370, 180, 35));
+        sidebarPanel.add(stackButton, new org.netbeans.lib.awtextra.AbsoluteConstraints(160, 0, 30, 30));
 
-        newFileButton.setText("Nuevo");
+        newFileButton.setIcon(new javax.swing.ImageIcon(getClass().getResource("/icons/new-file.png"))); // NOI18N
         newFileButton.setBorder(new javax.swing.border.MatteBorder(null));
         newFileButton.setBorderPainted(false);
         newFileButton.setHorizontalTextPosition(javax.swing.SwingConstants.CENTER);
+        newFileButton.addMouseListener(new java.awt.event.MouseAdapter() {
+            public void mouseEntered(java.awt.event.MouseEvent evt) {
+                newFileButtonMouseEntered(evt);
+            }
+        });
         newFileButton.addActionListener(new java.awt.event.ActionListener() {
             public void actionPerformed(java.awt.event.ActionEvent evt) {
                 newFileButtonActionPerformed(evt);
             }
         });
-        sidebarPanel.add(newFileButton, new org.netbeans.lib.awtextra.AbsoluteConstraints(0, 90, 180, 35));
+        sidebarPanel.add(newFileButton, new org.netbeans.lib.awtextra.AbsoluteConstraints(10, 0, 30, 30));
 
-        lexerErrorButton.setText("Tabla de errores léxicos");
+        lexerErrorButton.setIcon(new javax.swing.ImageIcon(getClass().getResource("/icons/error-table.png"))); // NOI18N
         lexerErrorButton.setBorder(new javax.swing.border.MatteBorder(null));
         lexerErrorButton.setBorderPainted(false);
         lexerErrorButton.setHorizontalTextPosition(javax.swing.SwingConstants.CENTER);
+        lexerErrorButton.addMouseListener(new java.awt.event.MouseAdapter() {
+            public void mouseEntered(java.awt.event.MouseEvent evt) {
+                lexerErrorButtonMouseEntered(evt);
+            }
+        });
         lexerErrorButton.addActionListener(new java.awt.event.ActionListener() {
             public void actionPerformed(java.awt.event.ActionEvent evt) {
                 lexerErrorButtonActionPerformed(evt);
             }
         });
-        sidebarPanel.add(lexerErrorButton, new org.netbeans.lib.awtextra.AbsoluteConstraints(0, 265, 180, 35));
+        sidebarPanel.add(lexerErrorButton, new org.netbeans.lib.awtextra.AbsoluteConstraints(190, 0, 30, 30));
 
-        sintaxErrorButton1.setText("Tabla de errores sintácticos");
-        sintaxErrorButton1.setBorder(new javax.swing.border.MatteBorder(null));
-        sintaxErrorButton1.setBorderPainted(false);
-        sintaxErrorButton1.setHorizontalTextPosition(javax.swing.SwingConstants.CENTER);
-        sintaxErrorButton1.addActionListener(new java.awt.event.ActionListener() {
-            public void actionPerformed(java.awt.event.ActionEvent evt) {
-                sintaxErrorButton1ActionPerformed(evt);
-            }
-        });
-        sidebarPanel.add(sintaxErrorButton1, new org.netbeans.lib.awtextra.AbsoluteConstraints(0, 300, 180, 35));
+        optionSelectedLabel.setText("jLabel1");
+        sidebarPanel.add(optionSelectedLabel, new org.netbeans.lib.awtextra.AbsoluteConstraints(240, 0, 710, 30));
 
-        semanticErrorButton1.setText("Tabla de errores semánticos");
-        semanticErrorButton1.setBorder(new javax.swing.border.MatteBorder(null));
-        semanticErrorButton1.setBorderPainted(false);
-        semanticErrorButton1.setHorizontalTextPosition(javax.swing.SwingConstants.CENTER);
-        semanticErrorButton1.addActionListener(new java.awt.event.ActionListener() {
-            public void actionPerformed(java.awt.event.ActionEvent evt) {
-                semanticErrorButton1ActionPerformed(evt);
-            }
-        });
-        sidebarPanel.add(semanticErrorButton1, new org.netbeans.lib.awtextra.AbsoluteConstraints(0, 335, 180, 35));
-
-        editTextButton.setText("Editor de texto");
-        editTextButton.setBorder(new javax.swing.border.MatteBorder(null));
-        editTextButton.setBorderPainted(false);
-        editTextButton.setHorizontalTextPosition(javax.swing.SwingConstants.CENTER);
-        editTextButton.addActionListener(new java.awt.event.ActionListener() {
-            public void actionPerformed(java.awt.event.ActionEvent evt) {
-                editTextButtonActionPerformed(evt);
-            }
-        });
-        sidebarPanel.add(editTextButton, new org.netbeans.lib.awtextra.AbsoluteConstraints(0, 56, 180, 35));
+        jSeparator1.setOrientation(javax.swing.SwingConstants.VERTICAL);
+        sidebarPanel.add(jSeparator1, new org.netbeans.lib.awtextra.AbsoluteConstraints(230, 0, 10, 30));
 
         contentPane.setLayout(new java.awt.BorderLayout());
 
-        navTextLabel.setBackground(new java.awt.Color(0, 0, 0));
-        navTextLabel.setForeground(new java.awt.Color(0, 255, 0));
-        navTextLabel.setText("jLabel1");
-        navTextLabel.setMinimumSize(new java.awt.Dimension(685, 461));
+        javax.swing.GroupLayout fileTreePanelLayout = new javax.swing.GroupLayout(fileTreePanel);
+        fileTreePanel.setLayout(fileTreePanelLayout);
+        fileTreePanelLayout.setHorizontalGroup(
+            fileTreePanelLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
+            .addGap(0, 170, Short.MAX_VALUE)
+        );
+        fileTreePanelLayout.setVerticalGroup(
+            fileTreePanelLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
+            .addGap(0, 0, Short.MAX_VALUE)
+        );
 
         javax.swing.GroupLayout layout = new javax.swing.GroupLayout(getContentPane());
         getContentPane().setLayout(layout);
         layout.setHorizontalGroup(
             layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
+            .addComponent(sidebarPanel, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
             .addGroup(layout.createSequentialGroup()
-                .addComponent(sidebarPanel, javax.swing.GroupLayout.PREFERRED_SIZE, 180, javax.swing.GroupLayout.PREFERRED_SIZE)
-                .addGap(1, 1, 1)
-                .addGroup(layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
-                    .addComponent(navTextLabel, javax.swing.GroupLayout.DEFAULT_SIZE, 690, Short.MAX_VALUE)
-                    .addComponent(contentPane, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)))
+                .addGap(166, 166, 166)
+                .addComponent(contentPane, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
+                .addGap(4, 4, 4))
+            .addComponent(fileTreePanel, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)
         );
         layout.setVerticalGroup(
             layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
-            .addComponent(sidebarPanel, javax.swing.GroupLayout.DEFAULT_SIZE, 461, Short.MAX_VALUE)
             .addGroup(layout.createSequentialGroup()
-                .addComponent(navTextLabel, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)
-                .addGap(1, 1, 1)
-                .addComponent(contentPane, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE))
+                .addComponent(sidebarPanel, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)
+                .addGroup(layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
+                    .addGroup(layout.createSequentialGroup()
+                        .addGap(2, 2, 2)
+                        .addComponent(contentPane, javax.swing.GroupLayout.DEFAULT_SIZE, 510, Short.MAX_VALUE))
+                    .addGroup(layout.createSequentialGroup()
+                        .addComponent(fileTreePanel, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
+                        .addGap(2, 2, 2))))
         );
 
         pack();
@@ -239,6 +287,8 @@ public class MainWindow extends javax.swing.JFrame {
         editorPanel.setCodeText("");
         editorPanel.setConsoleTextArea("");
         editorPanel.setResult("");
+        editorPanel.setC3DText("");
+        currentFile = null;
         //compiler = new Compiler();
 
         paintPanel(editorPanel);
@@ -268,9 +318,10 @@ public class MainWindow extends javax.swing.JFrame {
         }
 
         JFileChooser fileChooser = new JFileChooser();
-        fileChooser.setDialogTitle("Seleccionar archivo de código (Latín o PigLatin)");
+        fileChooser.setDialogTitle("Seleccionar archivo de código (Latín, PigLatin, Y, Zetariano)");
 
-        FileNameExtensionFilter filter = new FileNameExtensionFilter("Archivos de Código (*.lat, *.pig)", "lat", "pig");
+        FileNameExtensionFilter filter = new FileNameExtensionFilter(
+                "Archivos de Código (*.lat, *.pig, *.y, *.z)", "lat", "pig", "y", "z");
         fileChooser.setFileFilter(filter);
 
         int userSelection = fileChooser.showOpenDialog(this);
@@ -289,8 +340,11 @@ public class MainWindow extends javax.swing.JFrame {
 
                 editorPanel.setCodeText(contenido);
                 editorPanel.setConsoleTextArea("");
+                editorPanel.setC3DText("");
 
-            } catch (java.io.IOException e) {
+                currentFile = fileToOpen;
+
+            } catch (IOException e) {
                 JOptionPane.showMessageDialog(this,
                         "Error al leer el archivo: " + e.getMessage(),
                         "Error",
@@ -337,38 +391,6 @@ public class MainWindow extends javax.swing.JFrame {
         navText("Tabla de errores léxicos");*/
     }//GEN-LAST:event_lexerErrorButtonActionPerformed
 
-    private void sintaxErrorButton1ActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_sintaxErrorButton1ActionPerformed
-        /*List<CompilationError> allErrors = editorPanel.getCompilationErrors();
-        List<CompilationError> syntaxErrors = new ArrayList<>();
-
-        if (allErrors != null) {
-            syntaxErrors = allErrors.stream()
-                    .filter(e -> "SINTACTICO".equalsIgnoreCase(e.getType()))
-                    .collect(Collectors.toList());
-        }
-
-        ErrorTablePanel panel = new ErrorTablePanel();
-        panel.loadErrors(syntaxErrors);
-        paintPanel(panel);
-        navText("Tabla de errores sintácticos");*/
-    }//GEN-LAST:event_sintaxErrorButton1ActionPerformed
-
-    private void semanticErrorButton1ActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_semanticErrorButton1ActionPerformed
-       /* List<CompilationError> allErrors = editorPanel.getCompilationErrors();
-        List<CompilationError> semanticErrors = new ArrayList<>();
-
-        if (allErrors != null) {
-            semanticErrors = allErrors.stream()
-                    .filter(e -> "SEMANTICO".equalsIgnoreCase(e.getType()))
-                    .collect(Collectors.toList());
-        }
-
-        ErrorTablePanel panel = new ErrorTablePanel();
-        panel.loadErrors(semanticErrors);
-        paintPanel(panel);
-        navText("Tabla errores semánticos");*/
-    }//GEN-LAST:event_semanticErrorButton1ActionPerformed
-
     private void stackButtonActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_stackButtonActionPerformed
        /* List<StackState> steps = editorPanel.getLastStackSteps();
 
@@ -377,75 +399,85 @@ public class MainWindow extends javax.swing.JFrame {
         navText("Pila de procesos");*/
     }//GEN-LAST:event_stackButtonActionPerformed
 
-    private void editTextButtonActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_editTextButtonActionPerformed
-        paintPanel(editorPanel);
-        navText("Editor de código");
-    }//GEN-LAST:event_editTextButtonActionPerformed
-
     private void saveFileButtonActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_saveFileButtonActionPerformed
         saveFilesAction();
     }//GEN-LAST:event_saveFileButtonActionPerformed
+
+    private void newFileButtonMouseEntered(java.awt.event.MouseEvent evt) {//GEN-FIRST:event_newFileButtonMouseEntered
+        this.optionSelectedLabel.setText("Nuevo archivo");
+    }//GEN-LAST:event_newFileButtonMouseEntered
+
+    private void openFileButtonMouseEntered(java.awt.event.MouseEvent evt) {//GEN-FIRST:event_openFileButtonMouseEntered
+        this.optionSelectedLabel.setText("Abrir archivo");
+    }//GEN-LAST:event_openFileButtonMouseEntered
+
+    private void saveFileButtonMouseEntered(java.awt.event.MouseEvent evt) {//GEN-FIRST:event_saveFileButtonMouseEntered
+        this.optionSelectedLabel.setText("Guardar archivo");
+    }//GEN-LAST:event_saveFileButtonMouseEntered
+
+    private void symbolTableButtonMouseEntered(java.awt.event.MouseEvent evt) {//GEN-FIRST:event_symbolTableButtonMouseEntered
+        this.optionSelectedLabel.setText("Tabla de Símbolos");
+    }//GEN-LAST:event_symbolTableButtonMouseEntered
+
+    private void astButtonMouseEntered(java.awt.event.MouseEvent evt) {//GEN-FIRST:event_astButtonMouseEntered
+        this.optionSelectedLabel.setText("AST");
+    }//GEN-LAST:event_astButtonMouseEntered
+
+    private void stackButtonMouseEntered(java.awt.event.MouseEvent evt) {//GEN-FIRST:event_stackButtonMouseEntered
+        this.optionSelectedLabel.setText("Pila de Procesos");
+    }//GEN-LAST:event_stackButtonMouseEntered
+
+    private void lexerErrorButtonMouseEntered(java.awt.event.MouseEvent evt) {//GEN-FIRST:event_lexerErrorButtonMouseEntered
+        this.optionSelectedLabel.setText("Tabla de Errores");
+    }//GEN-LAST:event_lexerErrorButtonMouseEntered
 
 
     // Variables declaration - do not modify//GEN-BEGIN:variables
     private javax.swing.JButton astButton;
     private javax.swing.JPanel contentPane;
-    private javax.swing.JButton editTextButton;
+    private javax.swing.JPanel fileTreePanel;
     private javax.swing.JSeparator jSeparator1;
     private javax.swing.JButton lexerErrorButton;
-    private javax.swing.JLabel menuLabel;
-    private javax.swing.JLabel navTextLabel;
     private javax.swing.JButton newFileButton;
     private javax.swing.JButton openFileButton;
+    private javax.swing.JLabel optionSelectedLabel;
     private javax.swing.JButton saveFileButton;
-    private javax.swing.JButton semanticErrorButton1;
     private javax.swing.JPanel sidebarPanel;
-    private javax.swing.JButton sintaxErrorButton1;
     private javax.swing.JButton stackButton;
     private javax.swing.JButton symbolTableButton;
     // End of variables declaration//GEN-END:variables
 
     private void paintPanel(JPanel panel) {
-        contentPane.removeAll();
-        contentPane.add(panel);
-        contentPane.revalidate();
-        contentPane.repaint();
+        JPanel target = (contentArea != null) ? contentArea : contentPane;
+        target.removeAll();
+        target.add(panel, java.awt.BorderLayout.CENTER);
+        target.revalidate();
+        target.repaint();
     }
 
     /**
      * Genera los estilos de los componentes.
      */
     private void initStyles() {
-        menuLabel.putClientProperty("FlatLaf.style", "font: bold $h3.regular.font");
-        menuLabel.setForeground(Color.white);
 
-        navTextLabel.setOpaque(true);
-        navTextLabel.setBackground(Color.BLACK);
-        navTextLabel.setForeground(new Color(0, 255, 0));
-        navTextLabel.setFont(new java.awt.Font("Monospaced", java.awt.Font.BOLD, 13));
-        navTextLabel.setBorder(javax.swing.BorderFactory.createEmptyBorder(5, 10, 5, 10));
+        optionSelectedLabel.setOpaque(true);
+        optionSelectedLabel.setBackground(Color.BLACK);
+        optionSelectedLabel.setForeground(new Color(0, 255, 0));
+        optionSelectedLabel.setFont(new java.awt.Font("Monospaced", java.awt.Font.BOLD, 13));
+        optionSelectedLabel.setBorder(javax.swing.BorderFactory.createEmptyBorder(5, 10, 5, 10));
 
         SwingUtilities.updateComponentTreeUI(this);
     }
 
     private void navText(String optionMenu) {
-        navTextLabel.setText(navText + "/" + optionMenu);
+        optionSelectedLabel.setText(navText + "/" + optionMenu);
     }
 
     private void initialPanel() {
         paintPanel(editorPanel);
         navText("Editor de código");
     }
-/*
-    private void collectSymbolsRecursive(Scope scope, List<Symbol> list) {
-        if (scope == null) {
-            return;
-        }
 
-        if (scope.getSymbols() != null) {
-            list.addAll(scope.getSymbols().values());
-        }
-    }*/
 
     private boolean saveFilesAction() {
         JFileChooser fileChooser = new JFileChooser();
@@ -500,6 +532,10 @@ public class MainWindow extends javax.swing.JFrame {
                 try (FileWriter writerPig = new FileWriter(pigFile, StandardCharsets.UTF_8)) {
                     writerPig.write(pigContent);
                 }
+
+                // Registrar los archivos guardados en el árbol de archivos
+
+                currentFile = latFile;
 
                 JOptionPane.showMessageDialog(this,
                         "Carpeta y archivos creados exitosamente en:\n" + projectFolder.getAbsolutePath()
