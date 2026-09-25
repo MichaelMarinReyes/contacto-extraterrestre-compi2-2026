@@ -11,6 +11,7 @@ import javax.swing.JFileChooser;
 import javax.swing.JFrame;
 import javax.swing.JOptionPane;
 import javax.swing.JPanel;
+import javax.swing.JSplitPane;
 import javax.swing.SwingUtilities;
 import javax.swing.filechooser.FileNameExtensionFilter;
 
@@ -21,6 +22,7 @@ import javax.swing.filechooser.FileNameExtensionFilter;
 public class MainWindow extends JFrame {
 
     private static final String navText = "Contacto 3xtrat3rr3str3D";
+    private final FileTreePanel fileTreePanelInstance = new FileTreePanel();
     private final EditorPanel editorPanel = new EditorPanel();
    // private Compiler compiler = new Compiler();
     private final StackVisualizerPanel stackVisualizerPanel = new StackVisualizerPanel();
@@ -46,6 +48,32 @@ public class MainWindow extends JFrame {
      * panel activo (editor, AST, tablas, pila) a la derecha.
      */
     private void initContentLayout() {
+        contentArea = new JPanel(new java.awt.BorderLayout());
+        contentArea.setBackground(new Color(240, 240, 240));
+
+        fileTreePanelInstance.setOnFileSelected(file -> {
+            if (file != null && file.isFile()) {
+                loadFileFromTree(file);
+            }
+        });
+
+        JSplitPane splitPane = new javax.swing.JSplitPane(
+            javax.swing.JSplitPane.HORIZONTAL_SPLIT,
+            fileTreePanelInstance,
+            contentArea
+        );
+        
+        splitPane.setDividerLocation(230);
+        splitPane.setResizeWeight(0.0);
+        splitPane.setContinuousLayout(true);
+        splitPane.setBorder(null);
+
+        contentPane.removeAll();
+        contentPane.setLayout(new java.awt.BorderLayout());
+        contentPane.add(splitPane, java.awt.BorderLayout.CENTER);
+        contentPane.revalidate();
+        contentPane.repaint();
+        
         contentArea = new JPanel(new java.awt.BorderLayout());
         contentArea.setBackground(new Color(240, 240, 240));
 
@@ -85,7 +113,6 @@ public class MainWindow extends JFrame {
     @SuppressWarnings("unchecked")
     // <editor-fold defaultstate="collapsed" desc="Generated Code">//GEN-BEGIN:initComponents
     private void initComponents() {
-        java.awt.GridBagConstraints gridBagConstraints;
 
         sidebarPanel = new javax.swing.JPanel();
         openFileButton = new javax.swing.JButton();
@@ -98,7 +125,6 @@ public class MainWindow extends JFrame {
         optionSelectedLabel = new javax.swing.JLabel();
         jSeparator1 = new javax.swing.JSeparator();
         contentPane = new javax.swing.JPanel();
-        fileTreePanel = new javax.swing.JPanel();
 
         setDefaultCloseOperation(javax.swing.WindowConstants.EXIT_ON_CLOSE);
 
@@ -224,17 +250,6 @@ public class MainWindow extends JFrame {
 
         contentPane.setLayout(new java.awt.BorderLayout());
 
-        javax.swing.GroupLayout fileTreePanelLayout = new javax.swing.GroupLayout(fileTreePanel);
-        fileTreePanel.setLayout(fileTreePanelLayout);
-        fileTreePanelLayout.setHorizontalGroup(
-            fileTreePanelLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
-            .addGap(0, 170, Short.MAX_VALUE)
-        );
-        fileTreePanelLayout.setVerticalGroup(
-            fileTreePanelLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
-            .addGap(0, 0, Short.MAX_VALUE)
-        );
-
         javax.swing.GroupLayout layout = new javax.swing.GroupLayout(getContentPane());
         getContentPane().setLayout(layout);
         layout.setHorizontalGroup(
@@ -244,19 +259,13 @@ public class MainWindow extends JFrame {
                 .addGap(166, 166, 166)
                 .addComponent(contentPane, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
                 .addGap(4, 4, 4))
-            .addComponent(fileTreePanel, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)
         );
         layout.setVerticalGroup(
             layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
             .addGroup(layout.createSequentialGroup()
                 .addComponent(sidebarPanel, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)
-                .addGroup(layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
-                    .addGroup(layout.createSequentialGroup()
-                        .addGap(2, 2, 2)
-                        .addComponent(contentPane, javax.swing.GroupLayout.DEFAULT_SIZE, 510, Short.MAX_VALUE))
-                    .addGroup(layout.createSequentialGroup()
-                        .addComponent(fileTreePanel, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
-                        .addGap(2, 2, 2))))
+                .addGap(2, 2, 2)
+                .addComponent(contentPane, javax.swing.GroupLayout.DEFAULT_SIZE, 510, Short.MAX_VALUE))
         );
 
         pack();
@@ -435,7 +444,6 @@ public class MainWindow extends JFrame {
     // Variables declaration - do not modify//GEN-BEGIN:variables
     private javax.swing.JButton astButton;
     private javax.swing.JPanel contentPane;
-    private javax.swing.JPanel fileTreePanel;
     private javax.swing.JSeparator jSeparator1;
     private javax.swing.JButton lexerErrorButton;
     private javax.swing.JButton newFileButton;

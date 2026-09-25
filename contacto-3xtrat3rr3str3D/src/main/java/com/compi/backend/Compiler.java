@@ -18,6 +18,7 @@ public class Compiler {
     private String c3dCode;
     private String tripletsCode;
     private String quadruplesCode;
+    private final com.compi.backend.c3d.IntermediateCodeManager icm = new com.compi.backend.c3d.IntermediateCodeManager();
 
     /**
      * Recibe el texto fuente desde el frontend y el lenguaje a compilar.
@@ -30,6 +31,7 @@ public class Compiler {
         this.language = language;
         errors.clear();
         processStack.clear();
+        icm.clear();
         try{
             // 1. Análisis léxico y sintáctico -> AST
             // 2. Generación de AST en Graphviz
@@ -37,8 +39,9 @@ public class Compiler {
             // 3. Análisis semántico -> Tabla de símbolos
             // 4. Generación de pila de procesos
             // 5. Generación de tripletas y cuartetas
-            tripletsCode = generateTriplets();
-            quadruplesCode = generateQuadruples();
+            generateIntermediateFromSource();
+            tripletsCode = icm.getTripletsString();
+            quadruplesCode = icm.getQuadruplesString();
             c3dCode = generateC3D();
             translatedCode = generateTranslatedCode();
         }catch(Exception e){
@@ -114,8 +117,25 @@ public class Compiler {
     private String generateAstDot(){
         return "digraph AST { /* DOT generado desde AST */ }";
     }
-    private String generateTriplets(){ return "/* tripletas */"; }
-    private String generateQuadruples(){ return "/* cuartetas */"; }
+    private void generateIntermediateFromSource(){
+        if(source == null) return;
+        String[] lines = source.split("\\r?\\n");
+        for(String line : lines){
+            line = line.trim();
+            if(line.isEmpty() || line.startsWith("//") || line.startsWith("/*")) continue;
+            // Simple heuristic: detect assignment pattern var = expr
+            if(line.matches(".*[=].*")){
+                String[] parts = line.split("=",2);
+                String left = parts[0].trim();
+                String right = parts[1].trim().replaceAll(";", "");
+                String temp = icm.newTemp();
+                icm.emitTriplet(com.compi.backend.c3d.QuadrupleOp.ASSIGN, right, left);
+                icm.emitQuadruple(com.compi.backend.c3d.QuadrupleOp.ASSIGN, right, null, left);
+            }
+        }
+    }
+    private String generateTriplets(){ return icm.getTripletsString(); }
+    private String generateQuadruples(){ return icm.getQuadruplesString(); }
     private String generateC3D(){ return "/* C3D */"; }
     private String generateTranslatedCode(){ return "/* código traducido */"; }
 }
