@@ -8,6 +8,7 @@ import com.compi.backend.errors.CompilationError;
 import com.compi.backend.errors.ErrorType;
 import com.compi.backend.languages.piglatin.PigLatinC3DVisitor;
 import com.compi.backend.languages.piglatin.PigLatinSemanticVisitor;
+import com.compi.backend.languages2.LanguageCompilerFactory;
 import com.compi.backend.symbols.SymbolTable;
 import com.compi.backend.languages.y.YC3DVisitor;
 import com.compi.backend.languages.y.YIndentLexer;
@@ -193,18 +194,26 @@ public class CompilerFacade {
         }
 
         String rawPath = pathBuilder.toString();
-        // Buscar archivo con .y o .z
-        File fileY = new File(workingDirectory, rawPath + ".y");
-        File fileZ = new File(workingDirectory, rawPath + ".z");
-
+        // Buscar el archivo importado con las extensiones admitidas: se prueban
+        // en el orden en que las declara cada compilador.
         try {
-            if (fileY.exists()) {
-                String content = Files.readString(fileY.toPath());
-                compileY(content);
-            } else if (fileZ.exists()) {
-                String content = Files.readString(fileZ.toPath());
-                compileZetariano(content);
+            for (String ext : LanguageCompilerFactory.allowedExtensions()) {
+                File candidate = new File(workingDirectory, rawPath + "." + ext);
+                if (!candidate.exists()) {
+                    continue;
+                }
+                String content = Files.readString(candidate.toPath());
+                if ("y".equals(ext)) {
+                    compileY(content);
+                } else if ("z".equals(ext)) {
+                    compileZetariano(content);
+                }
+                return;
             }
+            allErrors.add(new CompilationError(ErrorType.SEMANTICO,
+                    "No se encontro el archivo importado \"" + rawPath + "\" ("
+                            + LanguageCompilerFactory.extensionPattern() + ")",
+                    impCtx.getStart().getLine(), impCtx.getStart().getCharPositionInLine()));
         } catch (Exception e) {
             allErrors.add(new CompilationError(ErrorType.SEMANTICO, "No se pudo leer archivo importado: " + rawPath,
                     impCtx.getStart().getLine(), impCtx.getStart().getCharPositionInLine()));

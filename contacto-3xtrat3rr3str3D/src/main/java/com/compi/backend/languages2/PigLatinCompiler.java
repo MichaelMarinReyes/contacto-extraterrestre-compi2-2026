@@ -33,7 +33,7 @@ public class PigLatinCompiler extends AbstractLanguageCompiler {
 
     @Override
     public List<String> extensions() {
-        return List.of(".pig", ".lat");
+        return List.of(".pig");
     }
 
     @Override

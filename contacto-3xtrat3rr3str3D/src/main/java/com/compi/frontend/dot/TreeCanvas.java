@@ -3,11 +3,13 @@ package com.compi.frontend.dot;
 import com.compi.frontend.UiTheme;
 import java.awt.BasicStroke;
 import java.awt.Color;
+import java.awt.Container;
 import java.awt.Dimension;
 import java.awt.Font;
 import java.awt.FontMetrics;
 import java.awt.Graphics;
 import java.awt.Graphics2D;
+import java.awt.Rectangle;
 import java.awt.RenderingHints;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
@@ -17,6 +19,9 @@ import java.awt.geom.RoundRectangle2D;
 import java.util.HashMap;
 import java.util.Map;
 import javax.swing.JComponent;
+import javax.swing.JViewport;
+import javax.swing.Scrollable;
+import javax.swing.SwingConstants;
 import javax.swing.SwingUtilities;
 import javax.swing.ToolTipManager;
 
@@ -27,7 +32,7 @@ import javax.swing.ToolTipManager;
  * la vista a PNG. Las etiquetas se recortan si el nodo es mas estrecho que el
  * texto completo.
  */
-public class TreeCanvas extends JComponent {
+public class TreeCanvas extends JComponent implements Scrollable {
 
     private static final double ZOOM_MIN = 0.25;
     private static final double ZOOM_MAX = 2.5;
@@ -93,6 +98,38 @@ public class TreeCanvas extends JComponent {
         return new Dimension(120, 120);
     }
 
+    // ====================== Scroll ======================
+    //
+    // El lienzo es mas grande que el panel a proposito: se deja que aparezca la
+    // barra horizontal y se navega por el arbol con la rueda o las barras.
+
+    @Override
+    public Dimension getPreferredScrollableViewportSize() {
+        return getPreferredSize();
+    }
+
+    @Override
+    public int getScrollableUnitIncrement(Rectangle visibleRect, int orientation, int direction) {
+        return 24;
+    }
+
+    @Override
+    public int getScrollableBlockIncrement(Rectangle visibleRect, int orientation, int direction) {
+        return orientation == SwingConstants.VERTICAL ? visibleRect.height - 48
+                : visibleRect.width - 48;
+    }
+
+    /** La rueda se controla con Ctrl o Mayus, asi que la suelta nunca queda. */
+    @Override
+    public boolean getScrollableTracksViewportWidth() {
+        return false;
+    }
+
+    @Override
+    public boolean getScrollableTracksViewportHeight() {
+        return false;
+    }
+
     public double getZoom() {
         return zoom;
     }
@@ -124,9 +161,25 @@ public class TreeCanvas extends JComponent {
         if (b.width <= 0 || b.height <= 0) {
             return;
         }
-        double sx = getWidth() / (double) b.width;
-        double sy = getHeight() / (double) b.height;
+        // Hay que medir contra lo que se ve, no contra el propio lienzo: su
+        // tamaño es justo el del grafo, asi que comparar con el daria 1 y el
+        // boton no haria nada.
+        Dimension visible = visibleSize();
+        double sx = visible.width / (double) b.width;
+        double sy = visible.height / (double) b.height;
         setZoom(Math.min(sx, sy));
+    }
+
+    /** Zona del lienzo que se ve ahora mismo a traves del scroll. */
+    private Dimension visibleSize() {
+        Container parent = getParent();
+        if (parent instanceof JViewport viewport) {
+            Dimension extent = viewport.getExtentSize();
+            if (extent.width > 0 && extent.height > 0) {
+                return extent;
+            }
+        }
+        return new Dimension(getWidth(), getHeight());
     }
 
     public void resetZoom() {

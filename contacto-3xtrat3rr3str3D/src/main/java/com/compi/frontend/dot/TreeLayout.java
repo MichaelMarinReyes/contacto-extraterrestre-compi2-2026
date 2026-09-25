@@ -16,7 +16,10 @@ import javax.swing.JPanel;
  *
  * Usa un reparto clasico de subarboles: las hojas se colocan a la misma altura,
  * el padre se centra sobre el intervalo que ocupan sus hijos y despues se
- * separa cada nivel. El resultado es un arbol legible sin depender de Graphviz.
+ * separa cada nivel. Ese reparto deja las hojas arriba y la raiz en el fondo, asi
+ * que al terminar se refleja en vertical ({@link #flipAndNormalize}) y el arbol
+ * se lee como es habitual: raiz arriba y hijos hacia abajo. El resultado es un
+ * arbol legible sin depender de Graphviz.
  */
 public class TreeLayout {
 
@@ -52,13 +55,44 @@ public class TreeLayout {
 
         String root = model.root();
         place(model, root, fm);
-        maxWidth = Math.max(1, leftmostExtent());
-        maxHeight = 1;
-        for (int[] pos : positions.values()) {
-            maxHeight = Math.max(maxHeight, pos[1]);
+        flipAndNormalize(fm);
+    }
+
+    /**
+     * Da la vuelta al reparto y calcula el tamaño total.
+     *
+     * <p>El reparto de {@link #place} deja las hojas arriba y a la raiz en el
+     * fondo, que se lee al reves. Como todas las cajas miden lo mismo, basta
+     * con reflejar el eje vertical (y' = maxY - y) para dejar la raiz arriba y
+     * los hijos colgando hacia abajo, y despues se separa del margen izquierdo.
+     * El ancho se mide con el borde derecho de la caja mas a la derecha, que es
+     * lo que necesita el lienzo para poder desplazarse en horizontal.</p>
+     */
+    private void flipAndNormalize(FontMetrics fm) {
+        int maxY = 0;
+        int minX = Integer.MAX_VALUE;
+        int rightX = 0;
+        for (Map.Entry<String, int[]> entry : positions.entrySet()) {
+            int[] pos = entry.getValue();
+            Dimension size = sizes.get(entry.getKey());
+            maxY = Math.max(maxY, pos[1]);
+            minX = Math.min(minX, pos[0]);
+            rightX = Math.max(rightX, pos[0] + size.width);
         }
-        maxHeight += nodeHeight(fm) + PADDING * 2;
-        maxWidth += PADDING * 2;
+        if (minX == Integer.MAX_VALUE) {
+            minX = 0;
+        }
+
+        for (int[] pos : positions.values()) {
+            pos[1] = maxY - pos[1];
+        }
+        int shift = PADDING - minX;
+        for (int[] pos : positions.values()) {
+            pos[0] += shift;
+        }
+
+        maxWidth = Math.max(1, rightX - minX) + PADDING * 2;
+        maxHeight = maxY + nodeHeight(fm) + PADDING * 2;
     }
 
     // ====================== Reparto ======================
@@ -112,14 +146,6 @@ public class TreeLayout {
         leafCursor += size.width + H_GAP;
         positions.put(id, new int[]{x, 0});
         return x + size.width / 2;
-    }
-
-    private int leftmostExtent() {
-        int min = Integer.MAX_VALUE;
-        for (int[] pos : positions.values()) {
-            min = Math.min(min, pos[0]);
-        }
-        return min == Integer.MAX_VALUE ? 0 : min;
     }
 
     private Dimension sizeOf(DotModel.DotNode node, FontMetrics fm) {

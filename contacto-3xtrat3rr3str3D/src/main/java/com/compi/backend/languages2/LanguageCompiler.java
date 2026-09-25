@@ -27,7 +27,12 @@ public interface LanguageCompiler {
     /** Nombre legible para la interfaz. */
     String displayName();
 
-    /** Extensiones de archivo (.pig, .y, .z) soportadas. */
+    /**
+     * Extensiones de archivo (.pig, .y, .z) que el frontend puede abrir.
+     *
+     * <p>Es la unica lista que decide que archivos se aceptan, asi que anadir
+     * un lenguaje con una extension nueva no obliga a tocar la interfaz.</p>
+     */
     List<String> extensions();
 
     /**

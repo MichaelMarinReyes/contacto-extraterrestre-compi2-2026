@@ -75,6 +75,12 @@ public class ParserTreePanel extends JPanel {
         scrollPane.getViewport().setBackground(UiTheme.toolWindowBg());
         scrollPane.getVerticalScrollBar().setUnitIncrement(18);
         scrollPane.getHorizontalScrollBar().setUnitIncrement(18);
+        // El arbol puede ser muy ancho, asi que las dos barras hacen falta:
+        // la horizontal es la que deja recorrer los niveles completos.
+        scrollPane.setHorizontalScrollBarPolicy(JScrollPane.HORIZONTAL_SCROLLBAR_AS_NEEDED);
+        scrollPane.setVerticalScrollBarPolicy(JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED);
+        scrollPane.getHorizontalScrollBar().setUnitIncrement(24);
+        scrollPane.getHorizontalScrollBar().setBlockIncrement(240);
 
         add(buildToolbar(), BorderLayout.NORTH);
         add(scrollPane, BorderLayout.CENTER);

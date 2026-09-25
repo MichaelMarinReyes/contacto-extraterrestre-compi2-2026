@@ -1,23 +1,30 @@
 package com.compi.frontend;
 
+import com.compi.backend.languages2.LanguageCompilerFactory;
 import java.awt.BorderLayout;
-import java.awt.Color;
+import java.awt.CardLayout;
 import java.awt.Component;
 import java.awt.Cursor;
 import java.awt.Dimension;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.io.File;
+import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.LinkedHashSet;
+import java.util.List;
 import java.util.Locale;
+import java.util.Set;
 import java.util.function.Consumer;
 import javax.swing.BorderFactory;
 import javax.swing.JButton;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
 import javax.swing.JScrollPane;
+import javax.swing.SwingConstants;
 import javax.swing.JTextField;
 import javax.swing.JTree;
+import javax.swing.SwingUtilities;
 import javax.swing.event.TreeSelectionEvent;
 import javax.swing.tree.DefaultMutableTreeNode;
 import javax.swing.tree.DefaultTreeCellRenderer;
@@ -30,10 +37,14 @@ import javax.swing.tree.TreePath;
  * Contiene una cabecera con el nombre del proyecto, un filtro de texto y el
  * arbol propiamente dicho. Al hacer doble clic sobre un archivo se notifica al
  * contenedor para que lo abra en una pestana de editor.
+ *
+ * <p>Solo se muestran los archivos cuya extension esta admitida (ver
+ * {@link LanguageCompilerFactory#allowedExtensions()}). Los demas se ignoran y
+ * se comunican con {@link #setOnFilesIgnored(Consumer)} para que la ventana
+ * avise de cual ha quedado fuera. Una carpeta que se queda sin archivos
+ * admitidos tampoco aparece.</p>
  */
 public class FileTreePanel extends JPanel {
-
-    private static final String[] SOURCE_EXTENSIONS = {"pig", "lat", "y", "z"};
 
     private final JTree tree;
     private final DefaultMutableTreeNode rootNode;
@@ -41,11 +52,23 @@ public class FileTreePanel extends JPanel {
     private final JLabel titleLabel = new JLabel("PROYECTO");
     private final JTextField filterField = new JTextField();
     private final JPanel emptyHint = new JPanel(new BorderLayout());
+    private final JLabel emptyLabel = new JLabel();
+    private CardLayout centerCards;
+    private JPanel centerHolder;
 
     private File root;
     private Consumer<File> onFileSelected;
     private Consumer<File> onDirectorySelected;
     private Runnable onDirectoryChanged;
+    private Consumer<List<File>> onFilesIgnored;
+    /** Pide abrir una carpeta como proyecto; lo atiende la ventana principal. */
+    private Runnable onOpenProjectRequest;
+
+    /** Archivos rechazados en la ultima lectura, para no avisar dos veces. */
+    private final Set<File> lastIgnored = new LinkedHashSet<>();
+
+    private static final String CARD_TREE = "arbol";
+    private static final String CARD_EMPTY = "vacio";
 
     public FileTreePanel() {
         setLayout(new BorderLayout());
@@ -135,19 +158,20 @@ public class FileTreePanel extends JPanel {
         scroll.getVerticalScrollBar().setUnitIncrement(18);
 
         emptyHint.setBackground(UiTheme.toolWindowBg());
-        JLabel hint = new JLabel(
-                "<html><div style='text-align:center;padding:16px'>"
-                        + "Selecciona una carpeta con el boton<br/>de la cabecera para ver<br/>sus archivos fuente</div></html>",
-                JLabel.CENTER);
-        hint.setFont(UiTheme.sans(12));
-        hint.setForeground(UiTheme.dim());
-        emptyHint.add(hint, BorderLayout.CENTER);
+        emptyLabel.setFont(UiTheme.sans(12));
+        emptyLabel.setForeground(UiTheme.dim());
+        emptyLabel.setHorizontalAlignment(SwingConstants.CENTER);
+        emptyHint.add(emptyLabel, BorderLayout.CENTER);
 
-        JPanel holder = new JPanel(new BorderLayout());
-        holder.setBackground(UiTheme.toolWindowBg());
-        holder.add(scroll, BorderLayout.CENTER);
-        holder.add(emptyHint, BorderLayout.CENTER);
-        return holder;
+        // Un CardLayout y no dos componentes en CENTER: superponer el aviso al
+        // arbol dejaba el arbol Tapado y no se veia si habia archivos o no.
+        centerCards = new CardLayout();
+        centerHolder = new JPanel(centerCards);
+        centerHolder.setBackground(UiTheme.toolWindowBg());
+        centerHolder.add(scroll, CARD_TREE);
+        centerHolder.add(emptyHint, CARD_EMPTY);
+        centerCards.show(centerHolder, CARD_EMPTY);
+        return centerHolder;
     }
 
     private JPanel buildFooter() {
@@ -184,6 +208,30 @@ public class FileTreePanel extends JPanel {
     /** Callback invocado tras recargar el arbol. */
     public void setOnDirectoryChanged(Runnable consumer) {
         this.onDirectoryChanged = consumer;
+    }
+
+    /**
+     * Callback invocado con los archivos que se han dejado fuera del arbol por
+     * no tener una extension admitida. Solo se dispara cuando la lista cambia,
+     * para no repetir el aviso en cada recarga.
+     */
+    public void setOnFilesIgnored(Consumer<List<File>> consumer) {
+        this.onFilesIgnored = consumer;
+    }
+
+    /**
+     * Callback del boton "Abrir carpeta" de la cabecera.
+     *
+     * <p>No se abre el selector aqui: lo atiende la ventana principal, que
+     * ademas valida la ruta y avisa de lo encontrado o de por que fallo.</p>
+     */
+    public void setOnOpenProjectRequest(Runnable request) {
+        this.onOpenProjectRequest = request;
+    }
+
+    /** Archivos ignorados en la ultima lectura del arbol. */
+    public List<File> getIgnoredFiles() {
+        return new ArrayList<>(lastIgnored);
     }
 
     public File getRoot() {
@@ -230,8 +278,46 @@ public class FileTreePanel extends JPanel {
         }
     }
 
-    /** Pide al usuario una carpeta y la carga como proyecto. */
+    /** true si el archivo esta actualmente en el arbol. */
+    public boolean contains(File file) {
+        return file != null && findPath(rootNode, file) != null;
+    }
+
+    /**
+     * Cuenta los archivos de codigo que hay ahora mismo en el arbol.
+     *
+     * <p>Serve para informar de cuanto se ha cargado y para detectar que una
+     * carpeta no contiene nada que el compilador pueda abrir.</p>
+     */
+    public int countSourceFiles() {
+        int[] total = {0};
+        countSources(rootNode, total);
+        return total[0];
+    }
+
+    private static void countSources(DefaultMutableTreeNode node, int[] total) {
+        for (int i = 0; i < node.getChildCount(); i++) {
+            DefaultMutableTreeNode child = (DefaultMutableTreeNode) node.getChildAt(i);
+            if (child.getUserObject() instanceof File f && !f.isDirectory()) {
+                total[0]++;
+            } else {
+                countSources(child, total);
+            }
+        }
+    }
+
+    /**
+     * Pide al usuario una carpeta y la carga como proyecto.
+     *
+     * <p>Si la ventana principal registro un gestor, se le delega para que
+     * valide la ruta y avise del resultado. Sin gestor se usa el selector
+     * directo.</p>
+     */
     public void askForDirectory() {
+        if (onOpenProjectRequest != null) {
+            onOpenProjectRequest.run();
+            return;
+        }
         javax.swing.JFileChooser chooser = new javax.swing.JFileChooser();
         chooser.setDialogTitle("Seleccionar carpeta del proyecto");
         chooser.setFileSelectionMode(javax.swing.JFileChooser.DIRECTORIES_ONLY);
@@ -245,11 +331,12 @@ public class FileTreePanel extends JPanel {
     /** Relee el arbol desde disco respetando el filtro activo. */
     private void rebuild() {
         String needle = currentFilter();
+        List<File> ignored = new ArrayList<>();
         rootNode.removeAllChildren();
         if (root != null && root.isDirectory()) {
             for (File child : sortedChildren(root)) {
-                if (keep(child, needle)) {
-                    addNode(rootNode, child, needle);
+                if (isVisible(child, needle, ignored)) {
+                    addNode(rootNode, child, needle, ignored);
                 }
             }
         }
@@ -260,40 +347,124 @@ public class FileTreePanel extends JPanel {
                 tree.expandRow(i);
             }
         }
-        emptyHint.setVisible(rootNode.getChildCount() == 0);
+        refreshEmptyCard(needle, ignored.size());
+        publishIgnored(ignored);
         if (onDirectoryChanged != null) {
             onDirectoryChanged.run();
         }
     }
 
-    private void addNode(DefaultMutableTreeNode parent, File file, String needle) {
+    /**
+     * Decide si se ve el arbol o el aviso, y redacta el aviso segun el motivo:
+     * no hay proyecto, la carpeta esta vacia o el filtro no deja nada.
+     */
+    private void refreshEmptyCard(String needle, int ignored) {
+        boolean vacio = rootNode.getChildCount() == 0;
+        if (centerCards != null && centerHolder != null) {
+            centerCards.show(centerHolder, vacio ? CARD_EMPTY : CARD_TREE);
+        }
+        emptyHint.setVisible(vacio);
+        if (!vacio) {
+            return;
+        }
+        emptyLabel.setText("<html><div style='text-align:center;padding:16px'>"
+                + emptyMessage(needle, ignored) + "</div></html>");
+    }
+
+    private String emptyMessage(String needle, int ignored) {
+        if (root == null) {
+            return "Sin proyecto abierto.<br/>Usa <b>Abrir carpeta</b> en la cabecera"
+                    + "<br/>o el botón <b>Abrir archivo</b> de la barra superior.";
+        }
+        if (!root.isDirectory()) {
+            return "La carpeta del proyecto ya no existe:<br/>"
+                    + escape(root.getAbsolutePath());
+        }
+        if (!needle.isEmpty()) {
+            return "Ningún archivo coincide con el filtro<br/><b>" + escape(needle)
+                    + "</b>.<br/>Borra el texto para verlos todos.";
+        }
+        if (ignored > 0) {
+            return "Esta carpeta no tiene archivos de código.<br/>"
+                    + ignored + (ignored == 1
+                            ? " archivo fue ignorado"
+                            : " archivos fueron ignorados")
+                    + " por su extensión.<br/>Se admiten "
+                    + LanguageCompilerFactory.extensionPattern() + ".";
+        }
+        return "Esta carpeta está vacía.<br/>Se admiten "
+                + LanguageCompilerFactory.extensionPattern() + ".";
+    }
+
+    /** Escapa el texto para poder ponerlo dentro del HTML de una etiqueta. */
+    private static String escape(String text) {
+        return text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;");
+    }
+
+    /**
+     * Avisa de los archivos descartados, pero solo si la lista ha cambiado: el
+     * arbol se recarga al guardar o al filtrar y el aviso no debe repetirse.
+     */
+    private void publishIgnored(List<File> ignored) {
+        if (ignored.equals(new ArrayList<>(lastIgnored))) {
+            return;
+        }
+        lastIgnored.clear();
+        lastIgnored.addAll(ignored);
+        if (onFilesIgnored != null && !lastIgnored.isEmpty()) {
+            List<File> copy = new ArrayList<>(lastIgnored);
+            // El aviso es modal y el arbol se recarga desde eventos de Swing:
+            // se encola para no dejar el arbol a medias si el usuario interactua.
+            SwingUtilities.invokeLater(() -> onFilesIgnored.accept(copy));
+        }
+    }
+
+    private void addNode(DefaultMutableTreeNode parent, File file, String needle,
+                         List<File> ignored) {
         DefaultMutableTreeNode node = new DefaultMutableTreeNode(file);
         parent.add(node);
         if (file.isDirectory()) {
             for (File child : sortedChildren(file)) {
-                if (keep(child, needle)) {
-                    addNode(node, child, needle);
+                if (isVisible(child, needle, ignored)) {
+                    addNode(node, child, needle, ignored);
                 }
             }
         }
     }
 
-    /** true si el archivo (o algun descendiente suyo) encaja con el filtro. */
-    private boolean keep(File file, String needle) {
-        if (needle.isEmpty()) {
-            return true;
-        }
-        if (file.getName().toLowerCase(Locale.ROOT).contains(needle)) {
-            return true;
-        }
+    /**
+     * Decide si una entrada entra en el arbol.
+     *
+     * <p>Un archivo entra si su extension esta admitida y ademas encaja con el
+     * filtro de texto. Uno cuya extension no vale se anota en {@code ignored} y
+     * se descarta. Una carpeta entra si conserva alguna entrada valida: una
+     * carpeta vacia de codigo no aporta nada al arbol, pero sus archivos
+     * rechazados se anotan igualmente para que el usuario sepa que existen.</p>
+     */
+    private boolean isVisible(File file, String needle, List<File> ignored) {
         if (file.isDirectory()) {
-            for (File child : sortedChildren(file)) {
-                if (keep(child, needle)) {
-                    return true;
-                }
+            return containsVisible(file, needle, ignored);
+        }
+        if (!isSourceFile(file)) {
+            ignored.add(file);
+            return false;
+        }
+        return matchesText(file, needle);
+    }
+
+    /** true si el archivo, o algun descendiente suyo, debe mostrarse. */
+    private boolean containsVisible(File dir, String needle, List<File> ignored) {
+        for (File child : sortedChildren(dir)) {
+            if (isVisible(child, needle, ignored)) {
+                return true;
             }
         }
         return false;
+    }
+
+    private static boolean matchesText(File file, String needle) {
+        return needle.isEmpty()
+                || file.getName().toLowerCase(Locale.ROOT).contains(needle);
     }
 
     private static File[] sortedChildren(File dir) {
@@ -329,14 +500,9 @@ public class FileTreePanel extends JPanel {
         rebuild();
     }
 
+    /** true si el nombre lleva una de las extensiones admitidas. */
     private static boolean isSourceFile(File file) {
-        String name = file.getName().toLowerCase(Locale.ROOT);
-        for (String ext : SOURCE_EXTENSIONS) {
-            if (name.endsWith("." + ext)) {
-                return true;
-            }
-        }
-        return false;
+        return LanguageCompilerFactory.hasAllowedExtension(file.getName());
     }
 
     // ====================== Renderer ======================
@@ -359,7 +525,8 @@ public class FileTreePanel extends JPanel {
                     setIcon(expanded ? IdeIcons.folderOpen() : IdeIcons.folder());
                     setText(file.getName().isEmpty() ? file.getPath() : file.getName());
                 } else {
-                    setIcon(TabHeader.fileIcon(languageOf(file.getName())));
+                    setIcon(TabHeader.fileIcon(
+                            LanguageCompilerFactory.detectLanguageId(file.getName())));
                     setText(file.getName());
                 }
                 setToolTipText(file.getAbsolutePath());
@@ -372,17 +539,6 @@ public class FileTreePanel extends JPanel {
                 setForeground(UiTheme.fg());
             }
             return this;
-        }
-
-        private static String languageOf(String name) {
-            String lower = name.toLowerCase();
-            if (lower.endsWith(".y")) {
-                return "y";
-            }
-            if (lower.endsWith(".z")) {
-                return "zet";
-            }
-            return "pig";
         }
     }
 

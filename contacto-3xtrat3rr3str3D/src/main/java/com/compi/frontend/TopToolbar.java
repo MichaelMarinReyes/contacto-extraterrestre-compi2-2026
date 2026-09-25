@@ -37,24 +37,23 @@ public class TopToolbar extends JPanel {
     private final JPanel actionCluster = new JPanel();
     private final JPanel viewCluster = new JPanel();
     private final JLabel navLabel;
-    private final JComboBox<String> languageBox;
     private final JComboBox<String> cModeBox;
     private final JButton compileButton;
     private final JToggleButton sideToggle;
     private final JLabel projectLabel = new JLabel();
 
     /**
+     * <p>No hay selector de lenguaje: el lenguaje de cada archivo lo decide su
+     * extension, de modo que un mismo proyecto puede mezclar los tres.</p>
+     *
      * @param navLabel      etiqueta de ruta (MainWindow.optionSelectedLabel)
-     * @param languageBox   selector de lenguaje
      * @param cModeBox      selector de modo de generacion de C
      * @param compileButton boton de compilacion
      * @param sideToggle    boton que muestra/oculta el panel derecho
      */
-    public TopToolbar(JLabel navLabel, JComboBox<String> languageBox,
-                      JComboBox<String> cModeBox, JButton compileButton,
-                      JToggleButton sideToggle) {
+    public TopToolbar(JLabel navLabel, JComboBox<String> cModeBox,
+                      JButton compileButton, JToggleButton sideToggle) {
         this.navLabel = navLabel;
-        this.languageBox = languageBox;
         this.cModeBox = cModeBox;
         this.compileButton = compileButton;
         this.sideToggle = sideToggle;
@@ -124,15 +123,13 @@ public class TopToolbar extends JPanel {
         return center;
     }
 
-    /** Lenguaje, modo de C, compilar y visibilidad del dock derecho. */
+    /** Modo de C, compilar y visibilidad del dock derecho. */
     private JComponent buildRight() {
         JPanel right = new JPanel(new FlowLayout(FlowLayout.RIGHT, 6, 0));
         right.setOpaque(false);
 
-        styleCombo(languageBox, 130);
         styleCombo(cModeBox, 150);
 
-        right.add(labelled("Lenguaje", languageBox));
         right.add(labelled("Generar C", cModeBox));
 
         if (sideToggle != null) {
@@ -277,15 +274,6 @@ public class TopToolbar extends JPanel {
     }
 
     /** Permite a MainWindow inyectar consumidores de los desplegables. */
-    public void onLanguageSelected(Consumer<String> consumer) {
-        languageBox.addActionListener(e -> {
-            Object v = languageBox.getSelectedItem();
-            if (v != null) {
-                consumer.accept(v.toString());
-            }
-        });
-    }
-
     public void onCModeSelected(Consumer<Mode> consumer) {
         cModeBox.addActionListener(e -> {
             Object v = cModeBox.getSelectedItem();
@@ -303,10 +291,5 @@ public class TopToolbar extends JPanel {
     /** Desplegable de generacion de C, para fijarlo desde fuera. */
     public JComboBox<String> getCModeBox() {
         return cModeBox;
-    }
-
-    /** Desplegable de lenguaje, para fijarlo desde fuera. */
-    public JComboBox<String> getLanguageBox() {
-        return languageBox;
     }
 }

@@ -53,9 +53,18 @@ public class EditorTabs extends JTabbedPane {
     /**
      * Abre un archivo existente, reutilizando la pestana si ya estaba abierto.
      *
-     * @return el editor del archivo, o null si no se pudo leer
+     * <p>El lenguaje se deduce siempre de la extension; un archivo sin
+     * extension admitida se rechaza para que el arbol y el selector de archivos
+     * sean la unica puerta de entrada.</p>
+     *
+     * @return el editor del archivo, o null si no se pudo leer o la extension
+     *         no esta admitida
      */
     public EditorPanel openFile(File file) {
+        String lang = LanguageCompilerFactory.detectLanguageId(file.getName());
+        if (lang == null) {
+            return null;
+        }
         EditorPanel existing = open.get(file);
         if (existing != null) {
             setSelectedComponent(existing);
@@ -69,31 +78,73 @@ public class EditorTabs extends JTabbedPane {
         }
         EditorPanel editor = new EditorPanel(this::onCaretMoved, () -> onEditorModified());
         editor.setFile(file);
-        String lang = LanguageCompilerFactory.detectLanguageId(file.getName());
-        editor.setLanguageId(lang == null ? "pig" : lang);
+        editor.setLanguageId(lang);
         editor.setCodeText(content);
         addTab(editor);
         return editor;
     }
 
     /**
-     * Crea una pestana vacia con nombre "archivoN.pig".
+     * Crea una pestana vacia cuyo nombre ya lleva la extension del lenguaje
+     * ("archivoN.pig", "archivoN.y", "archivoN.z").
      */
     public EditorPanel newFile(String languageId) {
-        String ext = switch (languageId == null ? "pig" : languageId) {
-            case "y" -> ".y";
-            case "zet" -> ".z";
-            default -> ".pig";
-        };
+        return newFile(languageId, null);
+    }
+
+    /**
+     * Crea un archivo de verdad dentro de la carpeta contenedora y lo abre.
+     *
+     * <p>El archivo se escribe vacio en disco para que aparezca en el arbol de
+     * proyectos y no quede como una pestana sin ruta. Si el nombre ya existe se
+     * añade un sufijo numerico.</p>
+     *
+     * @param dir carpeta donde crear el archivo, o null para dejarlo sin ruta
+     * @return el editor del archivo nuevo, o null si no se pudo crear
+     */
+    public EditorPanel newFile(String languageId, File dir) {
+        String lang = languageId == null ? "pig" : languageId;
+        String ext = LanguageCompilerFactory.extensionOfLanguage(lang);
+        if (ext == null) {
+            ext = "pig";
+            lang = "pig";
+        }
+
+        File file = dir == null
+                ? new File("archivo" + (untitledCounter + 1) + "." + ext)
+                : uniqueName(dir, ext);
         untitledCounter++;
-        File placeholder = new File("archivo" + untitledCounter + ext);
+
+        if (dir != null && !file.exists()) {
+            try {
+                if (!file.createNewFile()) {
+                    return null;
+                }
+            } catch (IOException e) {
+                return null;
+            }
+        }
+
         EditorPanel editor = new EditorPanel(this::onCaretMoved, () -> onEditorModified());
-        editor.setFile(placeholder);
-        editor.setLanguageId(languageId == null ? "pig" : languageId);
+        editor.setFile(file);
+        editor.setLanguageId(lang);
         editor.setCodeText("");
-        untitled.add(placeholder);
+        if (dir == null) {
+            untitled.add(file);
+        }
         addTab(editor);
         return editor;
+    }
+
+    /** Primer "archivoN.<ext>" libre dentro de la carpeta. */
+    private static File uniqueName(File dir, String ext) {
+        for (int i = 1; i < 10_000; i++) {
+            File candidate = new File(dir, "archivo" + i + "." + ext);
+            if (!candidate.exists()) {
+                return candidate;
+            }
+        }
+        return new File(dir, "archivo." + ext);
     }
 
     private void addTab(EditorPanel editor) {
@@ -287,12 +338,10 @@ public class EditorTabs extends JTabbedPane {
         firePropertyChange("tabModified", null, editor);
     }
 
+    /** Extension de archivo que corresponde al lenguaje de un editor. */
     private static String extensionFor(String languageId) {
-        return switch (languageId == null ? "pig" : languageId) {
-            case "y" -> "y";
-            case "zet" -> "z";
-            default -> "pig";
-        };
+        String ext = LanguageCompilerFactory.extensionOfLanguage(languageId);
+        return ext == null ? "pig" : ext;
     }
 
     /** Refresca los encabezados (por ejemplo, tras cambiar de lenguaje). */
