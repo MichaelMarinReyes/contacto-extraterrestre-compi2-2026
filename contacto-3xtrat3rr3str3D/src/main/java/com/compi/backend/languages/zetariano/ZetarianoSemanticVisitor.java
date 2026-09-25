@@ -68,6 +68,7 @@ public class ZetarianoSemanticVisitor extends ZetarianoBaseVisitor<Type> {
         }
 
         symbolTable.enterScope("constructor_" + name, 1); // 0 es 'this'
+        defineThis();
         if (ctx.parametros() != null) {
             for (ZetarianoParser.ParametroContext pCtx : ctx.parametros().parametro()) {
                 String pName = pCtx.ID().getText();
@@ -93,6 +94,7 @@ public class ZetarianoSemanticVisitor extends ZetarianoBaseVisitor<Type> {
         methodSymbol.setReturnType(returnType);
 
         symbolTable.enterScope("method_" + methodName, 1); // offset 0 reservado para 'this'
+        defineThis();
 
         if (ctx.parametros() != null) {
             for (ZetarianoParser.ParametroContext pCtx : ctx.parametros().parametro()) {
@@ -309,8 +311,20 @@ public class ZetarianoSemanticVisitor extends ZetarianoBaseVisitor<Type> {
         return current;
     }
 
-    private Type resolveType(String text) {
-        if (text == null) return Type.UNKNOWN;
+    /**
+     * Declara la referencia implicita {@code this} en el ambito actual.
+     *
+     * El offset 0 queda reservado para ella, de modo que
+     * {@code this.campo} se resuelve igual que cualquier acceso a miembro.
+     */
+    private void defineThis() {
+        if (currentClass != null) {
+            symbolTable.define(new Symbol("this", currentClass.getType(),
+                    SymbolCategory.VARIABLE, 0, false));
+        }
+    }
+
+    private Type resolveType(String text) {        if (text == null) return Type.UNKNOWN;
         if (text.endsWith("[]")) {
             String base = text.substring(0, text.length() - 2);
             return Type.array(resolveType(base), 1);

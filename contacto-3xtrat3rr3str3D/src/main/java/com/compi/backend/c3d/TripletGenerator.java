@@ -12,7 +12,12 @@ public class TripletGenerator {
     public String newLabel(){ return "L"+(labelCounter++); }
 
     public void emit(QuadrupleOp op, String arg1, String arg2){
-        triplets.add(new Triplet(op, arg1, arg2));
+        emit(op, arg1, arg2, null);
+    }
+
+    /** Emite un triplete indicando adonde va el resultado de la operacion. */
+    public void emit(QuadrupleOp op, String arg1, String arg2, String result){
+        triplets.add(new Triplet(op, arg1, arg2, result));
     }
     public void emitLabel(String label){ triplets.add(new Triplet(QuadrupleOp.LABEL, null, label)); }
     public void emitGoto(String label){ triplets.add(new Triplet(QuadrupleOp.GOTO, null, label)); }

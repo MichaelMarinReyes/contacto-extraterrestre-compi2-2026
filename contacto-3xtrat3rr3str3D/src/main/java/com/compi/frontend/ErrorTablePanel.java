@@ -1,17 +1,24 @@
 package com.compi.frontend;
 
+import com.compi.backend.errors.CompilationError;
 import java.awt.BorderLayout;
-import java.awt.Font;
+import java.awt.Color;
+import java.awt.Component;
 import java.util.List;
 import javax.swing.JLabel;
+import javax.swing.JPanel;
 import javax.swing.JScrollPane;
 import javax.swing.JTable;
+import javax.swing.ListSelectionModel;
 import javax.swing.SwingConstants;
+import javax.swing.table.DefaultTableCellRenderer;
 import javax.swing.table.DefaultTableModel;
 
 /**
+ * Vista de la tabla de errores del compilador.
  *
- * @author michael
+ * Clasifica los errores por fase (lexico, sintactico, semantico) y colorea la
+ * columna de tipo segun la gravedad.
  */
 public class ErrorTablePanel extends javax.swing.JPanel {
 
@@ -19,15 +26,13 @@ public class ErrorTablePanel extends javax.swing.JPanel {
     private DefaultTableModel tableModel;
     private JScrollPane scrollPane;
     private JLabel emptyMessageLabel;
-    
-    
+
     /**
      * Creates new form ErrorTablePanel
      */
     public ErrorTablePanel() {
         initComponents();
         initCustomComponents();
-        //loadErrors(null);
     }
 
     /**
@@ -58,10 +63,8 @@ public class ErrorTablePanel extends javax.swing.JPanel {
     private void initCustomComponents() {
         setLayout(new BorderLayout());
 
-        // Definir columnas para cuando sí haya errores
-        String[] columnNames = {"Tipo", "Descripción del Error", "Línea", "Columna"};
-        
-        tableModel = new DefaultTableModel(columnNames, 0) {
+        tableModel = new DefaultTableModel(
+                new Object[]{"#", "Tipo", "Línea", "Col.", "Descripción"}, 0) {
             @Override
             public boolean isCellEditable(int row, int column) {
                 return false;
@@ -69,48 +72,111 @@ public class ErrorTablePanel extends javax.swing.JPanel {
         };
 
         errorTable = new JTable(tableModel);
-        scrollPane = new JScrollPane(errorTable);
+        errorTable.setFont(UiTheme.mono(12));
+        errorTable.setRowHeight(24);
+        errorTable.setAutoResizeMode(JTable.AUTO_RESIZE_LAST_COLUMN);
+        errorTable.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
+        errorTable.setBackground(UiTheme.toolWindowBg());
+        errorTable.setForeground(UiTheme.fg());
+        errorTable.setGridColor(UiTheme.separator());
+        errorTable.getTableHeader().setFont(UiTheme.sansBold(12));
+        errorTable.getTableHeader().setReorderingAllowed(false);
 
-        // Etiqueta creativa para cuando no hay errores
-        emptyMessageLabel = new JLabel(
-            "<html><div style='text-align: center;'>"
-            + "<h2 style='color: #2e7d32;'>¡Zona Libre de Infracciones!</h2>"
-            + "<p style='color: #555;'>Los firewalls biométricos de los Cerdos Tiranos no detectaron errores.</p>"
-            + "<p style='color: #777; font-size: 11px;'>El código fuente ha pasado la inspección con éxito 🐷✨</p>"
-            + "</div></html>", 
-            SwingConstants.CENTER
-        );
-        emptyMessageLabel.setFont(new Font("Segoe UI", Font.PLAIN, 14));
-    }
-    
-    /**
-     * Carga o actualiza la lista de errores en el modelo de la tabla.
-     * Si no hay errores, muestra un mensaje creativo en lugar de una tabla vacía.
-     *//*
-    public void loadErrors(List<CompilationError> errors) {
-        removeAll(); // Limpia el panel actual
-
-        if (errors == null || errors.isEmpty()) {
-            // Mostrar mensaje creativo si todo está limpio
-            add(emptyMessageLabel, BorderLayout.CENTER);
-        } else {
-            // Si hay errores, rellenar el modelo y mostrar la tabla
-            if (tableModel != null) {
-                tableModel.setRowCount(0);
-                for (CompilationError err : errors) {
-                    Object[] rowData = {
-                        err.getType(),
-                        err.getMessage(),
-                        err.getLine(),
-                        err.getColumn()
-                    };
-                    tableModel.addRow(rowData);
-                }
-            }
-            add(scrollPane, BorderLayout.CENTER);
+        int[] widths = {34, 100, 52, 52, 240};
+        for (int i = 0; i < widths.length; i++) {
+            errorTable.getColumnModel().getColumn(i).setPreferredWidth(widths[i]);
         }
 
+        DefaultTableCellRenderer typeRenderer = new DefaultTableCellRenderer() {
+            @Override
+            public Component getTableCellRendererComponent(JTable table, Object value,
+                                                           boolean isSelected, boolean hasFocus,
+                                                           int row, int column) {
+                Component comp = super.getTableCellRendererComponent(
+                        table, value, isSelected, hasFocus, row, column);
+                if (!isSelected) {
+                    comp.setForeground(colorForType(String.valueOf(value)));
+                }
+                setHorizontalAlignment(SwingConstants.CENTER);
+                return comp;
+            }
+        };
+        errorTable.getColumnModel().getColumn(1).setCellRenderer(typeRenderer);
+
+        emptyMessageLabel = new JLabel("Sin errores de compilación", SwingConstants.CENTER);
+        emptyMessageLabel.setFont(UiTheme.sans(12));
+        emptyMessageLabel.setForeground(UiTheme.dim());
+        emptyMessageLabel.setBorder(UiTheme.pad(20, 0, 20, 0));
+
+        scrollPane = new JScrollPane(errorTable);
+        scrollPane.setBorder(javax.swing.BorderFactory.createEmptyBorder());
+        scrollPane.setVisible(false);
+
+        add(scrollPane, BorderLayout.CENTER);
+        add(emptyMessageLabel, BorderLayout.CENTER);
+    }
+
+    private Color colorForType(String type) {
+        return switch (type) {
+            case "LEXICO" -> UiTheme.warning();
+            case "SINTACTICO" -> UiTheme.error();
+            case "SEMANTICO" -> new Color(0xDB5860).brighter();
+            default -> UiTheme.dim();
+        };
+    }
+
+    // ====================== API ======================
+
+    /**
+     * Carga la lista de errores.
+     */
+    public void loadErrors(List<CompilationError> errors) {
+        tableModel.setRowCount(0);
+        if (errors == null || errors.isEmpty()) {
+            scrollPane.setVisible(false);
+            emptyMessageLabel.setVisible(true);
+            emptyMessageLabel.setText("Sin errores de compilación");
+            revalidate();
+            repaint();
+            return;
+        }
+        int i = 1;
+        for (CompilationError e : errors) {
+            tableModel.addRow(new Object[]{
+                    i++,
+                    e.getType(),
+                    e.getLine(),
+                    e.getColumn(),
+                    e.getMessage()
+            });
+        }
+        scrollPane.setVisible(true);
+        emptyMessageLabel.setVisible(false);
         revalidate();
         repaint();
-    }*/
+    }
+
+    public JTable getErrorTable() {
+        return errorTable;
+    }
+
+    public int getErrorCount() {
+        return tableModel.getRowCount();
+    }
+
+    /**
+     * Devuelve el error de la fila seleccionada, o null.
+     */
+    public CompilationError getSelectedError(List<CompilationError> errors) {
+        int row = errorTable.getSelectedRow();
+        if (row < 0 || errors == null || row >= errors.size()) {
+            return null;
+        }
+        return errors.get(row);
+    }
+
+    /** Limpia la vista. */
+    public void clear() {
+        loadErrors(null);
+    }
 }

@@ -1,9 +1,13 @@
 package com.compi.backend.symbols;
 
 import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Collections;
 import java.util.HashMap;
+import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 public class SymbolTable {
     private Scope currentScope;
@@ -39,6 +43,20 @@ public class SymbolTable {
 
     public Scope getCurrentScope() {
         return currentScope;
+    }
+
+    /**
+     * Devuelve la tabla al estado inicial para empezar una compilacion limpia.
+     *
+     * <p>Sin esto la segunda compilacion de la misma sesion volveria a declarar
+     * los simbolos de la primera y cada variable globals aparecia duplicada.</p>
+     */
+    public void clear() {
+        currentScope = globalScope;
+        globalScope.clear();
+        structs.clear();
+        classes.clear();
+        functions.clear();
     }
 
     public Scope getGlobalScope() {
@@ -92,13 +110,41 @@ public class SymbolTable {
         return functions.get(name);
     }
 
+    /**
+     * Todos los simbolos visibles tras la compilacion.
+     *
+     * <p>Los ambitos anidados (clases, metodos) se cierran al terminar cada
+     * pasada, asi que ademas de los globales se incluyen los miembros de cada
+     * clase y estructura, que es donde quedan registrados.</p>
+     */
     public List<Symbol> getAllSymbols() {
         List<Symbol> all = new ArrayList<>();
-        collectAllSymbols(globalScope, all);
-        all.addAll(structs.values());
-        all.addAll(classes.values());
-        all.addAll(functions.values());
+        Set<Symbol> seen = Collections.newSetFromMap(new IdentityHashMap<>());
+        collectAllSymbols(globalScope, all, seen);
+        addMembers(structs.values(), all, seen);
+        addMembers(classes.values(), all, seen);
+        addMembers(functions.values(), all, seen);
         return all;
+    }
+
+    private void addMembers(Collection<Symbol> owners, List<Symbol> result, Set<Symbol> seen) {
+        for (Symbol owner : owners) {
+            if (seen.add(owner)) {
+                result.add(owner);
+            }
+            addMembers(owner.getMembers(), result, seen);
+        }
+    }
+
+    private void collectAllSymbols(Scope scope, List<Symbol> result, Set<Symbol> seen) {
+        if (scope == null) {
+            return;
+        }
+        for (Symbol s : scope.getSymbols()) {
+            if (seen.add(s)) {
+                result.add(s);
+            }
+        }
     }
 
     private void collectAllSymbols(Scope scope, List<Symbol> result) {

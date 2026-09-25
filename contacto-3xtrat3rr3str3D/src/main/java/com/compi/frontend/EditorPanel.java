@@ -2,57 +2,49 @@ package com.compi.frontend;
 
 import java.awt.BorderLayout;
 import java.awt.Color;
-import java.awt.Cursor;
-import java.awt.FlowLayout;
 import java.awt.Font;
-import java.awt.event.ActionEvent;
-import java.util.List;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
+import java.io.File;
+import java.util.function.Consumer;
 import javax.swing.BorderFactory;
-import javax.swing.JButton;
-import javax.swing.JLabel;
 import javax.swing.JPanel;
 import javax.swing.JScrollPane;
-import javax.swing.JSplitPane;
-import javax.swing.JTabbedPane;
-import javax.swing.JTextArea;
 import javax.swing.JTextPane;
+import javax.swing.SwingUtilities;
 import javax.swing.event.CaretEvent;
+import javax.swing.event.CaretListener;
 import javax.swing.event.DocumentEvent;
 import javax.swing.event.DocumentListener;
-import javax.swing.text.Style;
+import javax.swing.text.BadLocationException;
 import javax.swing.text.StyleConstants;
-import javax.swing.text.StyleContext;
 import javax.swing.text.StyledDocument;
 
 /**
+ * Editor de un unico archivo: area de texto, numeros de linea, resaltado
+ * sintactico segun el lenguaje y estado de modificacion.
  *
- * @author michael
+ * Cada instancia ocupa una pestana dentro de {@link EditorTabs}.
  */
 public class EditorPanel extends JPanel {
 
     private JTextPane codeTextArea;
-    private JTextArea pigLatinConsole;
-    private JTextArea executionConsole;
-    private JTextArea c3dConsole;
-    private JTabbedPane consoleTabbedPane;
-    private JLabel statusLabel;
-    private JButton compileButton;
     private LineNumberComponent lineNumberComponent;
-    //private final Compiler compiler = new Compiler();
-    private String result = "";
-    private boolean isUpdatingHighlight = false;
-    private Color colorSecciones;
-    private Color colorKeywords;
-    private Color colorTipos;
-    private Color colorCadenas;
-    private Color colorComentarios;
+    private SyntaxHighlighter highlighter;
+
+    private File file;
+    private String languageId = "pig";
+    private boolean modified;
+    private boolean suppressChangeEvents;
+
+    private final Consumer<EditorPanel> onCaretMove;
+    private final Runnable onModified;
 
     /**
-     * Creates new form EditorPanel
+     * @param onCaretMove notificado en cada movimiento del cursor
+     * @param onModified  notificado cuando el documento pasa a modificado
      */
-    public EditorPanel() {
+    public EditorPanel(Consumer<EditorPanel> onCaretMove, Runnable onModified) {
+        this.onCaretMove = onCaretMove;
+        this.onModified = onModified;
         initComponents();
         initCustomEditor();
     }
@@ -81,333 +73,194 @@ public class EditorPanel extends JPanel {
 
     // Variables declaration - do not modify//GEN-BEGIN:variables
     // End of variables declaration//GEN-END:variables
-    public String getCodeText() {
-        return codeTextArea.getText();
-    }
 
-    public void setCodeText(String text) {
-        codeTextArea.setText(text);
-    }
+    // ====================== Construccion ======================
 
-    public String getResult() {
-        return result;
-    }
-
-    public void setResult(String text) {
-        this.result = text;
-    }
-
-    // ===== Terminal de salida =====
-
-    public String getTerminalText() {
-        return executionConsole != null ? executionConsole.getText() : "";
-    }
-
-    public void setTerminalText(String text) {
-        if (executionConsole != null) {
-            executionConsole.setText(text);
-        }
-    }
-
-    public void appendTerminal(String text) {
-        if (executionConsole != null) {
-            executionConsole.append(text + "\n");
-        }
-    }
-
-    // ===== Consola Código de 3 direcciones =====
-
-    public String getC3DText() {
-        return c3dConsole != null ? c3dConsole.getText() : "";
-    }
-
-    public void setC3DText(String text) {
-        if (c3dConsole != null) {
-            c3dConsole.setText(text);
-        }
-    }
-
-    public void appendC3D(String text) {
-        if (c3dConsole != null) {
-            c3dConsole.append(text + "\n");
-        }
-    }
-
-    /**
-     * Muestra la pestaña "Código 3D" en las consolas del editor.
-     */
-    public void showC3DTab() {
-        if (consoleTabbedPane != null) {
-            int index = consoleTabbedPane.indexOfTab("Código 3D");
-            if (index >= 0) {
-                consoleTabbedPane.setSelectedIndex(index);
-            }
-        }
-    }
-
-    /**
-     * Método de compatibilidad para establecer texto en las consolas desde
-     * MainWindow.
-     *
-     * @param text El texto a mostrar.
-     */
-    public void setConsoleTextArea(String text) {
-        if (pigLatinConsole != null) {
-            pigLatinConsole.setText(text);
-        }
-        if (executionConsole != null) {
-            executionConsole.setText(text);
-        }
-    }
-
-    /**
-     * Método de compatibilidad para imprimir en la consola de PigLatin.
-     */
-    public void printToConsole(String text) {
-        if (pigLatinConsole != null) {
-            pigLatinConsole.setForeground(Color.GREEN);
-            pigLatinConsole.append(text + "\n");
-        }
-    }
-
-    /**
-     * Inicializa los componentes del editor de código, consola, números de
-     * línea, botón compilar y barra de estado.
-     */
     private void initCustomEditor() {
-        this.setLayout(new BorderLayout());
+        setLayout(new BorderLayout());
+        setBorder(UiTheme.hairlineTop());
 
-        inicializarColores();
-
-        Color backgroundGray = new Color(240, 240, 240);
-        this.setBackground(backgroundGray);
-
-        // Editor de código fuente (Área superior)
         codeTextArea = new JTextPane();
-        codeTextArea.setFont(new Font("Monospaced", Font.PLAIN, 14));
-        codeTextArea.setBackground(new Color(255, 255, 255));
+        codeTextArea.setFont(UiTheme.mono(14));
+        codeTextArea.putClientProperty(JTextPane.HONOR_DISPLAY_PROPERTIES, Boolean.TRUE);
+        codeTextArea.setBackground(UiTheme.editorBg());
+        codeTextArea.setForeground(UiTheme.fg());
+        codeTextArea.setCaretColor(UiTheme.fg());
+        codeTextArea.setSelectionColor(UiTheme.accent());
+        codeTextArea.setSelectedTextColor(Color.WHITE);
+        codeTextArea.setBorder(UiTheme.pad(4, 8, 4, 8));
 
+        highlighter = new SyntaxHighlighter(codeTextArea);
         lineNumberComponent = new LineNumberComponent(codeTextArea);
 
-        JScrollPane codeScrollPane = new JScrollPane(codeTextArea);
-        codeScrollPane.setRowHeaderView(lineNumberComponent);
-        codeScrollPane.setVerticalScrollBarPolicy(JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED);
-        codeScrollPane.setHorizontalScrollBarPolicy(JScrollPane.HORIZONTAL_SCROLLBAR_AS_NEEDED);
-        codeScrollPane.setBackground(backgroundGray);
-        codeScrollPane.getViewport().setBackground(new Color(255, 255, 255));
+        JScrollPane scroll = new JScrollPane(codeTextArea);
+        scroll.setRowHeaderView(lineNumberComponent);
+        scroll.setBorder(BorderFactory.createEmptyBorder());
+        scroll.getViewport().setBackground(UiTheme.editorBg());
+        scroll.getVerticalScrollBar().setUnitIncrement(18);
+        add(scroll, BorderLayout.CENTER);
 
-        // Consola Pestaña 1: PigLatin
-        pigLatinConsole = new JTextArea();
-        pigLatinConsole.setFont(new Font("Monospaced", Font.PLAIN, 13));
-        pigLatinConsole.setEditable(false);
-        pigLatinConsole.setBackground(new Color(30, 30, 30));
-        pigLatinConsole.setForeground(new Color(220, 220, 220));
-        JScrollPane pigLatinScroll = new JScrollPane(pigLatinConsole);
+        attachListeners();
+    }
 
-        // Consola Pestaña 2: Ejecución (terminal de salida del programa)
-        executionConsole = new JTextArea();
-        executionConsole.setFont(new Font("Monospaced", Font.PLAIN, 13));
-        executionConsole.setEditable(false);
-        executionConsole.setBackground(new Color(30, 30, 30));
-        executionConsole.setForeground(new Color(220, 220, 220));
-        JScrollPane executionScroll = new JScrollPane(executionConsole);
-
-        // Consola Pestaña 3: Código de tres direcciones
-        c3dConsole = new JTextArea();
-        c3dConsole.setFont(new Font("Monospaced", Font.PLAIN, 13));
-        c3dConsole.setEditable(false);
-        c3dConsole.setBackground(new Color(25, 25, 35));
-        c3dConsole.setForeground(new Color(180, 220, 255));
-        JScrollPane c3dScroll = new JScrollPane(c3dConsole);
-
-        // Panel con pestañas para la consola
-        consoleTabbedPane = new JTabbedPane();
-        consoleTabbedPane.addTab("Terminal", executionScroll);
-        consoleTabbedPane.addTab("PigLatin", pigLatinScroll);
-        consoleTabbedPane.addTab("Código 3D", c3dScroll);
-        consoleTabbedPane.setBorder(BorderFactory.createTitledBorder(" Consola de Resultados "));
-
-        // Barra de estado y botón compilar (Área inferior)
-        JPanel statusPanel = new JPanel(new BorderLayout());
-        statusPanel.setBackground(backgroundGray);
-        statusPanel.setBorder(BorderFactory.createEmptyBorder(2, 5, 2, 5));
-
-        compileButton = new JButton("Compilar y Ejecutar");
-        compileButton.setBackground(new Color(46, 139, 87));
-        compileButton.setForeground(Color.WHITE);
-        compileButton.setCursor(new Cursor(Cursor.HAND_CURSOR));
-        compileButton.addActionListener(e -> compileButtonActionPerformed(e));
-
-        JPanel leftStatusPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 0, 0));
-        leftStatusPanel.setOpaque(false);
-        leftStatusPanel.add(compileButton);
-        statusPanel.add(leftStatusPanel, BorderLayout.WEST);
-
-        statusLabel = new JLabel("Línea: 1 | Columna: 1");
-        statusLabel.setFont(new Font("SansSerif", Font.PLAIN, 12));
-        statusLabel.setForeground(Color.BLACK);
-        statusPanel.add(statusLabel, BorderLayout.EAST);
-
-        // SplitPane principal separando Editor y Consola Tabulada
-        JSplitPane splitPane = new JSplitPane(JSplitPane.VERTICAL_SPLIT, codeScrollPane, consoleTabbedPane);
-        splitPane.setResizeWeight(0.75);
-        splitPane.setDividerLocation(350);
-        splitPane.setBackground(backgroundGray);
-
-        this.add(splitPane, BorderLayout.CENTER);
-        this.add(statusPanel, BorderLayout.SOUTH);
-
-        // Listener para coloreado sintáctico dinámico
+    private void attachListeners() {
         codeTextArea.getDocument().addDocumentListener(new DocumentListener() {
             @Override
             public void insertUpdate(DocumentEvent e) {
-                triggerHighlight();
+                documentChanged();
             }
 
             @Override
             public void removeUpdate(DocumentEvent e) {
-                triggerHighlight();
+                documentChanged();
             }
 
             @Override
             public void changedUpdate(DocumentEvent e) {
-                triggerHighlight();
+                // Solo cambian los estilos: el texto sigue igual, asi que no
+                // hay que resaltar otra vez ni marcar la pestana como sucia.
+                // Si se hiciera, el resaltador se realimentaria sin fin.
             }
         });
 
-        // Listener para posición del cursor
-        codeTextArea.addCaretListener((CaretEvent e) -> {
-            int lineNumber = 1;
-            int columnNumber = 1;
-            try {
-                int caretPos = codeTextArea.getCaretPosition();
-                String text = codeTextArea.getText();
-                if (caretPos <= text.length()) {
-                    for (int i = 0; i < caretPos; i++) {
-                        if (text.charAt(i) == '\n') {
-                            lineNumber++;
-                            columnNumber = 1;
-                        } else {
-                            columnNumber++;
-                        }
-                    }
+        codeTextArea.addCaretListener(new CaretListener() {
+            @Override
+            public void caretUpdate(CaretEvent e) {
+                if (onCaretMove != null) {
+                    onCaretMove.accept(EditorPanel.this);
                 }
-            } catch (Exception ex) {
-                // Manejo de excepciones de posición
             }
-            statusLabel.setText("Línea: " + lineNumber + " | Columna: " + columnNumber);
         });
     }
 
-    private void inicializarColores() {
-        colorSecciones = new Color(128, 0, 128);
-        colorKeywords = new Color(0, 0, 255);
-        colorTipos = new Color(0, 128, 128);
-        colorCadenas = new Color(0, 128, 0);
-        colorComentarios = new Color(128, 128, 128);
-    }
-
-    private void triggerHighlight() {
-        if (isUpdatingHighlight) {
+    private void documentChanged() {
+        highlighter.rehighlight();
+        if (suppressChangeEvents) {
             return;
         }
-        isUpdatingHighlight = true;
-
-        javax.swing.SwingUtilities.invokeLater(() -> {
-            applySyntaxHighlighting();
-            isUpdatingHighlight = false;
-        });
-    }
-
-    private void applySyntaxHighlighting() {
-        StyledDocument doc = codeTextArea.getStyledDocument();
-        String text = codeTextArea.getText();
-
-        Style defaultStyle = StyleContext.getDefaultStyleContext().getStyle(StyleContext.DEFAULT_STYLE);
-        StyleConstants.setForeground(defaultStyle, Color.BLACK);
-        doc.setCharacterAttributes(0, text.length(), defaultStyle, true);
-
-        coloringRegex(doc, text, "\\b(VARIABILES>|MUNERA>|MAIOR>)\\b", colorSecciones, true);
-        coloringRegex(doc, text, "\\b(structura|ratio|actio|si|sino|dum|facere|per|reddere|finis|perge|interrumpe|verum|falsus)\\b", colorKeywords, true);
-        coloringRegex(doc, text, "\\b(numerus|textum|decimalis|littera)\\b", colorTipos, false);
-        coloringRegex(doc, text, "\"[^\"]*\"", colorCadenas, false);
-        coloringRegex(doc, text, "//.*", colorComentarios, false);
-        coloringRegex(doc, text, "##[\\s\\S]*?##", colorComentarios, false);
-    }
-
-    private void coloringRegex(StyledDocument doc, String text, String regex, Color color, boolean bold) {
-        Pattern pattern = Pattern.compile(regex);
-        Matcher matcher = pattern.matcher(text);
-
-        Style style = doc.addStyle("Style_" + regex.hashCode(), null);
-        StyleConstants.setForeground(style, color);
-        StyleConstants.setBold(style, bold);
-
-        while (matcher.find()) {
-            doc.setCharacterAttributes(matcher.start(), matcher.end() - matcher.start(), style, false);
+        if (!modified) {
+            modified = true;
+            if (onModified != null) {
+                onModified.run();
+            }
         }
     }
 
-    private void compileButtonActionPerformed(ActionEvent evt) {
-      /*  pigLatinConsole.setText("");
-        executionConsole.setText("");
-        String codigoFuente = codeTextArea.getText();
+    // ====================== Contenido ======================
 
-        if (codigoFuente.trim().isEmpty()) {
-            pigLatinConsole.setForeground(Color.RED);
-            pigLatinConsole.setText("Error: El editor está vacío.");
-            executionConsole.setForeground(Color.RED);
-            executionConsole.setText("Error: El editor está vacío.");
-            return;
-        }
+    public String getCodeText() {
+        return codeTextArea.getText();
+    }
 
+    /** Reemplaza el contenido sin marcar el documento como modificado. */
+    public void setCodeText(String text) {
+        suppressChangeEvents = true;
         try {
-            String pigLatinResult = compiler.parseCode(codigoFuente);
-            pigLatinConsole.setForeground(new Color(0, 230, 118));
-            pigLatinConsole.setText(pigLatinResult != null ? pigLatinResult : "");
-
-            if (compiler.getCompilationErrors().isEmpty()) {
-                String humanResult = compiler.getHumanTranslatedText();
-
-                executionConsole.setForeground(new Color(100, 210, 255));
-                executionConsole.setText(humanResult != null && !humanResult.isEmpty()
-                        ? humanResult 
-                        : "Ejecución finalizada con éxito (Sin salida por consola).");
-            } else {
-                executionConsole.setForeground(Color.ORANGE);
-                executionConsole.setText("No se puede ejecutar debido a errores en el código:\n" + compiler.getCompilationErrors());
-            }
-
-        } catch (Exception ex) {
-            pigLatinConsole.setForeground(Color.RED);
-            pigLatinConsole.setText("Error en la traducción:\n" + ex.getMessage());
-
-            executionConsole.setForeground(Color.RED);
-            executionConsole.setText("Error en la ejecución:\n" + ex.getMessage());
-        }*/
+            codeTextArea.setText(text == null ? "" : text);
+            codeTextArea.setCaretPosition(0);
+            modified = false;
+        } finally {
+            suppressChangeEvents = false;
+        }
+        highlighter.rehighlight();
     }
 
-    public void clearConsole() {
-        pigLatinConsole.setText("");
-        executionConsole.setText("");
-        if (c3dConsole != null) {
-            c3dConsole.setText("");
+    /** Inserta texto en la posicion del cursor. */
+    public void insertAtCaret(String text) {
+        try {
+            codeTextArea.getDocument().insertString(codeTextArea.getCaretPosition(), text, null);
+        } catch (BadLocationException ignored) {
+            // Si la posicion no es valida se ignora la insercion.
         }
     }
-/*
-    public SymbolTable getSymbolTable() {
-        return compiler.getSymbolTable();
+
+    public JTextPane getTextPane() {
+        return codeTextArea;
     }
 
-    public List<CompilationError> getCompilationErrors() {
-        return compiler.getCompilationErrors();
+    public LineNumberComponent getLineNumberComponent() {
+        return lineNumberComponent;
     }
 
-    public String getLastDotCode() {
-        return compiler.getLastDotCode();
+    // ====================== Estado ======================
+
+    public File getFile() {
+        return file;
     }
 
-    public List<StackState> getLastStackSteps() {
-        return compiler.getLastStackSteps();
-    }*/
+    public void setFile(File file) {
+        this.file = file;
+    }
+
+    public String getDisplayName() {
+        return file != null ? file.getName() : "Sin titulo";
+    }
+
+    public String getLanguageId() {
+        return languageId;
+    }
+
+    public void setLanguageId(String languageId) {
+        this.languageId = languageId;
+        highlighter.setLanguage(languageId);
+    }
+
+    public boolean isModified() {
+        return modified;
+    }
+
+    public void setModified(boolean modified) {
+        this.modified = modified;
+    }
+
+    // ====================== Posicion del cursor ======================
+
+    public int getCaretLine() {
+        return rootElement().getElementIndex(codeTextArea.getCaretPosition()) + 1;
+    }
+
+    public int getCaretColumn() {
+        var root = rootElement();
+        int index = root.getElementIndex(codeTextArea.getCaretPosition());
+        return codeTextArea.getCaretPosition() - root.getElement(index).getStartOffset() + 1;
+    }
+
+    public int getLineCount() {
+        return rootElement().getElementCount();
+    }
+
+    /** Lleva el cursor a una linea (1-based). */
+    public void gotoLine(int line) {
+        var root = rootElement();
+        int idx = Math.max(0, Math.min(root.getElementCount() - 1, line - 1));
+        int pos = root.getElement(idx).getStartOffset();
+        codeTextArea.setCaretPosition(Math.min(pos, codeTextArea.getDocument().getLength()));
+    }
+
+    private javax.swing.text.Element rootElement() {
+        return codeTextArea.getDocument().getDefaultRootElement();
+    }
+
+    // ====================== Resaltado ======================
+
+    /** Fuerza un repintado del resaltado sintactico. */
+    public void refreshHighlight() {
+        SwingUtilities.invokeLater(highlighter::rehighlight);
+    }
+
+    /** Aplica el color de primer plano al area de texto. */
+    public void applyTheme() {
+        codeTextArea.setBackground(UiTheme.editorBg());
+        codeTextArea.setForeground(UiTheme.fg());
+        codeTextArea.setCaretColor(UiTheme.fg());
+        if (lineNumberComponent != null) {
+            lineNumberComponent.applyTheme();
+        }
+        refreshHighlight();
+    }
+
+    /** Estilo base reutilizable por el resaltador. */
+    static void setForeground(javax.swing.text.Style style, Color color) {
+        StyleConstants.setForeground(style, color);
+    }
 }

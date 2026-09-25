@@ -70,7 +70,11 @@ public class Quadruple {
             case MUL:
             case DIV:
             case MOD:
+            case AND:
+            case OR:
                 return result + " = " + arg1 + " " + op.getSymbol() + " " + arg2 + ";";
+            case NOT:
+                return result + " = !" + arg1 + ";";
             case CALL:
                 return (result != null ? result + " = " : "") + "call " + arg1 + (arg2 != null ? ", " + arg2 : "") + ";";
             case PARAM:

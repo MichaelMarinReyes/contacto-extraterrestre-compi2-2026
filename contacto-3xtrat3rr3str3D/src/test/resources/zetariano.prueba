@@ -1,0 +1,23 @@
+public class Contador {
+    int valor;
+    int total;
+
+    public Contador(int valor) {
+        total = 0;
+        this.valor = valor;
+    }
+
+    public int procesar(int limite) {
+        int i;
+        i = 0;
+        while (i < limite) {
+            if (i == 5) {
+                println("cinco");
+            } else {
+                total = total + i;
+            }
+            i++;
+        }
+        return total;
+    }
+}

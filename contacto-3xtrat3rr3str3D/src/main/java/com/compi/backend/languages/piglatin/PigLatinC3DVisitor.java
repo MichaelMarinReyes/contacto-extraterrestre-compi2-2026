@@ -118,6 +118,78 @@ public class PigLatinC3DVisitor extends PigLatinBaseVisitor<String> {
         return null;
     }
 
+    // ===================== Condicionales =====================
+
+    @Override
+    public String visitCondicion(PigLatinParser.CondicionContext ctx) {
+        if (ctx.conjuncion() != null) {
+            return visit(ctx.conjuncion());
+        }
+        return visit(ctx.condicion());
+    }
+
+    @Override
+    public String visitConjuncion(PigLatinParser.ConjuncionContext ctx) {
+        if (ctx.conjuncion() != null) {
+            String acc = visit(ctx.conjuncion());
+            String right = visit(ctx.negacion_logica());
+            String temp = c3d.newTemp();
+            c3d.emit(QuadrupleOp.AND, acc, right, temp);
+            return temp;
+        }
+        return visit(ctx.negacion_logica());
+    }
+
+    @Override
+    public String visitNegacion_logica(PigLatinParser.Negacion_logicaContext ctx) {
+        if (ctx.NEGACION() != null) {
+            String inner = visit(ctx.negacion_logica());
+            String temp = c3d.newTemp();
+            // non x  ->  x == 0
+            c3d.emit(QuadrupleOp.IF_EQ, inner, "0", temp);
+            return temp;
+        }
+        return visit(ctx.primaria_logica());
+    }
+
+    @Override
+    public String visitPrimaria_logica(PigLatinParser.Primaria_logicaContext ctx) {
+        if (ctx.expresion().size() >= 2) {
+            String left = visit(ctx.expresion(0));
+            String right = visit(ctx.expresion(1));
+            String symbol = ctx.operador_relacional().getText();
+            QuadrupleOp op = switch (symbol) {
+                case "==" -> QuadrupleOp.IF_EQ;
+                case "!=" -> QuadrupleOp.IF_NE;
+                case "<" -> QuadrupleOp.IF_LT;
+                case "<=" -> QuadrupleOp.IF_LE;
+                case ">" -> QuadrupleOp.IF_GT;
+                case ">=" -> QuadrupleOp.IF_GE;
+                default -> QuadrupleOp.IF_EQ;
+            };
+            String temp = c3d.newTemp();
+            c3d.emit(op, left, right, temp);
+            return temp;
+        }
+        if (ctx.expresion() != null) {
+            return visit(ctx.expresion(0));
+        }
+        if (ctx.VERUM() != null) return "1";
+        if (ctx.FALSUS() != null) return "0";
+        if (ctx.VARIABLE() != null) {
+            Symbol s = symbolTable.resolve(ctx.VARIABLE().getText());
+            if (s != null) {
+                String temp = c3d.newTemp();
+                c3d.emit(QuadrupleOp.STACK_GET, String.valueOf(s.getOffset()), null, temp);
+                return temp;
+            }
+        }
+        if (ctx.llamada_funcion() != null) {
+            return visit(ctx.llamada_funcion());
+        }
+        return "0";
+    }
+
     @Override
     public String visitExpresion(PigLatinParser.ExpresionContext ctx) {
         if (ctx.termino() != null && ctx.termino().size() == 1) {

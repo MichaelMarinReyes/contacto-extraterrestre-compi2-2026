@@ -8,6 +8,11 @@ public enum QuadrupleOp {
     DIV("/"),
     MOD("%"),
 
+    // Lógica
+    AND("&&"),
+    OR("||"),
+    NOT("!"),
+
     // Asignación simple
     ASSIGN("="),
 

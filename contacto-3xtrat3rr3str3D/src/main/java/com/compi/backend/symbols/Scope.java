@@ -62,4 +62,10 @@ public class Scope {
     public Collection<Symbol> getSymbols() {
         return symbols.values();
     }
+
+    /** Vacia el ambito y reinicia el contador de offsets. */
+    public void clear() {
+        symbols.clear();
+        currentOffset = 0;
+    }
 }

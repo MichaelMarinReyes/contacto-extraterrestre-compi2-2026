@@ -1,17 +1,17 @@
 package com.compi.frontend;
 
+import com.compi.frontend.dot.TreeCanvas;
 import java.awt.BorderLayout;
+import java.awt.Cursor;
 import java.awt.Dimension;
-import java.awt.Graphics;
+import java.awt.FlowLayout;
 import java.awt.Graphics2D;
-import java.awt.Image;
-import java.awt.RenderingHints;
-import java.awt.event.MouseWheelEvent;
-import java.awt.event.MouseWheelListener;
+import java.awt.image.BufferedImage;
 import java.io.File;
-import java.io.FileWriter;
 import java.io.IOException;
-import javax.swing.ImageIcon;
+import javax.imageio.ImageIO;
+import javax.swing.BorderFactory;
+import javax.swing.JButton;
 import javax.swing.JLabel;
 import javax.swing.JOptionPane;
 import javax.swing.JPanel;
@@ -19,16 +19,17 @@ import javax.swing.JScrollPane;
 import javax.swing.SwingConstants;
 
 /**
+ * Vista del arbol de sintaxis abstracta.
  *
- * @author michael
+ * Muestra el grafo DOT generado por el backend dentro de un lienzo con zoom,
+ * ajuste automatico y exportacion a PNG. No depende del binario externo
+ * {@code dot}: el dibujado se hace con Graphics2D.
  */
 public class ParserTreePanel extends JPanel {
 
-    private ZoomableImagePanel imagePanel;
+    private TreeCanvas canvas;
     private JScrollPane scrollPane;
-    private Image originalImage = null;
-    private double zoomFactor = 1.0;
-    private JLabel messageLabel;
+    private JLabel infoLabel;
 
     /**
      * Creates new form ParserTree
@@ -62,149 +63,126 @@ public class ParserTreePanel extends JPanel {
 
     // Variables declaration - do not modify//GEN-BEGIN:variables
     // End of variables declaration//GEN-END:variables
-    
+
     private void initCustomComponents() {
-        this.setLayout(new BorderLayout());
+        setLayout(new BorderLayout());
 
-        messageLabel = new JLabel("No hay árbol AST generado aún.", SwingConstants.CENTER);
+        canvas = new TreeCanvas();
+        canvas.setBackground(UiTheme.toolWindowBg());
 
-        // Panel personalizado que escala instantáneamente mediante Graphics2D
-        imagePanel = new ZoomableImagePanel();
-        imagePanel.setLayout(new BorderLayout());
-        imagePanel.add(messageLabel, BorderLayout.CENTER);
+        scrollPane = new JScrollPane(canvas);
+        scrollPane.setBorder(BorderFactory.createEmptyBorder());
+        scrollPane.getViewport().setBackground(UiTheme.toolWindowBg());
+        scrollPane.getVerticalScrollBar().setUnitIncrement(18);
+        scrollPane.getHorizontalScrollBar().setUnitIncrement(18);
 
-        scrollPane = new JScrollPane(imagePanel);
-        scrollPane.setHorizontalScrollBarPolicy(JScrollPane.HORIZONTAL_SCROLLBAR_AS_NEEDED);
-        scrollPane.setVerticalScrollBarPolicy(JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED);
-
-        // Listener optimizado para el Zoom (Ctrl + Scroll)
-        scrollPane.addMouseWheelListener(new MouseWheelListener() {
-            @Override
-            public void mouseWheelMoved(MouseWheelEvent e) {
-                if (originalImage == null) {
-                    return;
-                }
-
-                if (e.isControlDown()) {
-                    e.consume();
-
-                    double oldFactor = zoomFactor;
-                    if (e.getPreciseWheelRotation() < 0) {
-                        zoomFactor *= 1.1; // Acercar
-                    } else {
-                        zoomFactor /= 1.1; // Alejar
-                    }
-
-                    // Limitar zoom entre 10% y 500%
-                    zoomFactor = Math.max(0.1, Math.min(5.0, zoomFactor));
-
-                    // Solo repintar si el zoom cambió realmente
-                    if (oldFactor != zoomFactor) {
-                        imagePanel.revalidate();
-                        imagePanel.repaint();
-                    }
-                }
-            }
-        });
-
-        this.add(scrollPane, BorderLayout.CENTER);
+        add(buildToolbar(), BorderLayout.NORTH);
+        add(scrollPane, BorderLayout.CENTER);
+        add(buildInfoBar(), BorderLayout.SOUTH);
     }
 
-    /**
-     * Panel interno encargado de renderizar la imagen con escala vectorial
-     * fluida.
-     */
-    private class ZoomableImagePanel extends JPanel {
-
-        @Override
-        protected void paintComponent(Graphics g) {
-            super.paintComponent(g);
-            if (originalImage != null) {
-                Graphics2D g2d = (Graphics2D) g.create();
-                g2d.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BILINEAR);
-                g2d.scale(zoomFactor, zoomFactor);
-                g2d.drawImage(originalImage, 0, 0, this);
-                g2d.dispose();
-            }
-        }
-
-        @Override
-        public Dimension getPreferredSize() {
-            if (originalImage == null) {
-                return super.getPreferredSize();
-            }
-            int width = (int) (originalImage.getWidth(null) * zoomFactor);
-            int height = (int) (originalImage.getHeight(null) * zoomFactor);
-            return new Dimension(width, height);
-        }
+    private JPanel buildToolbar() {
+        JPanel bar = new JPanel(new FlowLayout(FlowLayout.LEFT, 2, 6));
+        bar.setBorder(UiTheme.pad(0, 4, 0, 4));
+        bar.add(toolButton(IdeIcons.zoomIn(), "Acercar", () -> canvas.zoomIn()));
+        bar.add(toolButton(IdeIcons.zoomOut(), "Alejar", () -> canvas.zoomOut()));
+        bar.add(toolButton(IdeIcons.fit(), "Ajustar al panel", () -> fitGraph()));
+        bar.add(toolButton(IdeIcons.export(), "Exportar PNG", () -> exportPng()));
+        return bar;
     }
 
+    private JPanel buildInfoBar() {
+        JPanel bar = new JPanel(new BorderLayout());
+        bar.setBorder(UiTheme.pad(3, 10, 4, 10));
+        infoLabel = new JLabel("Sin árbol generado", SwingConstants.LEFT);
+        infoLabel.setFont(UiTheme.sans(11));
+        infoLabel.setForeground(UiTheme.dim());
+        bar.add(infoLabel, BorderLayout.WEST);
+        return bar;
+    }
+
+    private JButton toolButton(javax.swing.Icon icon, String tooltip, Runnable action) {
+        JButton b = new JButton(icon);
+        b.setToolTipText(tooltip);
+        b.setFocusable(false);
+        b.setBorderPainted(false);
+        b.setContentAreaFilled(false);
+        b.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+        b.setPreferredSize(new Dimension(26, 26));
+        b.addActionListener(e -> action.run());
+        return b;
+    }
+
+    // ====================== API ======================
+
     /**
-     * Recibe el código DOT de Graphviz, genera la imagen y la muestra en el
-     * panel.
+     * Carga un grafo DOT y lo dibuja.
      *
-     * @param dotCode Contenido en formato DOT del AST.
+     * @param dotCode contenido DOT del AST; vacio o null limpia la vista
      */
     public void renderGraph(String dotCode) {
-        if (dotCode == null || dotCode.trim().isEmpty()) {
-            originalImage = null;
-            zoomFactor = 1.0;
-            messageLabel.setText("No se generó el árbol debido a errores.\nVerifique las tablas de errores para más detalles.");
-            messageLabel.setVisible(true);
-            imagePanel.revalidate();
-            imagePanel.repaint();
+        canvas.setDot(dotCode);
+        if (!canvas.hasGraph()) {
+            infoLabel.setText("No se generó el árbol. Revisa la tabla de errores.");
             return;
         }
+        // Ajusta una vez que el panel tiene tamano real.
+        javax.swing.SwingUtilities.invokeLater(this::fitGraph);
+    }
 
-        try {
-            File tempDot = File.createTempFile("ast_graph", ".dot");
-            File tempImg = File.createTempFile("ast_graph", ".png");
-            tempImg.deleteOnExit();
+    /** Alias de {@link #renderGraph(String)} para uso desde MainWindow. */
+    public void setDotText(String dotCode) {
+        renderGraph(dotCode);
+    }
 
-            try (FileWriter writer = new FileWriter(tempDot)) {
-                writer.write(dotCode);
-            }
+    private void fitGraph() {
+        canvas.zoomToFit();
+        scrollPane.getViewport().setViewPosition(new java.awt.Point(0, 0));
+        infoLabel.setText("Nodos: " + canvas.getNodeCount()
+                + "   Profundidad: " + canvas.getTreeDepth()
+                + "   Zoom: " + Math.round(canvas.getZoom() * 100) + "%");
+    }
 
-            ProcessBuilder processBuilder = new ProcessBuilder("dot", "-Tpng", tempDot.getAbsolutePath(), "-o", tempImg.getAbsolutePath());
-            Process process = processBuilder.start();
-            int exitCode = process.waitFor();
+    public TreeCanvas getCanvas() {
+        return canvas;
+    }
 
-            if (exitCode == 0) {
-                ImageIcon icon = new ImageIcon(tempImg.getAbsolutePath());
-                originalImage = icon.getImage();
-                zoomFactor = 1.0; // Resetear zoom al generar un nuevo árbol
-                messageLabel.setVisible(false);
-                imagePanel.revalidate();
-                imagePanel.repaint();
-            } else {
-                originalImage = null;
-                zoomFactor = 1.0;
-                messageLabel.setText("Error al compilar Graphviz (Asegúrate de tenerlo instalado).");
-                messageLabel.setVisible(true);
-                imagePanel.revalidate();
-                imagePanel.repaint();
-                JOptionPane.showMessageDialog(this,
-                        "Graphviz devolvió un código de salida no exitoso. ¿Está instalado 'dot' en tu PATH?",
-                        "Error de Graphviz",
-                        JOptionPane.ERROR_MESSAGE);
-            }
+    public boolean hasGraph() {
+        return canvas.hasGraph();
+    }
 
-            tempDot.delete();
-
-        } catch (IOException | InterruptedException e) {
-            originalImage = null;
-            zoomFactor = 1.0;
-            messageLabel.setText("Excepción al generar la imagen del AST.");
-            messageLabel.setVisible(true);
-            imagePanel.revalidate();
-            imagePanel.repaint();
-            JOptionPane.showMessageDialog(this,
-                    "Error al procesar Graphviz: " + e.getMessage() + "\nVerifica que Graphviz esté instalado en el sistema.",
-                    "Error",
-                    JOptionPane.ERROR_MESSAGE);
-            if (Thread.currentThread().isInterrupted()) {
-                Thread.currentThread().interrupt();
-            }
+    /** Exporta la vista actual a un PNG elegido por el usuario. */
+    public void exportPng() {
+        if (!canvas.hasGraph()) {
+            JOptionPane.showMessageDialog(this, "Primero compila un archivo para tener un árbol.",
+                    "Exportar", JOptionPane.INFORMATION_MESSAGE);
+            return;
         }
+        JFileChooserLike.choosePng(this, "ast.png", path -> {
+            try {
+                Dimension size = canvas.getPreferredSize();
+                BufferedImage image = new BufferedImage(Math.max(1, size.width), Math.max(1, size.height),
+                        BufferedImage.TYPE_INT_RGB);
+                Graphics2D g2 = image.createGraphics();
+                g2.setColor(UiTheme.toolWindowBg());
+                g2.fillRect(0, 0, image.getWidth(), image.getHeight());
+                g2.translate(-scrollPane.getViewport().getViewPosition().x,
+                        -scrollPane.getViewport().getViewPosition().y);
+                canvas.paint(g2);
+                g2.dispose();
+                ImageIO.write(image, "png", path.toFile());
+                JOptionPane.showMessageDialog(this, "Imagen guardada en:\n" + path,
+                        "Exportar", JOptionPane.INFORMATION_MESSAGE);
+            } catch (IOException ex) {
+                JOptionPane.showMessageDialog(this, "No se pudo exportar:\n" + ex.getMessage(),
+                        "Error", JOptionPane.ERROR_MESSAGE);
+            }
+        });
+    }
+
+    /** Limpia el grafo. */
+    public void clear() {
+        canvas.setDot(null);
+        infoLabel.setText("Sin árbol generado");
     }
 }

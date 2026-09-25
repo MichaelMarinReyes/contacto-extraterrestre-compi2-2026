@@ -186,6 +186,57 @@ public class PigLatinSemanticVisitor extends PigLatinBaseVisitor<Type> {
         return func.getReturnType() != null ? func.getReturnType() : Type.VOID;
     }
 
+    /**
+     * El ciclo "per" declara su variable de control en la inicializacion.
+     * Sin este paso la condicion y el incremento del bucle fallarian al
+     * resolver el identificador.
+     */
+    @Override
+    public Type visitInicializacion_per(PigLatinParser.Inicializacion_perContext ctx) {
+        if (ctx.ESTO() != null && ctx.VARIABLE() != null) {
+            String name = ctx.VARIABLE().getText();
+            Type type = ctx.tipo_dato() != null ? resolveType(ctx.tipo_dato().getText()) : Type.INT;
+            if (symbolTable.resolve(name) == null) {
+                int offset = symbolTable.getGlobalScope().allocateOffset(1);
+                symbolTable.getGlobalScope().define(
+                        new Symbol(name, type, SymbolCategory.VARIABLE, offset, true));
+            }
+            if (ctx.expresion() != null) {
+                visit(ctx.expresion());
+            }
+            return type;
+        }
+        // Caso: variable ya declarada a la que se le asigna el valor inicial
+        return visit(ctx.expresion());
+    }
+
+    @Override
+    public Type visitCondiciones_per(PigLatinParser.Condiciones_perContext ctx) {
+        if (ctx.condicion() != null) {
+            return visit(ctx.condicion());
+        }
+        return Type.BOOLEAN;
+    }
+
+    @Override
+    public Type visitIncremento_per(PigLatinParser.Incremento_perContext ctx) {
+        if (ctx.expresion() != null) {
+            visit(ctx.expresion());
+        }
+        return Type.INT;
+    }
+
+    @Override
+    public Type visitCiclo_per(PigLatinParser.Ciclo_perContext ctx) {
+        visit(ctx.inicializacion_per());
+        visit(ctx.condiciones_per());
+        visit(ctx.incremento_per());
+        for (PigLatinParser.SentenciaContext s : ctx.sentencia()) {
+            visit(s);
+        }
+        return Type.VOID;
+    }
+
     private Type resolveType(String text) {
         if (text == null) return Type.UNKNOWN;
         switch (text.toLowerCase()) {

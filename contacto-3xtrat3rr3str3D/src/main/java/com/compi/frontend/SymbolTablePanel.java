@@ -1,19 +1,25 @@
 package com.compi.frontend;
 
+import com.compi.backend.symbols.Symbol;
 import java.awt.BorderLayout;
 import java.util.List;
 import javax.swing.JScrollPane;
 import javax.swing.JTable;
+import javax.swing.JTextArea;
+import javax.swing.ListSelectionModel;
 import javax.swing.table.DefaultTableModel;
 
 /**
+ * Vista de la tabla de simbolos construida por el analizador semantico.
  *
- * @author michael
+ * Muestra una fila por simbolo con su ambito, tipo, categoria, offset y
+ * detalles extra (parametros de funciones, miembros de estructuras).
  */
 public class SymbolTablePanel extends javax.swing.JPanel {
 
     private JTable table;
     private DefaultTableModel tableModel;
+    private JTextArea detailsArea;
 
     /**
      * Creates new form SymbolTablePanel
@@ -47,12 +53,12 @@ public class SymbolTablePanel extends javax.swing.JPanel {
 
     // Variables declaration - do not modify//GEN-BEGIN:variables
     // End of variables declaration//GEN-END:variables
-    
+
     private void initTableComponents() {
         this.setLayout(new BorderLayout());
 
-        String[] columns = {"Nombre", "Tipo de Dato", "Valor", "Tipo", "Rol", "Ámbito", "Línea", "Columna"};
-        tableModel = new DefaultTableModel(columns, 0) {
+        tableModel = new DefaultTableModel(
+                new Object[]{"Símbolo", "Tipo", "Categoría", "Ámbito", "Offset", "Detalle"}, 0) {
             @Override
             public boolean isCellEditable(int row, int column) {
                 return false;
@@ -60,46 +66,134 @@ public class SymbolTablePanel extends javax.swing.JPanel {
         };
 
         table = new JTable(tableModel);
-        JScrollPane scrollPane = new JScrollPane(table);
+        table.setFont(UiTheme.mono(12));
+        table.setRowHeight(24);
+        table.setShowGrid(true);
+        table.setAutoResizeMode(JTable.AUTO_RESIZE_LAST_COLUMN);
+        table.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
+        table.getTableHeader().setFont(UiTheme.sansBold(12));
+        table.getTableHeader().setReorderingAllowed(false);
+        table.setBackground(UiTheme.toolWindowBg());
+        table.setForeground(UiTheme.fg());
+        table.setGridColor(UiTheme.separator());
+        table.setSelectionBackground(UiTheme.accent());
 
-        this.add(scrollPane, BorderLayout.CENTER);
+        int[] widths = {110, 90, 90, 70, 60, 160};
+        for (int i = 0; i < widths.length; i++) {
+            table.getColumnModel().getColumn(i).setPreferredWidth(widths[i]);
+        }
+
+        detailsArea = new JTextArea();
+        detailsArea.setEditable(false);
+        detailsArea.setLineWrap(true);
+        detailsArea.setWrapStyleWord(true);
+        detailsArea.setFont(UiTheme.mono(12));
+        detailsArea.setBackground(UiTheme.toolWindowBg());
+        detailsArea.setForeground(UiTheme.fg());
+        detailsArea.setBorder(UiTheme.pad(6, 8, 6, 8));
+        detailsArea.setVisible(false);
+
+        table.getSelectionModel().addListSelectionListener(e -> {
+            if (!e.getValueIsAdjusting()) {
+                showDetails();
+            }
+        });
+
+        add(new JScrollPane(table), BorderLayout.CENTER);
+        add(detailsArea, BorderLayout.SOUTH);
     }
-/*
-    public void loadSymbols(List<Symbol> symbols, TypeTable typeTable) {
+
+    // ====================== API ======================
+
+    /**
+     * Carga la tabla de simbolos.
+     *
+     * @param symbols simbolos a mostrar; null o vacio limpia la vista
+     */
+    public void loadSymbols(List<Symbol> symbols) {
         tableModel.setRowCount(0);
-        if (symbols != null) {
-            for (Symbol sym : symbols) {
-                String scopeName = (sym.getScope() != null) ? sym.getScope().getScopeName() : "global";
+        if (symbols == null || symbols.isEmpty()) {
+            detailsArea.setVisible(false);
+            return;
+        }
+        for (Symbol s : symbols) {
+            tableModel.addRow(new Object[]{
+                    s.getName(),
+                    s.getType() == null ? "?" : s.getType().toString(),
+                    s.getCategory() == null ? "?" : s.getCategory().toString(),
+                    s.isGlobal() ? "global" : "local",
+                    s.getOffset(),
+                    describe(s)
+            });
+        }
+    }
 
-                String tipoDetalle = "Primitivo";
-                if (typeTable != null && sym.getType() != null) {
-                    TypeInfo info = typeTable.resolveType(sym.getType());
-                    if (info != null) {
-                        tipoDetalle = "Tamaño: " + info.getSizeInBytes();
-                    }
+    private static String describe(Symbol s) {
+        StringBuilder sb = new StringBuilder();
+        if (s.getParameters() != null && !s.getParameters().isEmpty()) {
+            sb.append("params(");
+            for (int i = 0; i < s.getParameters().size(); i++) {
+                if (i > 0) {
+                    sb.append(", ");
                 }
-
-                Object valorSimbolo = sym.getValue();
-                if (valorSimbolo == null) {
-                    valorSimbolo = "----";
+                Symbol p = s.getParameters().get(i);
+                sb.append(p.getName()).append(":").append(p.getType());
+            }
+            sb.append(')');
+        }
+        if (s.getMembers() != null && !s.getMembers().isEmpty()) {
+            if (sb.length() > 0) {
+                sb.append(' ');
+            }
+            sb.append("{");
+            for (int i = 0; i < s.getMembers().size(); i++) {
+                if (i > 0) {
+                    sb.append(", ");
                 }
+                Symbol m = s.getMembers().get(i);
+                sb.append(m.getName()).append(":").append(m.getType());
+            }
+            sb.append('}');
+        }
+        if (s.getReturnType() != null) {
+            if (sb.length() > 0) {
+                sb.append(' ');
+            }
+            sb.append("-> ").append(s.getReturnType());
+        }
+        return sb.length() == 0 ? "" : sb.toString();
+    }
 
-                Object[] row = {
-                    sym.getName(),
-                    sym.getType(),
-                    valorSimbolo,
-                    tipoDetalle,
-                    sym.getCategory(),
-                    scopeName,
-                    sym.getLine(),
-                    sym.getColumn()
-                };
-                tableModel.addRow(row);
+    private void showDetails() {
+        int row = table.getSelectedRow();
+        if (row < 0 || row >= tableModel.getRowCount()) {
+            detailsArea.setVisible(false);
+            return;
+        }
+        StringBuilder sb = new StringBuilder();
+        for (int col = 0; col < tableModel.getColumnCount(); col++) {
+            String value = String.valueOf(tableModel.getValueAt(row, col));
+            if (value != null && !value.isBlank()) {
+                sb.append(tableModel.getColumnName(col)).append(": ").append(value).append('\n');
             }
         }
-    }*/
-/*
-    public void loadSymbols(List<Symbol> symbols) {
-        loadSymbols(symbols, null);
-    }*/
+        detailsArea.setText(sb.toString());
+        detailsArea.setCaretPosition(0);
+        detailsArea.setVisible(true);
+        revalidate();
+        repaint();
+    }
+
+    public JTable getTable() {
+        return table;
+    }
+
+    public int getSymbolCount() {
+        return tableModel.getRowCount();
+    }
+
+    /** Limpia la vista. */
+    public void clear() {
+        loadSymbols(null);
+    }
 }

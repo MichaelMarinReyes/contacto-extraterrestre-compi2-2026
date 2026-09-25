@@ -1,8 +1,11 @@
 package com.compi.frontend;
 
+import com.compi.backend.runtime.StackState;
 import java.awt.BorderLayout;
 import java.awt.Color;
+import java.awt.Component;
 import java.awt.Dimension;
+import java.awt.FlowLayout;
 import java.awt.Font;
 import java.awt.FontMetrics;
 import java.awt.Graphics;
@@ -10,22 +13,32 @@ import java.awt.Graphics2D;
 import java.awt.RenderingHints;
 import java.util.ArrayList;
 import java.util.List;
+import javax.swing.BorderFactory;
+import javax.swing.JButton;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
 import javax.swing.JScrollPane;
+import javax.swing.JSlider;
 import javax.swing.JSplitPane;
 import javax.swing.JTextArea;
+import javax.swing.SwingConstants;
 
 /**
+ * Visualizador de la pila de procesos de la maquina abstracta.
  *
- * @author michael
+ * Muestra un control deslizante para recorrer los pasos de la simulacion y un
+ * dibujo de la pila en ese instante, junto con la instruccion que la produce.
  */
 public class StackVisualizerPanel extends JPanel {
 
-    //private List<StackState> stackStates = new ArrayList<>();
     private JPanel stackDrawPanel;
     private JTextArea logTextArea;
+    private JSlider stepSlider;
+    private JLabel stepLabel;
     private JSplitPane splitPane;
+
+    private List<StackState> states = new ArrayList<>();
+    private int currentStep = 0;
 
     /**
      * Creates new form StackVisualizerPanel
@@ -59,191 +72,215 @@ public class StackVisualizerPanel extends JPanel {
 
     // Variables declaration - do not modify//GEN-BEGIN:variables
     // End of variables declaration//GEN-END:variables
+
     private void initCustomComponents() {
-        this.setLayout(new BorderLayout());
+        setLayout(new BorderLayout());
 
-        stackDrawPanel = new JPanel() {
-            @Override
-            protected void paintComponent(Graphics g) {
-                super.paintComponent(g);
-                //drawAllSteps(g);
-            }
-        };
-        stackDrawPanel.setBackground(Color.WHITE);
+        stackDrawPanel = new StackPanel();
+        stackDrawPanel.setBackground(UiTheme.toolWindowBg());
+        stackDrawPanel.setPreferredSize(new Dimension(0, 260));
+        stackDrawPanel.setBorder(UiTheme.pad(8, 8, 8, 8));
 
-        JScrollPane stackScrollPane = new JScrollPane(stackDrawPanel,
-                JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED,
-                JScrollPane.HORIZONTAL_SCROLLBAR_ALWAYS);
-
-        JPanel topContainer = new JPanel(new BorderLayout());
-        JLabel lblTitle = new JLabel("  Secuencia de Estados de la Pila (Historial Completo)");
-        lblTitle.setFont(new Font("SansSerif", Font.BOLD, 12));
-        topContainer.add(lblTitle, BorderLayout.NORTH);
-        topContainer.add(stackScrollPane, BorderLayout.CENTER);
-
-        // 2. Panel Inferior (Consola de Logs detallada)
         logTextArea = new JTextArea();
         logTextArea.setEditable(false);
-        logTextArea.setFont(new Font("Monospaced", Font.PLAIN, 12));
-        logTextArea.setBackground(new Color(30, 30, 30));
-        logTextArea.setForeground(new Color(220, 220, 220));
-        JScrollPane logScrollPane = new JScrollPane(logTextArea);
+        logTextArea.setFont(UiTheme.mono(11));
+        logTextArea.setBackground(UiTheme.toolWindowBg());
+        logTextArea.setForeground(UiTheme.dim());
+        logTextArea.setBorder(UiTheme.pad(4, 8, 4, 8));
+        logTextArea.setVisible(false);
 
-        JPanel bottomContainer = new JPanel(new BorderLayout());
-        JLabel lblLogTitle = new JLabel("  Consola de Logs / Operaciones:");
-        lblLogTitle.setFont(new Font("SansSerif", Font.BOLD, 11));
-        bottomContainer.add(lblLogTitle, BorderLayout.NORTH);
-        bottomContainer.add(logScrollPane, BorderLayout.CENTER);
+        splitPane = new JSplitPane(JSplitPane.VERTICAL_SPLIT, stackDrawPanel,
+                new JScrollPane(logTextArea));
+        splitPane.setResizeWeight(0.72);
+        splitPane.setDividerLocation(260);
+        splitPane.setBorder(BorderFactory.createEmptyBorder());
+        splitPane.setContinuousLayout(true);
+        splitPane.setOneTouchExpandable(true);
 
-        splitPane = new JSplitPane(JSplitPane.VERTICAL_SPLIT, topContainer, bottomContainer);
-        splitPane.setResizeWeight(0.75);
-        splitPane.setDividerLocation(350);
+        stepSlider = new JSlider(0, 0, 0);
+        stepSlider.setEnabled(false);
+        stepSlider.setBackground(UiTheme.toolWindowBg());
+        stepSlider.addChangeListener(e -> {
+            currentStep = stepSlider.getValue();
+            updateStepLabel();
+            stackDrawPanel.repaint();
+        });
 
-        this.add(splitPane, BorderLayout.CENTER);
+        stepLabel = new JLabel("Paso 0 / 0", SwingConstants.CENTER);
+        stepLabel.setFont(UiTheme.sans(11));
+        stepLabel.setForeground(UiTheme.dim());
+
+        JButton first = navButton(IdeIcons.zoomOut(), "Primer paso", 0);
+        JButton prev = navButton(IdeIcons.chevronDown(), "Paso anterior", -1);
+        JButton next = navButton(IdeIcons.chevronDown(), "Paso siguiente", 1);
+        JButton last = navButton(IdeIcons.zoomIn(), "Último paso", Integer.MAX_VALUE);
+        JButton log = new JButton("Bitácora");
+        log.setFocusable(false);
+        log.setFont(UiTheme.sans(12));
+        log.addActionListener(e -> {
+            logTextArea.setVisible(!logTextArea.isVisible());
+            splitPane.setDividerLocation(logTextArea.isVisible() ? 200 : 260);
+        });
+
+        JPanel controls = new JPanel(new BorderLayout());
+        JPanel nav = new JPanel(new FlowLayout(FlowLayout.LEFT, 2, 0));
+        nav.setOpaque(false);
+        nav.add(first);
+        nav.add(prev);
+        nav.add(next);
+        nav.add(last);
+        nav.add(stepLabel);
+
+        JPanel right = new JPanel(new FlowLayout(FlowLayout.RIGHT, 2, 0));
+        right.setOpaque(false);
+        right.add(log);
+
+        controls.setBorder(UiTheme.pad(6, 6, 4, 8));
+        controls.add(nav, BorderLayout.WEST);
+        controls.add(right, BorderLayout.EAST);
+
+        JPanel south = new JPanel(new BorderLayout());
+        south.setOpaque(false);
+        south.add(controls, BorderLayout.NORTH);
+        south.add(stepSlider, BorderLayout.CENTER);
+
+        add(controls, BorderLayout.NORTH);
+        add(splitPane, BorderLayout.CENTER);
+        add(stepSlider, BorderLayout.SOUTH);
     }
-/*
-    public void loadStates(List<StackState> states) {
-        this.stackStates = states != null ? states : new ArrayList<>();
 
-        int totalSteps = stackStates.isEmpty() ? 1 : stackStates.size();
-
-        int maxDepth = 1;
-        for (StackState st : stackStates) {
-            if (st.getStackElements() != null) {
-                maxDepth = Math.max(maxDepth, st.getStackElements().size());
-            }
-        }
-
-        int colWidth = 115;
-        int boxHeight = 26;
-        int spacing = 4;
-
-        int containerHeight = Math.max(280, maxDepth * (boxHeight + spacing) + 50);
-
-        int panelWidth = Math.max(800, totalSteps * colWidth + 40);
-        int panelHeight = containerHeight + 70; // Margen para numeración y badges
-
-        stackDrawPanel.setPreferredSize(new Dimension(panelWidth, panelHeight));
-
-        updateLogs();
-        stackDrawPanel.revalidate();
-        stackDrawPanel.repaint();
-    }
-
-    private void updateLogs() {
-        StringBuilder logs = new StringBuilder();
-        for (int i = 0; i < stackStates.size(); i++) {
-            StackState st = stackStates.get(i);
-            logs.append("[Paso ").append(i + 1).append("] ").append(st.getOperation()).append("\n");
-        }
-        logTextArea.setText(logs.toString());
-    }
-
-    private void drawAllSteps(Graphics g) {
-        if (stackStates.isEmpty()) {
-            Graphics2D g2d = (Graphics2D) g;
-            g2d.setColor(Color.GRAY);
-            g2d.setFont(new Font("SansSerif", Font.ITALIC, 14));
-            g2d.drawString("No hay estados de pila para mostrar. Ejecute el análisis de código.", 30, 50);
-            return;
-        }
-
-        Graphics2D g2d = (Graphics2D) g;
-        g2d.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-
-        int startX = 20;
-        int colWidth = 115;
-        int boxHeight = 26;
-        int spacing = 4;
-
-        int maxDepth = 1;
-        for (StackState st : stackStates) {
-            if (st.getStackElements() != null) {
-                maxDepth = Math.max(maxDepth, st.getStackElements().size());
-            }
-        }
-        int containerHeight = Math.max(240, maxDepth * (boxHeight + spacing) + 30);
-
-        for (int i = 0; i < stackStates.size(); i++) {
-            StackState state = stackStates.get(i);
-            List<String> elements = state.getStackElements();
-
-            g2d.setColor(Color.DARK_GRAY);
-            g2d.setFont(new Font("SansSerif", Font.BOLD, 12));
-            String stepNumStr = String.valueOf(i + 1);
-            int numWidth = g2d.getFontMetrics().stringWidth(stepNumStr);
-            g2d.drawString(stepNumStr, startX + (colWidth - numWidth) / 2, 20);
-
-            g2d.setColor(new Color(254, 243, 199));
-            g2d.fillRoundRect(startX, 28, colWidth - 10, containerHeight, 10, 10);
-            g2d.setColor(new Color(217, 119, 6));
-            g2d.drawRoundRect(startX, 28, colWidth - 10, containerHeight, 10, 10);
-
-            int currentY = 36;
-
-            if (elements.isEmpty()) {
-                g2d.setColor(Color.GRAY);
-                g2d.setFont(new Font("SansSerif", Font.ITALIC, 11));
-                String emptyText = "Pila Vacía";
-                int emptyWidth = g2d.getFontMetrics().stringWidth(emptyText);
-                g2d.drawString(emptyText, startX + (colWidth - 10 - emptyWidth) / 2, currentY + 30);
+    private JButton navButton(javax.swing.Icon icon, String tooltip, int delta) {
+        JButton b = new JButton(icon);
+        b.setToolTipText(tooltip);
+        b.setFocusable(false);
+        b.setBorderPainted(false);
+        b.setContentAreaFilled(false);
+        b.setPreferredSize(new Dimension(24, 24));
+        UiTheme.asButton(b);
+        b.addActionListener(e -> {
+            if (delta == Integer.MAX_VALUE) {
+                currentStep = states.size() - 1;
             } else {
-                for (int j = elements.size() - 1; j >= 0; j--) {
-                    String el = elements.get(j);
-
-                    if (j == elements.size() - 1) {
-                        g2d.setColor(new Color(191, 219, 254));
-                    } else {
-                        g2d.setColor(new Color(254, 202, 202));
-                    }
-
-                    g2d.fillRoundRect(startX + 6, currentY, colWidth - 22, boxHeight, 5, 5);
-                    g2d.setColor(Color.GRAY);
-                    g2d.drawRoundRect(startX + 6, currentY, colWidth - 22, boxHeight, 5, 5);
-
-                    Font boxFont = new Font("SansSerif", Font.BOLD, 10);
-                    g2d.setFont(boxFont);
-                    FontMetrics fm = g2d.getFontMetrics();
-
-                    String displayEl = el;
-                    while (fm.stringWidth(displayEl) > colWidth - 28 && displayEl.length() > 3) {
-                        displayEl = displayEl.substring(0, displayEl.length() - 1);
-                    }
-                    if (!displayEl.equals(el)) {
-                        displayEl += "..";
-                    }
-
-                    g2d.setColor(Color.BLACK);
-                    int textX = startX + 6 + ((colWidth - 22 - fm.stringWidth(displayEl)) / 2);
-                    int textY = currentY + ((boxHeight - fm.getHeight()) / 2) + fm.getAscent();
-                    g2d.drawString(displayEl, textX, textY);
-
-                    currentY += boxHeight + spacing;
-                }
+                currentStep += delta;
             }
+            currentStep = Math.max(0, Math.min(states.size() - 1, currentStep));
+            stepSlider.setValue(currentStep);
+            updateStepLabel();
+            stackDrawPanel.repaint();
+        });
+        return b;
+    }
 
-            int badgeY = 32 + containerHeight + 6;
-            String operation = state.getOperation() != null ? state.getOperation() : "";
-            g2d.setColor(new Color(187, 247, 208));
-            g2d.fillRoundRect(startX + 2, badgeY, colWidth - 14, 24, 6, 6);
-            g2d.setColor(new Color(22, 101, 52));
-            g2d.drawRoundRect(startX + 2, badgeY, colWidth - 14, 24, 6, 6);
+    // ====================== API ======================
 
-            g2d.setColor(new Color(20, 83, 45));
-            g2d.setFont(new Font("SansSerif", Font.PLAIN, 9));
-            FontMetrics fmOp = g2d.getFontMetrics();
+    /**
+     * Carga los estados de la pila y muestra el ultimo.
+     */
+    public void loadStates(List<StackState> newStates) {
+        states = newStates == null ? new ArrayList<>() : new ArrayList<>(newStates);
+        stepSlider.setEnabled(states.size() > 1);
+        stepSlider.setMaximum(Math.max(0, states.size() - 1));
+        currentStep = states.size() - 1;
+        stepSlider.setValue(currentStep);
+        updateStepLabel();
+        stackDrawPanel.repaint();
+        rebuildLog();
+    }
 
-            if (fmOp.stringWidth(operation) > colWidth - 18) {
-                while (operation.length() > 3 && fmOp.stringWidth(operation + "...") > colWidth - 18) {
-                    operation = operation.substring(0, operation.length() - 1);
-                }
-                operation += "...";
-            }
-            int opX = startX + 2 + ((colWidth - 14 - fmOp.stringWidth(operation)) / 2);
-            int opY = badgeY + ((24 - fmOp.getHeight()) / 2) + fmOp.getAscent();
-            g2d.drawString(operation, opX, opY);
-
-            startX += colWidth;
+    private void rebuildLog() {
+        StringBuilder sb = new StringBuilder();
+        for (StackState s : states) {
+            sb.append(s).append('\n');
         }
-    }*/
+        logTextArea.setText(sb.toString());
+        logTextArea.setCaretPosition(0);
+    }
+
+    private void updateStepLabel() {
+        stepLabel.setText("Paso " + (states.isEmpty() ? 0 : currentStep + 1) + " / " + states.size());
+    }
+
+    public int getStateCount() {
+        return states.size();
+    }
+
+    public int getCurrentStep() {
+        return currentStep;
+    }
+
+    public void clear() {
+        loadStates(null);
+    }
+
+    /** Estado visible ahora mismo. */
+    public StackState getCurrentState() {
+        if (states.isEmpty()) {
+            return null;
+        }
+        return states.get(Math.max(0, Math.min(states.size() - 1, currentStep)));
+    }
+
+    // ====================== Dibujo de la pila ======================
+
+    /** Dibuja las celdas de la pila, con la cima arriba. */
+    private class StackPanel extends JPanel {
+
+        private static final int CELL_HEIGHT = 26;
+        private static final int GAP = 4;
+
+        @Override
+        protected void paintComponent(Graphics g) {
+            super.paintComponent(g);
+            Graphics2D g2 = (Graphics2D) g.create();
+            g2.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING,
+                    RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
+            g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING,
+                    RenderingHints.VALUE_ANTIALIAS_ON);
+
+            StackState state = getCurrentState();
+            g2.setFont(UiTheme.mono(12));
+
+            if (state == null) {
+                g2.setColor(UiTheme.dim());
+                g2.drawString("Sin datos de pila. Compila un archivo para ver la simulación.",
+                        12, 24);
+                g2.dispose();
+                return;
+            }
+
+            g2.setColor(UiTheme.dim());
+            g2.drawString("Instrucción: " + state.getC3dInstruction(), 8, 16);
+
+            if (state.getStackElements().isEmpty()) {
+                g2.setColor(UiTheme.dim());
+                g2.drawString("Pila vacía", 12, 44);
+                g2.dispose();
+                return;
+            }
+
+            List<String> elements = state.getStackElements();
+            int top = 32;
+            FontMetrics fm = g2.getFontMetrics();
+            int topIndex = elements.size() - 1;
+
+            for (int row = 0; row < elements.size(); row++) {
+                int i = topIndex - row;
+                int y = top + row * (CELL_HEIGHT + GAP);
+                boolean isTop = row == 0;
+
+                g2.setColor(isTop ? UiTheme.accent().darker() : UiTheme.color("Table.selectionBackground",
+                        new Color(0x313335)));
+                g2.fillRoundRect(8, y, Math.max(80, getWidth() - 16), CELL_HEIGHT, 6, 6);
+
+                g2.setColor(isTop ? Color.WHITE : UiTheme.fg());
+                g2.drawString(elements.get(i), 16, y + fm.getAscent() + 4);
+            }
+            g2.dispose();
+        }
+
+        @Override
+        public Dimension getPreferredSize() {
+            return new Dimension(320, 300);
+        }
+    }
 }
