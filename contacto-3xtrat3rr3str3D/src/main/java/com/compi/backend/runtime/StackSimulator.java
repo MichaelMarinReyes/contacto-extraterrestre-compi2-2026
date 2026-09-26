@@ -16,7 +16,10 @@ public class StackSimulator {
 
     private final List<StackState> states = new ArrayList<>();
     private final List<String> stack = new ArrayList<>();
+    private final List<String> poppedThisStep = new ArrayList<>();
     private int step = 0;
+    private int popsIntentados = 0;
+    private String pushedThisStep = null;
 
     /**
      * Simula la pila para una lista de cuartetas.
@@ -35,11 +38,29 @@ public class StackSimulator {
         }
 
         for (Quadruple q : quadruples) {
+            poppedThisStep.clear();
+            pushedThisStep = null;
+            popsIntentados = 0;
             apply(q);
             step++;
-            states.add(new StackState(step, q.toString(), stack, q.toString()));
+            states.add(new StackState(step, q.toString(), stack, q.toString(),
+                    accionDelPaso(), poppedThisStep, pushedThisStep));
         }
         return states;
+    }
+
+    /**
+     * Clasifica la accion del paso actual a partir de lo que la instruccion
+     * hizo con la pila: si apilo un valor sin consumir nada es un desplazamiento
+     * (shift); si consumio operandos, con o sin resultado que apilar, es una
+     * reduccion (reduce), aunque la pila estuviera vacia y no hubiera nada que
+     * desapilar; si no toco la pila no hay cambio.
+     */
+    private StackAction accionDelPaso() {
+        if (pushedThisStep != null) {
+            return poppedThisStep.isEmpty() ? StackAction.SHIFT : StackAction.REDUCE;
+        }
+        return popsIntentados > 0 ? StackAction.REDUCE : StackAction.NEUTRAL;
     }
 
     /** Aplica la semantica de pila de una instruccion. */
@@ -71,10 +92,14 @@ public class StackSimulator {
                 pop(1);
                 break;
 
-            // Consumen 1 y producen 1 (neto cero)
-            case STACK_GET: case HEAP_GET: case GET_P: case GET_H: case IF_TRUE: case IF_FALSE:
-                pop(1);
+            // Leen un valor de la memoria y lo apilan, sin consumir nada
+            case STACK_GET: case HEAP_GET: case GET_P: case GET_H:
                 push(q.getResult());
+                break;
+
+            // Saltos condicionales: consumen la condicion y nada mas
+            case IF_TRUE: case IF_FALSE:
+                pop(1);
                 break;
 
             case GOTO: case LABEL: case FUNCTION_START: case FUNCTION_END: case CALL:
@@ -90,13 +115,16 @@ public class StackSimulator {
     }
 
     private void push(String value) {
-        stack.add(value == null ? "?" : value);
+        String v = value == null ? "?" : value;
+        stack.add(v);
+        pushedThisStep = v;
     }
 
     private void pop(int n) {
+        popsIntentados += n;
         for (int i = 0; i < n; i++) {
             if (!stack.isEmpty()) {
-                stack.remove(stack.size() - 1);
+                poppedThisStep.add(stack.remove(stack.size() - 1));
             }
         }
     }

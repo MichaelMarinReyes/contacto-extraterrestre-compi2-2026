@@ -103,6 +103,19 @@ public class EditorTabs extends JTabbedPane {
      * @return el editor del archivo nuevo, o null si no se pudo crear
      */
     public EditorPanel newFile(String languageId, File dir) {
+        return newFile(languageId, dir, null);
+    }
+
+    /**
+     * Crea el archivo con el nombre que el usuario escribio.
+     *
+     * <p>Si el nombre ya lleva la extension no se repite. Si el archivo existe se
+     * avisa con un sufijo numerico, para no pisar el trabajo anterior.</p>
+     *
+     * @param baseName nombre sin extension; null o vacio para el "archivoN" automatico
+     * @return el editor del archivo nuevo, o null si no se pudo crear
+     */
+    public EditorPanel newFile(String languageId, File dir, String baseName) {
         String lang = languageId == null ? "pig" : languageId;
         String ext = LanguageCompilerFactory.extensionOfLanguage(lang);
         if (ext == null) {
@@ -110,9 +123,15 @@ public class EditorTabs extends JTabbedPane {
             lang = "pig";
         }
 
-        File file = dir == null
-                ? new File("archivo" + (untitledCounter + 1) + "." + ext)
-                : uniqueName(dir, ext);
+        String name = sanitizeName(baseName);
+        File file;
+        if (name == null) {
+            file = dir == null
+                    ? new File("archivo" + (untitledCounter + 1) + "." + ext)
+                    : uniqueName(dir, ext);
+        } else {
+            file = dir == null ? new File(name + "." + ext) : numbered(new File(dir, name + "." + ext));
+        }
         untitledCounter++;
 
         if (dir != null && !file.exists()) {
@@ -134,6 +153,54 @@ public class EditorTabs extends JTabbedPane {
         }
         addTab(editor);
         return editor;
+    }
+
+    /**
+     * Limpia el nombre escrito por el usuario.
+     *
+     * @return el nombre sin extension ni caracteres prohibidos, o null si no queda
+     *         nada utilizable
+     */
+    private static String sanitizeName(String raw) {
+        if (raw == null) {
+            return null;
+        }
+        String name = raw.trim();
+        if (name.isEmpty()) {
+            return null;
+        }
+        // Se quita la extension si el usuario ya la escribio, para no acabar en
+        // "saludo.pig.pig".
+        String ext = LanguageCompilerFactory.extensionOf(name);
+        if (ext != null) {
+            name = name.substring(0, name.length() - ext.length() - 1).trim();
+        }
+        // Caracteres que no valen en un nombre de archivo. Se cambian por guion en
+        // vez de rechazarlos, para no fallarle el nombre al usuario por un caracter.
+        name = name.replaceAll("[\\\\/:*?\"<>|]", "-").trim();
+        // Un nombre que sea solo puntos subiria de directorio o se perderia.
+        while (name.startsWith(".")) {
+            name = name.substring(1).trim();
+        }
+        return name.isEmpty() ? null : name;
+    }
+
+    /** El mismo nombre con un sufijo numerico, si ya hay un archivo con el. */
+    private static File numbered(File wanted) {
+        if (!wanted.exists()) {
+            return wanted;
+        }
+        String base = wanted.getName();
+        int dot = base.lastIndexOf('.');
+        String stem = dot > 0 ? base.substring(0, dot) : base;
+        String ext = dot > 0 ? base.substring(dot) : "";
+        for (int i = 2; i < 10_000; i++) {
+            File candidate = new File(wanted.getParentFile(), stem + "-" + i + ext);
+            if (!candidate.exists()) {
+                return candidate;
+            }
+        }
+        return new File(wanted.getParentFile(), stem + "-" + System.nanoTime() + ext);
     }
 
     /** Primer "archivoN.<ext>" libre dentro de la carpeta. */

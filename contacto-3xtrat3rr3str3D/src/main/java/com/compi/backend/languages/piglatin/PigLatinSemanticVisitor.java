@@ -3,7 +3,7 @@ package com.compi.backend.languages.piglatin;
 import com.compi.PigLatinBaseVisitor;
 import com.compi.PigLatinParser;
 import com.compi.backend.errors.CompilationError;
-import com.compi.backend.errors.ErrorType;
+import com.compi.backend.errors.Diagnostico;
 import com.compi.backend.symbols.*;
 
 import java.util.ArrayList;
@@ -51,19 +51,19 @@ public class PigLatinSemanticVisitor extends PigLatinBaseVisitor<Type> {
             }
 
             int offset = symbolTable.getGlobalScope().allocateOffset(1);
-            Symbol sym = new Symbol(varName, varType, SymbolCategory.VARIABLE, offset, true);
+            Symbol sym = new Symbol(varName, varType, SymbolCategory.VARIABLE, offset, true)
+                    .at(ctx);
 
-            if (!symbolTable.getGlobalScope().define(sym)) {
-                errors.add(new CompilationError(ErrorType.SEMANTICO, "Variable global ya declarada: " + varName,
-                        ctx.getStart().getLine(), ctx.getStart().getCharPositionInLine()));
+            if (!symbolTable.defineGlobal(sym)) {
+                errors.add(Diagnostico.variableGlobalYaDeclarada(varName, ctx));
             }
 
             if (ctx.expresion() != null) {
                 Type exprType = visit(ctx.expresion());
-                if (exprType != null && varType != Type.UNKNOWN && !exprType.isAssignableTo(varType)) {
-                    errors.add(new CompilationError(ErrorType.SEMANTICO,
-                            "Tipo incompatible en asignación de '" + varName + "'. Esperado: " + varType + ", obtenido: " + exprType,
-                            ctx.getStart().getLine(), ctx.getStart().getCharPositionInLine()));
+                if (esConocido(exprType) && esConocido(varType)
+                        && !exprType.isAssignableTo(varType)) {
+                    errors.add(Diagnostico.inicializacionIncompatible(
+                            varName, varType, exprType, ctx));
                 }
             }
         }
@@ -82,8 +82,9 @@ public class PigLatinSemanticVisitor extends PigLatinBaseVisitor<Type> {
 
         Type arrayType = Type.array(elemType, 1);
         int offset = symbolTable.getGlobalScope().allocateOffset(1);
-        Symbol sym = new Symbol(arrayName, arrayType, SymbolCategory.VARIABLE, offset, true);
-        symbolTable.getGlobalScope().define(sym);
+        Symbol sym = new Symbol(arrayName, arrayType, SymbolCategory.VARIABLE, offset, true)
+                .at(ctx);
+        symbolTable.defineGlobal(sym);
         return Type.VOID;
     }
 
@@ -106,8 +107,7 @@ public class PigLatinSemanticVisitor extends PigLatinBaseVisitor<Type> {
             String name = ctx.VARIABLE(0).getText();
             Symbol s = symbolTable.resolve(name);
             if (s == null) {
-                errors.add(new CompilationError(ErrorType.SEMANTICO, "Variable no definida: " + name,
-                        ctx.getStart().getLine(), ctx.getStart().getCharPositionInLine()));
+                errors.add(Diagnostico.variableNoDeclarada(name, ctx));
             } else {
                 targetType = s.getType();
             }
@@ -117,10 +117,9 @@ public class PigLatinSemanticVisitor extends PigLatinBaseVisitor<Type> {
 
         if (ctx.expresion() != null) {
             Type exprType = visit(ctx.expresion());
-            if (targetType != Type.UNKNOWN && exprType != null && !exprType.isAssignableTo(targetType)) {
-                errors.add(new CompilationError(ErrorType.SEMANTICO,
-                        "Asignación incompatible: " + exprType + " a " + targetType,
-                        ctx.getStart().getLine(), ctx.getStart().getCharPositionInLine()));
+            if (esConocido(targetType) && esConocido(exprType)
+                    && !exprType.isAssignableTo(targetType)) {
+                errors.add(Diagnostico.asignacionIncompatible(targetType, exprType, ctx));
             }
         }
         return targetType;
@@ -156,8 +155,7 @@ public class PigLatinSemanticVisitor extends PigLatinBaseVisitor<Type> {
             String varName = ctx.VARIABLE().getText();
             Symbol s = symbolTable.resolve(varName);
             if (s == null) {
-                errors.add(new CompilationError(ErrorType.SEMANTICO, "Identificador no encontrado: " + varName,
-                        ctx.getStart().getLine(), ctx.getStart().getCharPositionInLine()));
+                errors.add(Diagnostico.simboloNoResuelto(varName, ctx));
                 return Type.UNKNOWN;
             }
             return s.getType();
@@ -180,8 +178,11 @@ public class PigLatinSemanticVisitor extends PigLatinBaseVisitor<Type> {
         String funcName = ctx.VARIABLE().getText();
         Symbol func = symbolTable.getFunction(funcName);
         if (func == null) {
-            // Podría ser un método o función importada
-            return Type.INT; // fallback permisivo
+            // PigLatin no declara funciones, solo las llama. Y la que se llama
+            // puede venir de un archivo importado de otro lenguaje, asi que un
+            // nombre desconocido aqui no es un error: lo que no se sabe es el
+            // tipo que devuelve, y se supone que es un entero.
+            return Type.INT;
         }
         return func.getReturnType() != null ? func.getReturnType() : Type.VOID;
     }
@@ -190,6 +191,9 @@ public class PigLatinSemanticVisitor extends PigLatinBaseVisitor<Type> {
      * El ciclo "per" declara su variable de control en la inicializacion.
      * Sin este paso la condicion y el incremento del bucle fallarian al
      * resolver el identificador.
+     *
+     * <p>La variable se registra en el ambito global aunque el ciclo este dentro
+     * de un bloque, para que siga viva cuando ese bloque se cierre.</p>
      */
     @Override
     public Type visitInicializacion_per(PigLatinParser.Inicializacion_perContext ctx) {
@@ -198,8 +202,9 @@ public class PigLatinSemanticVisitor extends PigLatinBaseVisitor<Type> {
             Type type = ctx.tipo_dato() != null ? resolveType(ctx.tipo_dato().getText()) : Type.INT;
             if (symbolTable.resolve(name) == null) {
                 int offset = symbolTable.getGlobalScope().allocateOffset(1);
-                symbolTable.getGlobalScope().define(
-                        new Symbol(name, type, SymbolCategory.VARIABLE, offset, true));
+                symbolTable.defineGlobal(
+                        new Symbol(name, type, SymbolCategory.VARIABLE, offset, true)
+                                .at(ctx));
             }
             if (ctx.expresion() != null) {
                 visit(ctx.expresion());
@@ -251,5 +256,17 @@ public class PigLatinSemanticVisitor extends PigLatinBaseVisitor<Type> {
                 if (symbolTable.getClass(text) != null) return Type.classType(text);
                 return Type.UNKNOWN;
         }
+    }
+
+    /**
+     * true si el tipo se conoce de verdad.
+     *
+     * <p>Un tipo desconocido o nulo significa que la expresion que lo produce ya
+     * fallo: el aviso de verdad se dio ahi. Comprobar los tipos con un
+     * desconocido daria un segundo error, mas corto y mas generico, que solo
+     * tapa el primero.</p>
+     */
+    private static boolean esConocido(Type t) {
+        return t != null && t != Type.UNKNOWN;
     }
 }

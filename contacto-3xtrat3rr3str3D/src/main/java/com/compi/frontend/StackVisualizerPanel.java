@@ -1,44 +1,78 @@
 package com.compi.frontend;
 
-import com.compi.backend.runtime.StackState;
+import com.compi.backend.parser.AccionPila;
+import com.compi.backend.parser.ParseStep;
 import java.awt.BorderLayout;
 import java.awt.Color;
-import java.awt.Component;
+import java.awt.Container;
 import java.awt.Dimension;
-import java.awt.FlowLayout;
-import java.awt.Font;
 import java.awt.FontMetrics;
 import java.awt.Graphics;
 import java.awt.Graphics2D;
+import java.awt.Point;
 import java.awt.RenderingHints;
 import java.util.ArrayList;
 import java.util.List;
 import javax.swing.BorderFactory;
-import javax.swing.JButton;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
 import javax.swing.JScrollPane;
-import javax.swing.JSlider;
 import javax.swing.JSplitPane;
 import javax.swing.JTextArea;
+import javax.swing.JViewport;
 import javax.swing.SwingConstants;
 
 /**
- * Visualizador de la pila de procesos de la maquina abstracta.
+ * Visualizador de la pila del parser.
  *
- * Muestra un control deslizante para recorrer los pasos de la simulacion y un
- * dibujo de la pila en ese instante, junto con la instruccion que la produce.
+ * <p>Se divide en dos partes. La parte grafica dibuja una columna por cada paso
+ * del trazo: el numero de paso, si la accion fue un desplazamiento (shift) o una
+ * reduccion (reduce) y el contenido de la pila en ese instante, con la cima
+ * arriba. Cada bloque es un simbolo de la gramatica, que es lo unico que se
+ * apila: en un shift el token recien leido ({@code x}) y en un reduce el no
+ * terminal al que se reduce ({@code declaracion}). Debajo de la tarjeta, el
+ * distintivo dice el token que se desplaza o cuantos simbolos retira la
+ * reduccion. La parte inferior es una consola tipo logs con una linea por paso.</p>
  */
 public class StackVisualizerPanel extends JPanel {
 
+    // Geometria de cada columna de paso
+    private static final int START_X = 20;
+    private static final int COL_WIDTH = 180;
+    private static final int CARD_WIDTH = COL_WIDTH - 10;
+    private static final int STEP_NUM_Y = 15;
+    private static final int STEP_ACTION_Y = 27;
+    private static final int CARD_TOP = 32;
+    private static final int CARD_PADDING = 8;
+    private static final int BOX_HEIGHT = 22;
+    private static final int BOX_GAP = 4;
+    private static final int BOX_INSET = 6;
+    private static final int BADGE_HEIGHT = 24;
+    private static final int BADGE_GAP = 6;
+    private static final int BOTTOM_MARGIN = 12;
+    private static final int MIN_CARD_HEIGHT = 120;
+    /** A partir de este numero de pasos solo se pintan las columnas visibles. */
+    private static final int CLIP_THRESHOLD = 60;
+
+    // Paleta de las tarjetas, clara sobre el fondo oscuro del dock
+    private static final Color CARD_BG = new Color(254, 243, 199);
+    private static final Color CARD_BORDER = new Color(217, 119, 6);
+    private static final Color TOP_BOX_BG = new Color(191, 219, 254);
+    private static final Color BOX_BG = new Color(254, 202, 202);
+    private static final Color BOX_BORDER = new Color(140, 140, 140);
+    private static final Color BOX_FG = new Color(20, 20, 20);
+    private static final Color BADGE_BG = new Color(187, 247, 208);
+    private static final Color BADGE_BORDER = new Color(22, 101, 52);
+    private static final Color BADGE_FG = new Color(20, 83, 45);
+    private static final Color EMPTY_FG = new Color(120, 120, 120);
+    private static final Color SHIFT_FG = new Color(134, 239, 172);
+    private static final Color REDUCE_FG = new Color(253, 186, 116);
+
+    private List<ParseStep> steps = new ArrayList<>();
     private JPanel stackDrawPanel;
     private JTextArea logTextArea;
-    private JSlider stepSlider;
-    private JLabel stepLabel;
+    private JLabel countLabel;
     private JSplitPane splitPane;
-
-    private List<StackState> states = new ArrayList<>();
-    private int currentStep = 0;
 
     /**
      * Creates new form StackVisualizerPanel
@@ -76,211 +110,298 @@ public class StackVisualizerPanel extends JPanel {
     private void initCustomComponents() {
         setLayout(new BorderLayout());
 
-        stackDrawPanel = new StackPanel();
+        stackDrawPanel = new StackCanvas();
         stackDrawPanel.setBackground(UiTheme.toolWindowBg());
-        stackDrawPanel.setPreferredSize(new Dimension(0, 260));
-        stackDrawPanel.setBorder(UiTheme.pad(8, 8, 8, 8));
+        stackDrawPanel.setPreferredSize(new Dimension(900, 400));
+
+        JScrollPane stackScroll = new JScrollPane(stackDrawPanel,
+                JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED,
+                JScrollPane.HORIZONTAL_SCROLLBAR_ALWAYS);
+        stackScroll.setBorder(BorderFactory.createEmptyBorder());
+        stackScroll.getViewport().setBackground(UiTheme.toolWindowBg());
+
+        countLabel = new JLabel("0 pasos", SwingConstants.RIGHT);
+        countLabel.setFont(UiTheme.sans(11));
+        countLabel.setForeground(UiTheme.dim());
+        countLabel.setBorder(UiTheme.pad(0, 8, 0, 10));
+
+        JPanel stackBar = new JPanel(new BorderLayout());
+        stackBar.setOpaque(false);
+        stackBar.add(titulo("Secuencia de Estados de la Pila (Historial Completo)", 12),
+                BorderLayout.WEST);
+        stackBar.add(countLabel, BorderLayout.EAST);
+        stackBar.setBorder(UiTheme.pad(6, 2, 4, 0));
+
+        JPanel topContainer = new JPanel(new BorderLayout());
+        topContainer.setOpaque(false);
+        topContainer.add(stackBar, BorderLayout.NORTH);
+        topContainer.add(stackScroll, BorderLayout.CENTER);
 
         logTextArea = new JTextArea();
         logTextArea.setEditable(false);
+        logTextArea.setLineWrap(false);
         logTextArea.setFont(UiTheme.mono(11));
         logTextArea.setBackground(UiTheme.toolWindowBg());
-        logTextArea.setForeground(UiTheme.dim());
-        logTextArea.setBorder(UiTheme.pad(4, 8, 4, 8));
-        logTextArea.setVisible(false);
+        logTextArea.setForeground(UiTheme.fg());
+        logTextArea.setBorder(UiTheme.pad(2, 4, 2, 4));
 
-        splitPane = new JSplitPane(JSplitPane.VERTICAL_SPLIT, stackDrawPanel,
-                new JScrollPane(logTextArea));
-        splitPane.setResizeWeight(0.72);
-        splitPane.setDividerLocation(260);
+        JScrollPane logScroll = new JScrollPane(logTextArea);
+        logScroll.setBorder(BorderFactory.createEmptyBorder());
+        logScroll.getViewport().setBackground(UiTheme.toolWindowBg());
+
+        JPanel logBar = new JPanel(new BorderLayout());
+        logBar.setOpaque(false);
+        logBar.add(titulo("Consola de Logs / Operaciones (shift - reduce):", 11),
+                BorderLayout.WEST);
+        logBar.setBorder(UiTheme.pad(4, 2, 2, 0));
+
+        JPanel bottomContainer = new JPanel(new BorderLayout());
+        bottomContainer.setOpaque(false);
+        bottomContainer.add(logBar, BorderLayout.NORTH);
+        bottomContainer.add(logScroll, BorderLayout.CENTER);
+
+        splitPane = new JSplitPane(JSplitPane.VERTICAL_SPLIT, topContainer, bottomContainer);
+        splitPane.setResizeWeight(0.75);
+        splitPane.setDividerLocation(360);
         splitPane.setBorder(BorderFactory.createEmptyBorder());
         splitPane.setContinuousLayout(true);
         splitPane.setOneTouchExpandable(true);
 
-        stepSlider = new JSlider(0, 0, 0);
-        stepSlider.setEnabled(false);
-        stepSlider.setBackground(UiTheme.toolWindowBg());
-        stepSlider.addChangeListener(e -> {
-            currentStep = stepSlider.getValue();
-            updateStepLabel();
-            stackDrawPanel.repaint();
-        });
-
-        stepLabel = new JLabel("Paso 0 / 0", SwingConstants.CENTER);
-        stepLabel.setFont(UiTheme.sans(11));
-        stepLabel.setForeground(UiTheme.dim());
-
-        JButton first = navButton(IdeIcons.zoomOut(), "Primer paso", 0);
-        JButton prev = navButton(IdeIcons.chevronDown(), "Paso anterior", -1);
-        JButton next = navButton(IdeIcons.chevronDown(), "Paso siguiente", 1);
-        JButton last = navButton(IdeIcons.zoomIn(), "Último paso", Integer.MAX_VALUE);
-        JButton log = new JButton("Bitácora");
-        log.setFocusable(false);
-        log.setFont(UiTheme.sans(12));
-        log.addActionListener(e -> {
-            logTextArea.setVisible(!logTextArea.isVisible());
-            splitPane.setDividerLocation(logTextArea.isVisible() ? 200 : 260);
-        });
-
-        JPanel controls = new JPanel(new BorderLayout());
-        JPanel nav = new JPanel(new FlowLayout(FlowLayout.LEFT, 2, 0));
-        nav.setOpaque(false);
-        nav.add(first);
-        nav.add(prev);
-        nav.add(next);
-        nav.add(last);
-        nav.add(stepLabel);
-
-        JPanel right = new JPanel(new FlowLayout(FlowLayout.RIGHT, 2, 0));
-        right.setOpaque(false);
-        right.add(log);
-
-        controls.setBorder(UiTheme.pad(6, 6, 4, 8));
-        controls.add(nav, BorderLayout.WEST);
-        controls.add(right, BorderLayout.EAST);
-
-        JPanel south = new JPanel(new BorderLayout());
-        south.setOpaque(false);
-        south.add(controls, BorderLayout.NORTH);
-        south.add(stepSlider, BorderLayout.CENTER);
-
-        add(controls, BorderLayout.NORTH);
         add(splitPane, BorderLayout.CENTER);
-        add(stepSlider, BorderLayout.SOUTH);
     }
 
-    private JButton navButton(javax.swing.Icon icon, String tooltip, int delta) {
-        JButton b = new JButton(icon);
-        b.setToolTipText(tooltip);
-        b.setFocusable(false);
-        b.setBorderPainted(false);
-        b.setContentAreaFilled(false);
-        b.setPreferredSize(new Dimension(24, 24));
-        UiTheme.asButton(b);
-        b.addActionListener(e -> {
-            if (delta == Integer.MAX_VALUE) {
-                currentStep = states.size() - 1;
-            } else {
-                currentStep += delta;
-            }
-            currentStep = Math.max(0, Math.min(states.size() - 1, currentStep));
-            stepSlider.setValue(currentStep);
-            updateStepLabel();
-            stackDrawPanel.repaint();
-        });
-        return b;
+    private JLabel titulo(String texto, int size) {
+        JLabel label = new JLabel("  " + texto);
+        label.setFont(UiTheme.sansBold(size));
+        label.setForeground(UiTheme.fg());
+        return label;
     }
 
     // ====================== API ======================
 
     /**
-     * Carga los estados de la pila y muestra el ultimo.
+     * Carga el trazo de la pila y dibuja el historial completo, una columna por
+     * paso.
      */
-    public void loadStates(List<StackState> newStates) {
-        states = newStates == null ? new ArrayList<>() : new ArrayList<>(newStates);
-        stepSlider.setEnabled(states.size() > 1);
-        stepSlider.setMaximum(Math.max(0, states.size() - 1));
-        currentStep = states.size() - 1;
-        stepSlider.setValue(currentStep);
-        updateStepLabel();
-        stackDrawPanel.repaint();
-        rebuildLog();
-    }
+    public void loadSteps(List<ParseStep> nuevos) {
+        steps = nuevos == null ? new ArrayList<>() : new ArrayList<>(nuevos);
 
-    private void rebuildLog() {
-        StringBuilder sb = new StringBuilder();
-        for (StackState s : states) {
-            sb.append(s).append('\n');
+        int maxDepth = 1;
+        for (ParseStep st : steps) {
+            maxDepth = Math.max(maxDepth, st.getPila().size());
         }
-        logTextArea.setText(sb.toString());
-        logTextArea.setCaretPosition(0);
+
+        int alto = CARD_TOP + altoTarjeta(maxDepth) + BADGE_GAP + BADGE_HEIGHT + 2 * BOTTOM_MARGIN;
+        stackDrawPanel.setPreferredSize(new Dimension(
+                Math.max(900, steps.size() * COL_WIDTH + 2 * START_X), alto));
+
+        countLabel.setText(steps.size() + (steps.size() == 1 ? " paso" : " pasos"));
+        updateLogs();
+        stackDrawPanel.revalidate();
+        stackDrawPanel.repaint();
     }
 
-    private void updateStepLabel() {
-        stepLabel.setText("Paso " + (states.isEmpty() ? 0 : currentStep + 1) + " / " + states.size());
-    }
-
+    /**
+     * Numero de pasos del trazo.
+     *
+     * <p>Mantiene el nombre que le puso el manejador de evento generado por
+     * NetBeans, que es el que lo invoca.</p>
+     */
     public int getStateCount() {
-        return states.size();
+        return steps.size();
     }
 
-    public int getCurrentStep() {
-        return currentStep;
+    /** Numero de pasos del trazo. */
+    public int getStepCount() {
+        return steps.size();
     }
 
     public void clear() {
-        loadStates(null);
+        loadSteps(null);
     }
 
-    /** Estado visible ahora mismo. */
-    public StackState getCurrentState() {
-        if (states.isEmpty()) {
-            return null;
+    /** Alto de la tarjeta: el de la pila mas profunda, con un minimo razonable. */
+    private int altoTarjeta(int maxDepth) {
+        return Math.max(MIN_CARD_HEIGHT, maxDepth * (BOX_HEIGHT + BOX_GAP) + 2 * CARD_PADDING);
+    }
+
+    /**
+     * Escribe una linea de log por paso: numero, si desplaza o reduce, el simbolo
+     * que entra en la pila y de donde sale.
+     */
+    private void updateLogs() {
+        StringBuilder logs = new StringBuilder();
+        for (ParseStep st : steps) {
+            logs.append(st).append('\n');
         }
-        return states.get(Math.max(0, Math.min(states.size() - 1, currentStep)));
+        logTextArea.setText(logs.toString());
+        logTextArea.setCaretPosition(0);
     }
 
     // ====================== Dibujo de la pila ======================
 
-    /** Dibuja las celdas de la pila, con la cima arriba. */
-    private class StackPanel extends JPanel {
-
-        private static final int CELL_HEIGHT = 26;
-        private static final int GAP = 4;
+    /** Lienzo donde se dibuja una columna por paso. */
+    private class StackCanvas extends JPanel {
 
         @Override
         protected void paintComponent(Graphics g) {
             super.paintComponent(g);
-            Graphics2D g2 = (Graphics2D) g.create();
-            g2.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING,
-                    RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
-            g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING,
-                    RenderingHints.VALUE_ANTIALIAS_ON);
+            drawAllSteps(g);
+        }
+    }
 
-            StackState state = getCurrentState();
-            g2.setFont(UiTheme.mono(12));
+    private void drawAllSteps(Graphics g) {
+        Graphics2D g2 = (Graphics2D) g.create();
+        g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+        g2.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING,
+                RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
 
-            if (state == null) {
-                g2.setColor(UiTheme.dim());
-                g2.drawString("Sin datos de pila. Compila un archivo para ver la simulación.",
-                        12, 24);
-                g2.dispose();
-                return;
-            }
-
+        if (steps.isEmpty()) {
             g2.setColor(UiTheme.dim());
-            g2.drawString("Instrucción: " + state.getC3dInstruction(), 8, 16);
-
-            if (state.getStackElements().isEmpty()) {
-                g2.setColor(UiTheme.dim());
-                g2.drawString("Pila vacía", 12, 44);
-                g2.dispose();
-                return;
-            }
-
-            List<String> elements = state.getStackElements();
-            int top = 32;
-            FontMetrics fm = g2.getFontMetrics();
-            int topIndex = elements.size() - 1;
-
-            for (int row = 0; row < elements.size(); row++) {
-                int i = topIndex - row;
-                int y = top + row * (CELL_HEIGHT + GAP);
-                boolean isTop = row == 0;
-
-                g2.setColor(isTop ? UiTheme.accent().darker() : UiTheme.color("Table.selectionBackground",
-                        new Color(0x313335)));
-                g2.fillRoundRect(8, y, Math.max(80, getWidth() - 16), CELL_HEIGHT, 6, 6);
-
-                g2.setColor(isTop ? Color.WHITE : UiTheme.fg());
-                g2.drawString(elements.get(i), 16, y + fm.getAscent() + 4);
-            }
+            g2.setFont(UiTheme.sans(13));
+            g2.drawString("No hay pila que mostrar. Compile un archivo para ver el trazo "
+                    + "de shift y reduce.", 24, 44);
             g2.dispose();
+            return;
         }
 
-        @Override
-        public Dimension getPreferredSize() {
-            return new Dimension(320, 300);
+        int maxDepth = 1;
+        for (ParseStep st : steps) {
+            maxDepth = Math.max(maxDepth, st.getPila().size());
         }
+        int cardH = altoTarjeta(maxDepth);
+        int badgeY = CARD_TOP + cardH + BADGE_GAP;
+
+        for (int i = firstVisibleColumn(); i <= lastVisibleColumn(); i++) {
+            drawStep(g2, steps.get(i), i, cardH, badgeY);
+        }
+        g2.dispose();
+    }
+
+    private void drawStep(Graphics2D g2, ParseStep state, int i, int cardH, int badgeY) {
+        int x = START_X + i * COL_WIDTH;
+        List<String> elementos = state.getPila();
+
+        // Numero de paso, coloreado segun la accion
+        g2.setFont(UiTheme.sansBold(12));
+        g2.setColor(colorDe(state.getTipo()));
+        String numero = String.valueOf(state.getNumero());
+        g2.drawString(numero, x + (CARD_WIDTH - g2.getFontMetrics().stringWidth(numero)) / 2,
+                STEP_NUM_Y);
+
+        // Etiqueta shift / reduce
+        g2.setFont(UiTheme.sans(9));
+        String etiqueta = state.getTipo().tag();
+        g2.drawString(etiqueta, x + (CARD_WIDTH - g2.getFontMetrics().stringWidth(etiqueta)) / 2,
+                STEP_ACTION_Y);
+
+        // Tarjeta del paso
+        g2.setColor(CARD_BG);
+        g2.fillRoundRect(x, CARD_TOP, CARD_WIDTH, cardH, 10, 10);
+        g2.setColor(CARD_BORDER);
+        g2.drawRoundRect(x, CARD_TOP, CARD_WIDTH, cardH, 10, 10);
+
+        int boxW = CARD_WIDTH - 2 * BOX_INSET;
+
+        if (elementos.isEmpty()) {
+            g2.setColor(EMPTY_FG);
+            g2.setFont(UiTheme.sans(11));
+            FontMetrics fm = g2.getFontMetrics();
+            String vacia = "Pila vacía";
+            g2.drawString(vacia, x + (CARD_WIDTH - fm.stringWidth(vacia)) / 2,
+                    CARD_TOP + CARD_PADDING + fm.getAscent());
+        } else {
+            // Contenido de la pila, con la cima arriba
+            g2.setFont(UiTheme.sansBold(9));
+            FontMetrics fm = g2.getFontMetrics();
+            int y = CARD_TOP + CARD_PADDING;
+            for (int j = elementos.size() - 1; j >= 0; j--) {
+                boolean esCima = j == elementos.size() - 1;
+                g2.setColor(esCima ? TOP_BOX_BG : BOX_BG);
+                g2.fillRoundRect(x + BOX_INSET, y, boxW, BOX_HEIGHT, 5, 5);
+                g2.setColor(BOX_BORDER);
+                g2.drawRoundRect(x + BOX_INSET, y, boxW, BOX_HEIGHT, 5, 5);
+
+                g2.setColor(BOX_FG);
+                String texto = recortar(elementos.get(j), fm, boxW - 6);
+                g2.drawString(texto, x + BOX_INSET + (boxW - fm.stringWidth(texto)) / 2,
+                        y + (BOX_HEIGHT - fm.getHeight()) / 2 + fm.getAscent());
+                y += BOX_HEIGHT + BOX_GAP;
+            }
+        }
+
+        // Distintivo con el detalle de la accion: que token se desplaza o
+        // cuantos simbolos retira la reduccion.
+        g2.setFont(UiTheme.sans(9));
+        FontMetrics fmBadge = g2.getFontMetrics();
+        String detalle = recortar(distintivo(state), fmBadge, CARD_WIDTH - 12);
+        g2.setColor(BADGE_BG);
+        g2.fillRoundRect(x + 2, badgeY, CARD_WIDTH - 4, BADGE_HEIGHT, 6, 6);
+        g2.setColor(BADGE_BORDER);
+        g2.drawRoundRect(x + 2, badgeY, CARD_WIDTH - 4, BADGE_HEIGHT, 6, 6);
+        g2.setColor(BADGE_FG);
+        g2.drawString(detalle, x + 2 + (CARD_WIDTH - 4 - fmBadge.stringWidth(detalle)) / 2,
+                badgeY + (BADGE_HEIGHT - fmBadge.getHeight()) / 2 + fmBadge.getAscent());
+    }
+
+    /**
+     * Detalle que va en el distintivo de la columna: en un shift el token de la
+     * gramatica que se desplaza y, si el lexema es otro, tambien el lexema; en
+     * un reduce cuantos simbolos retira de la pila.
+     */
+    private static String distintivo(ParseStep state) {
+        if (state.getTipo() == AccionPila.SHIFT) {
+            String terminal = state.getTerminal();
+            if (terminal == null || terminal.equals(state.getSimbolo())) {
+                return state.getSimbolo();
+            }
+            return terminal + ": " + state.getSimbolo();
+        }
+        return "retira " + state.getConsumidos().size();
+    }
+
+    /** Color de la etiqueta de accion: verde para shift, naranja para reduce. */
+    private static Color colorDe(AccionPila tipo) {
+        return tipo == AccionPila.SHIFT ? SHIFT_FG : REDUCE_FG;
+    }
+
+    /** Recorta el texto para que quepa en el ancho dado. */
+    private static String recortar(String texto, FontMetrics fm, int anchoMax) {
+        if (texto == null) {
+            return "";
+        }
+        String t = texto;
+        while (t.length() > 3 && fm.stringWidth(t) > anchoMax) {
+            t = t.substring(0, t.length() - 1);
+        }
+        return t.equals(texto) ? t : t + "..";
+    }
+
+    /** Primera columna que toca la parte visible del lienzo. */
+    private int firstVisibleColumn() {
+        return rangoVisible()[0];
+    }
+
+    /** Ultima columna que toca la parte visible del lienzo. */
+    private int lastVisibleColumn() {
+        return rangoVisible()[1];
+    }
+
+    /**
+     * Rango de columnas que alcanza la parte visible del lienzo. Con muchos
+     * pasos solo se pintan esas columnas para no redibujar el historial entero
+     * en cada desplazamiento.
+     */
+    private int[] rangoVisible() {
+        int ultimo = steps.size() - 1;
+        Container padre = stackDrawPanel.getParent();
+        if (steps.size() <= CLIP_THRESHOLD || !(padre instanceof JViewport)) {
+            return new int[]{0, ultimo};
+        }
+        Point posicion = ((JViewport) padre).getViewPosition();
+        int ancho = ((JViewport) padre).getExtentSize().width;
+        int primero = Math.max(0, (posicion.x - START_X) / COL_WIDTH);
+        int fin = Math.max(0, Math.min(ultimo, (posicion.x + ancho - START_X) / COL_WIDTH));
+        return new int[]{primero, Math.max(primero, fin)};
     }
 }

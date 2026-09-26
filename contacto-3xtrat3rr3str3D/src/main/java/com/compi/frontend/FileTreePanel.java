@@ -9,6 +9,7 @@ import java.awt.Dimension;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.io.File;
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.LinkedHashSet;
@@ -284,6 +285,38 @@ public class FileTreePanel extends JPanel {
     }
 
     /**
+     * Todos los archivos de codigo del proyecto, de las carpetas que tienen.
+     *
+     * <p>Recorre el disco en vez de usar el arbol, porque compilar el proyecto
+     * tiene que abarcar todo lo que hay, no solo lo que se ve con el filtro de
+     * busqueda puesto.</p>
+     */
+    public List<File> allSourceFiles() {
+        List<File> found = new ArrayList<>();
+        collectSources(root, found);
+        // Orden estable: si no, el resultado cambiaria entre ejecuciones.
+        found.sort(Comparator.comparing(File::getAbsolutePath));
+        return found;
+    }
+
+    private static void collectSources(File dir, List<File> out) {
+        if (dir == null || !dir.isDirectory()) {
+            return;
+        }
+        File[] children = dir.listFiles();
+        if (children == null) {
+            return;
+        }
+        for (File child : children) {
+            if (child.isDirectory()) {
+                collectSources(child, out);
+            } else if (isSourceFile(child)) {
+                out.add(child);
+            }
+        }
+    }
+
+    /**
      * Cuenta los archivos de codigo que hay ahora mismo en el arbol.
      *
      * <p>Serve para informar de cuanto se ha cargado y para detectar que una
@@ -293,6 +326,58 @@ public class FileTreePanel extends JPanel {
         int[] total = {0};
         countSources(rootNode, total);
         return total[0];
+    }
+
+    /**
+     * Carpetas del proyecto donde tiene sentido crear un archivo nuevo.
+     *
+     * <p>Son la raiz y todas las carpetas intermedias que llevan a algun archivo de
+     * codigo. No se ofrecen las carpetas vacias porque ahi no hay nada que
+     * compilar todavia; si se quiere una de esas, se escoge con el selector de
+     * carpetas.</p>
+     */
+    public List<File> codeFolders() {
+        Set<File> folders = new LinkedHashSet<>();
+        for (File file : allSourceFiles()) {
+            File parent = file.getParentFile();
+            while (parent != null && isWithinRoot(parent)) {
+                folders.add(parent);
+                if (parent.equals(root)) {
+                    break;
+                }
+                parent = parent.getParentFile();
+            }
+        }
+        // La raiz primero, que es donde se crea todo por defecto; el resto, por
+        // nombre para que la lista no se mueva entre Builds.
+        List<File> ordered = new ArrayList<>();
+        if (root != null && root.isDirectory()) {
+            ordered.add(root);
+        }
+        folders.stream()
+                .filter(f -> !f.equals(root))
+                .sorted(Comparator.comparing(File::getAbsolutePath))
+                .forEach(ordered::add);
+        return ordered;
+    }
+
+    /** true si la carpeta esta dentro de la raiz del proyecto. */
+    private boolean isWithinRoot(File dir) {
+        if (root == null) {
+            return false;
+        }
+        try {
+            String base = root.getCanonicalPath();
+            String candidate = dir.getCanonicalPath();
+            return candidate.equals(base) || candidate.startsWith(base + File.separator);
+        } catch (IOException e) {
+            return false;
+        }
+    }
+
+    /** Carpeta del proyecto, o null si no hay ninguna abierta. */
+    public File projectRoot() {
+        return root;
     }
 
     private static void countSources(DefaultMutableTreeNode node, int[] total) {

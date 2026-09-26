@@ -10,12 +10,15 @@ import com.compi.backend.errors.CompilationError;
 import com.compi.backend.errors.ErrorType;
 import com.compi.backend.languages2.LanguageCompiler;
 import com.compi.backend.languages2.LanguageCompilerFactory;
+import com.compi.backend.parser.ParseStep;
+import com.compi.backend.parser.ParseTrace;
 import com.compi.backend.runtime.Stack;
 import com.compi.backend.runtime.StackSimulator;
 import com.compi.backend.runtime.StackState;
 import com.compi.backend.symbols.Symbol;
 import com.compi.backend.symbols.SymbolTable;
 import com.compi.backend.utils.ParseTreeDotGenerator;
+import java.io.File;
 import java.util.ArrayList;
 import java.util.List;
 import org.antlr.v4.runtime.tree.ParseTree;
@@ -43,6 +46,7 @@ public class Compiler {
     private final Stack processStack = new Stack();
     private final List<CompilationError> errors = new ArrayList<>();
     private final List<StackState> stackStates = new ArrayList<>();
+    private final List<ParseStep> parseSteps = new ArrayList<>();
     private final IntermediateCodeManager icm = new IntermediateCodeManager();
     private final C3DGenerator c3dGenerator = new C3DGenerator();
 
@@ -52,6 +56,35 @@ public class Compiler {
     private String tripletsCode = "";
     private String quadruplesCode = "";
     private String cCode = "";
+
+    /** Raiz del proyecto, contra la que se resuelven los imports. */
+    private File workingDirectory = new File(".");
+
+    /** Archivos que se traido con los imports en la ultima compilacion. */
+    private List<String> importedFiles = List.of();
+
+    /**
+     * Fija la carpeta del proyecto.
+     *
+     * <p>Es donde se buscan los archivos que el fuente importa. Si no se dice
+     * nada, los imports se resuelven contra el directorio de trabajo del
+     * proceso.</p>
+     */
+    public void setWorkingDirectory(File directory) {
+        this.workingDirectory = directory == null ? new File(".") : directory;
+    }
+
+    public File getWorkingDirectory() {
+        return workingDirectory;
+    }
+
+    /**
+     * Archivos cargados por los {@code import} en la ultima compilacion, con su
+     * ruta respecto a la carpeta del proyecto.
+     */
+    public List<String> getImportedFiles() {
+        return importedFiles;
+    }
 
     /**
      * Compila el texto fuente del lenguaje indicado.
@@ -67,62 +100,127 @@ public class Compiler {
         LanguageCompiler compiler = LanguageCompilerFactory.getCompiler(language);
         if (compiler == null) {
             errors.add(new CompilationError(ErrorType.SEMANTICO,
-                    "Lenguaje no soportado: " + language, 0, 0));
+                    "Lenguaje no soportado: " + language, -1, -1));
+            importedFiles = List.of();
             return false;
         }
         this.language = compiler.id();
+        compiler.setWorkingDirectory(workingDirectory);
+        importedFiles = List.of();
 
         try {
             // 1. Lexico + sintactico
             ParseTree tree = compiler.parse(this.source, errors);
+
+            // 1b. Trazo de la pila del parser: reglas que entra, tokens que
+            // reconoce y reducciones, tal y como ocurrieron.
+            if (tree != null) {
+                parseSteps.addAll(ParseTrace.build(tree, compiler.vocabulary(),
+                        compiler.ruleNames()));
+            }
 
             // 2. Arbol de parseo -> representacion DOT
             if (tree != null) {
                 astDot = new ParseTreeDotGenerator().build(tree, "AST_" + compiler.id());
             }
 
-            // 3. Semantico -> tabla de simbolos
+            // 3. Imports: lo que el fuente trae de otros archivos se compila antes
+            // de mirarlo a el, en la misma tabla de simbolos, para que sus
+            // simbolos ya existan cuando se resuelvan sus usos.
             if (tree != null && errors.isEmpty()) {
-                compiler.analyze(tree, symbolTable, errors);
+                importedFiles = compiler.loadImports(tree, symbolTable, c3dGenerator, errors);
             }
 
-            // 4. Codigo de tres direcciones -> cuartetas
-            if (tree != null && errors.isEmpty()) {
-                compiler.generateIntermediate(tree, symbolTable, c3dGenerator);
+            // 4. Semantico -> tabla de simbolos
+            if (tree != null) {
+                if (errors.isEmpty()) {
+                    compiler.analyze(tree, symbolTable, errors);
+                } else {
+                    // El parseo ya fallo, pero el arbol suele estar incompleto solo
+                    // al final. Se analiza igualmente para completar la tabla con
+                    // lo que si se reconocio, en vez de dejarla vacia y no
+                    // informar de nada. Los errores que salgan aqui se guardan
+                    // aparte y se tiran: serian reacciones en cascada de un error
+                    // de sintaxis y solo taparian el problema real.
+                    List<CompilationError> descartados = new ArrayList<>();
+                    try {
+                        compiler.analyze(tree, symbolTable, descartados);
+                    } catch (Exception ex) {
+                        // El arbol esta incompleto: se conserva la tabla parcial.
+                    }
+                }
+            }
+
+            // 5. Codigo de tres direcciones -> cuartetas
+            if (tree != null) {
+                if (errors.isEmpty()) {
+                    compiler.generateIntermediate(tree, symbolTable, c3dGenerator);
+                } else {
+                    // Con errores ya registrados el codigo no es de fiar, pero
+                    // intentarlo da la pila de ejecucion de la parte que si se
+                    // entendio, que es justo lo que sirve para ver por donde se
+                    // salio. Si el generador se tropieza, se queda con las
+                    // cuartetas que hubiera emitido hasta ese punto.
+                    try {
+                        compiler.generateIntermediate(tree, symbolTable, c3dGenerator);
+                    } catch (Exception ex) {
+                        // El arbol no cuadra con la tabla: la pila sale a medias.
+                    }
+                }
             }
 
             List<Quadruple> quadruples = c3dGenerator.getQuadruples();
 
-            // 5. Tripletes derivados de las cuartetas
+            // 6. Tripletes derivados de las cuartetas
             icm.loadFromQuadruples(quadruples);
             tripletsCode = icm.getTripletsString();
             quadruplesCode = icm.getQuadruplesString();
             c3dCode = c3dGenerator.toC3DString();
 
-            // 6. Traduccion intermedia legible
+            // 7. Traduccion intermedia legible
             translatedCode = buildTranslatedCode(compiler, quadruples);
 
-            // 7. Codigo C segun el modo elegido (tripletes o cuartetas)
+            // 8. Codigo C segun el modo elegido (tripletes o cuartetas)
             cCode = generateCCode();
 
-            // 8. Pila de procesos
+            // 9. Pila de procesos
             stackStates.addAll(new StackSimulator().simulate(quadruples));
 
-            // 9. El resumen se rehace para incluir la profundidad final de la pila.
+            // 10. El resumen se rehace para incluir la profundidad final de la pila.
             translatedCode = buildTranslatedCode(compiler, quadruples);
 
         } catch (Exception e) {
             String msg = e.getMessage() == null ? e.getClass().getSimpleName() : e.getMessage();
             errors.add(new CompilationError(ErrorType.SEMANTICO,
-                    "Error interno de compilación: " + msg, 0, 0));
+                    "Error interno de compilación: " + msg, -1, -1));
         }
+
+        // Cada simbolo se anota con el lenguaje en el que se declaro. Se hace
+        // aqui, en la fachada, y no en cada visitor: los tres visitantes no
+        // tienen por que saber como se llama su lenguaje.
+        tagSymbolsLanguage(compiler.displayName());
+
         return errors.isEmpty();
+    }
+
+    /**
+     * Anota el lenguaje de origen de todos los simbolos de la tabla.
+     *
+     * <p>Se usa el nombre legible ({@code PigLatin}) y no el identificador
+     * interno ({@code pig}) porque esto sale tal cual en la tabla de simbolos de
+     * la interfaz.</p>
+     */
+    private void tagSymbolsLanguage(String languageName) {
+        for (Symbol s : symbolTable.getAllSymbols()) {
+            s.inLanguage(languageName);
+        }
     }
 
     /** Limpia todo el estado de una compilacion anterior. */
     private void reset() {
         errors.clear();
         stackStates.clear();
+        parseSteps.clear();
         processStack.clear();
         symbolTable.clear();
         icm.clear();
@@ -255,8 +353,9 @@ public class Compiler {
         sb.append("Cuartetas       : ").append(quadruples.size()).append('\n');
         sb.append("Tripletes       : ").append(icm.getTriplets().size()).append('\n');
         sb.append("Errores         : ").append(errors.size()).append('\n');
-        sb.append("Pila            : ").append(stackStates.size())
-                .append(" estados (profundidad maxima ").append(maxDepth).append(")\n");
+        sb.append("Pila del parser : ").append(parseSteps.size()).append(" pasos\n");
+        sb.append("Pila maquina    : ").append(stackStates.size())
+                .append(" pasos (profundidad maxima ").append(maxDepth).append(")\n");
         return sb.toString();
     }
 
@@ -273,6 +372,11 @@ public class Compiler {
     /** Estados de la pila de procesos, uno por instruccion simulada. */
     public List<StackState> getStackStates() {
         return stackStates;
+    }
+
+    /** Trazo de la pila del parser: un paso por regla, token o reduccion. */
+    public List<ParseStep> getParseSteps() {
+        return parseSteps;
     }
 
     public String getTranslatedCode() {

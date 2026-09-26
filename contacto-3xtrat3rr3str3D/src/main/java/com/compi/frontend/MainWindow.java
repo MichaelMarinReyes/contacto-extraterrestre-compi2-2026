@@ -3,7 +3,10 @@ package com.compi.frontend;
 import com.compi.backend.Compiler;
 import com.compi.backend.c3d.Mode;
 import com.compi.backend.errors.CompilationError;
+import com.compi.backend.errors.ErrorType;
 import com.compi.backend.languages2.LanguageCompilerFactory;
+import com.compi.backend.parser.ParseStep;
+import com.compi.backend.symbols.Symbol;
 import java.awt.BorderLayout;
 import java.awt.CardLayout;
 import java.awt.Color;
@@ -91,6 +94,36 @@ public class MainWindow extends JFrame {
     private final Compiler compiler = new Compiler();
     private Mode currentCMode = Mode.QUADRUPLES;
 
+    /**
+     * Errores de la ultima compilacion, en el mismo orden que las filas de la
+     * tabla. Se guardan aparte porque la tabla guarda solo el texto de cada celda
+     * y al saltar a un error hace falta saber de que archivo era.
+     */
+    private List<CompilationError> lastErrors = List.of();
+
+    /**
+     * Archivos de la ultima compilacion, para resolver el nombre de un error sin
+     * tener que volver a recorrer el disco cada vez que se salta a uno.
+     */
+    private List<File> lastTargets = List.of();
+
+    /**
+     * Archivo al que pertenecen los simbolos de la tabla.
+     *
+     * <p>La tabla de simbolos, a diferencia de la de errores, no es del proyecto
+     * entero sino del archivo de la pestana activa, asi que el salto a la
+     * declaracion va siempre ahi.</p>
+     */
+    private File lastFocusFile;
+
+    /**
+     * Nombre del archivo que es el punto de partida de un proyecto.
+     *
+     * <p>{@code main.pig} se lee el primero, es el que se enseña por defecto y el
+     * que carga los demas a traves de sus imports.</p>
+     */
+    private static final String MAIN_FILE = "main.pig";
+
     private JPanel contentArea;
     private File currentFile;
 
@@ -107,6 +140,10 @@ public class MainWindow extends JFrame {
         initContentLayout();
         initToolbar();
         initShortcuts();
+        // Doble clic en un error: abrir su archivo y quedarse en la linea.
+        errorPanel.setOnErrorActivated(this::jumpToError);
+        // Doble clic en un simbolo: quedarse en su declaracion.
+        symbolPanel.setOnSymbolActivated(this::jumpToSymbol);
         initStyles();
         navText("");
         showWelcome();
@@ -351,17 +388,28 @@ public class MainWindow extends JFrame {
      * una pestana suelta.</p>
      */
     private void actionNewFile() {
-        String languageId = askForLanguage();
-        if (languageId == null) {
+        // El proyecto manda: si ya hay carpeta abierta se pregunta solo el nombre,
+        // el lenguaje y en que carpeta de esa nace. Sin proyecto hay que elegir
+        // primero la carpeta contenedora, que si no el archivo no tendria donde
+        // aparecer en el arbol.
+        File container = currentContainer();
+        if (container == null) {
+            container = ensureContainer("archivo nuevo", null);
+            if (container == null) {
+                return;
+            }
+        }
+
+        NewFileDialog.Choice choice = promptNewFile(container);
+        if (choice == null) {
             return;
         }
-        File dir = ensureContainer("archivo nuevo", null);
-        if (dir == null) {
-            return;
-        }
-        EditorPanel editor = editorTabs.newFile(languageId, dir);
+
+        EditorPanel editor = editorTabs.newFile(choice.languageId(),
+                choice.directory(), choice.baseName());
         if (editor == null) {
-            promptInfo("No se pudo crear el archivo en:\n" + dir.getAbsolutePath(),
+            promptInfo("No se pudo crear el archivo en:\n"
+                            + choice.directory().getAbsolutePath(),
                     "Error de escritura", JOptionPane.ERROR_MESSAGE);
             return;
         }
@@ -373,13 +421,68 @@ public class MainWindow extends JFrame {
     }
 
     /**
-     * Pregunta con que extension crear el archivo.
+     * Pregunta como se llama el archivo nuevo, en que lenguaje y en que carpeta.
      *
-     * <p>Se propone primero el lenguaje de la pestana activa, que es lo que
-     * esta escribiendo el usuario, y en su defecto PigLatin.</p>
+     * <p>Se propone el lenguaje de la pestana activa, que es lo que esta
+     * escribiendo el usuario, y la carpeta donde esta el archivo abierto: es
+     * donde suele querer seguir escribiendo.</p>
      */
-    private String askForLanguage() {
-        return promptLanguage();
+    NewFileDialog.Choice promptNewFile(File container) {
+        return buildNewFileDialog(container).ask();
+    }
+
+    /**
+     * Monta el dialogo del archivo nuevo, sin mostrarlo.
+     *
+     * <p>Va aparte del {@link #promptNewFile} para poder inspeccionarlo en las
+     * pruebas sin abrir una ventana modal que las bloquearia.</p>
+     */
+    NewFileDialog buildNewFileDialog(File container) {
+        List<File> folders = fileTreePanelInstance.codeFolders();
+        if (folders.isEmpty()) {
+            folders = List.of(container);
+        }
+        EditorPanel active = editorTabs.getActiveEditor();
+        String languageId = active == null ? null : active.getLanguageId();
+
+        // Si hay un archivo abierto se propone la carpeta en la que esta; si no, la
+        // raiz del proyecto.
+        File suggestedFolder = active != null && active.getFile() != null
+                ? active.getFile().getParentFile() : container;
+        int selected = folders.indexOf(suggestedFolder);
+        List<File> ordered = new ArrayList<>(folders);
+        if (selected > 0) {
+            // NewFileDialog marca la primera carpeta del desplegable, asi que se
+            // deja la deseada en ese puesto.
+            ordered.add(0, ordered.remove(selected));
+        }
+
+        String suggestedName = suggestFileName(languageId, container);
+        return new NewFileDialog(this, container, ordered, languageId, suggestedName);
+    }
+
+    /** Nombre libre del estilo "archivoN", para proponerlo como punto de partida. */
+    private String suggestFileName(String languageId, File container) {
+        String ext = LanguageCompilerFactory.extensionOfLanguage(languageId);
+        if (ext == null) {
+            ext = "pig";
+        }
+        for (int i = 1; i < 10_000; i++) {
+            String candidate = "archivo" + i;
+            boolean taken = new File(container, candidate + "." + ext).exists();
+            if (!taken) {
+                for (EditorPanel editor : editorTabs.getAllEditors()) {
+                    if (editor.getDisplayName().equals(candidate + "." + ext)) {
+                        taken = true;
+                        break;
+                    }
+                }
+            }
+            if (!taken) {
+                return candidate;
+            }
+        }
+        return "archivo";
     }
 
     private void actionOpenFile() {
@@ -450,31 +553,6 @@ public class MainWindow extends JFrame {
         return dir;
     }
 
-    /** Selector de la extension del archivo nuevo, o null si se cancela. */
-    String promptLanguage() {
-        List<String> extensions = LanguageCompilerFactory.allowedExtensions();
-        List<String> options = new ArrayList<>(extensions.size());
-        for (String ext : extensions) {
-            options.add("*." + ext + "  (" + UiTheme.prettifyLanguage(
-                    LanguageCompilerFactory.byExtensionLanguage(ext)) + ")");
-        }
-
-        EditorPanel active = editorTabs.getActiveEditor();
-        String currentExt = LanguageCompilerFactory.extensionOfLanguage(
-                active == null ? null : active.getLanguageId());
-        Object preselected = currentExt == null ? options.get(0)
-                : options.get(extensions.indexOf(currentExt));
-
-        Object choice = JOptionPane.showInputDialog(this,
-                "Extensión del archivo nuevo (define el lenguaje):",
-                "Archivo nuevo", JOptionPane.QUESTION_MESSAGE, null,
-                options.toArray(), preselected);
-        if (choice == null) {
-            return null;
-        }
-        int index = options.indexOf(String.valueOf(choice));
-        return LanguageCompilerFactory.byExtensionLanguage(extensions.get(index));
-    }
 
     /** Confirmacion si/no. */
     int promptConfirm(String message, String title) {
@@ -801,87 +879,488 @@ public class MainWindow extends JFrame {
     // ====================== Compilacion ======================
 
     /**
-     * Compila el contenido de la pestana activa y reparte el resultado entre
-     * todos los paneles.
+     * Resultado de compilar un archivo, para poder juntar en una sola pasada los
+     * de todo el proyecto.
+     *
+     * <p>Son copias y no referencias vivas: {@link Compiler} reutiliza las mismas
+     * estructuras en cada {@code compile}, asi que si se guardara el estado
+     * compartida, al terminar el bucle todas las copias apuntarian al ultimo
+     * archivo compilado.</p>
+     */
+    private record FileResult(File file, String language, boolean ok,
+                              String astDot, List<Symbol> symbols, List<ParseStep> steps,
+                              List<CompilationError> errors, int quadruples, int triplets,
+                              String tripletsCode, String quadruplesCode,
+                              String c3dCode, String cCode, String translated,
+                              List<String> imports) {
+    }
+
+    /**
+     * Compila el proyecto entero, como haria un compilador de Java con todas sus
+     * clases: no solo el archivo de la pestana activa.
+     *
+     * <p>Con carpeta abierta se compilan todos los archivos de codigo que haya
+     * dentro, cada uno con el lenguaje que le toca por extension. Sin proyecto se
+     * compilan las pestanas abiertas, que es lo unico que hay.</p>
      */
     private void actionCompile() {
-        EditorPanel editor = editorTabs.getActiveEditor();
-        if (editor == null) {
-            consoleDock.setConsole("Abre un archivo antes de compilar.\n");
-            navText("Sin archivo activo");
+        // Cada compilacion arranca de cero: nada de lo que salio de la anterior
+        // puede quedarse colgando en ninguna de las vistas.
+        limpiarResultados();
+
+        List<File> targets = compileTargets();
+        if (targets.isEmpty()) {
+            consoleDock.setConsole("No hay nada que compilar.\n"
+                    + "Abre una carpeta de proyecto o un archivo de código.\n");
+            navText("Sin archivos que compilar");
             return;
         }
 
-        consoleDock.setConsole("Compilando " + editor.getDisplayName()
-                + " (" + UiTheme.prettifyLanguage(editor.getLanguageId()) + ")...\n");
+        File container = currentContainer();
+        File main = targets.stream().filter(MainWindow::isMainFile).findFirst().orElse(null);
+        StringBuilder cabecera = new StringBuilder();
+        cabecera.append("Compilando ").append(targets.size())
+                .append(targets.size() == 1 ? " archivo" : " archivos")
+                .append(container != null ? " de " + container.getName() : " abiertos")
+                .append("...\n");
+        if (main != null) {
+            cabecera.append("Punto de partida: ").append(main.getName())
+                    .append(" (se lee primero; sus imports se cargan antes)\n");
+        } else if (container != null) {
+            cabecera.append("No hay ningún ").append(MAIN_FILE)
+                    .append(" en el proyecto: se compilan los archivos por orden de nombre\n");
+        }
+        consoleDock.setConsole(cabecera.toString());
 
         compiler.setCMode(currentCMode);
-        boolean ok = compiler.compile(editor.getCodeText(), editor.getLanguageId());
+        // Los imports se resuelven contra la raiz del proyecto, que es donde estan
+        // los archivos que se importan.
+        compiler.setWorkingDirectory(container);
 
-        publishResults(ok);
+        List<FileResult> results = new ArrayList<>(targets.size());
+        for (File file : targets) {
+            results.add(compileOne(file));
+        }
+
+        publishResults(results);
     }
 
-    private void publishResults(boolean ok) {
-        List<CompilationError> errors = compiler.getErrors();
+    /**
+     * Archivos a compilar: los del proyecto entero, o las pestanas abiertas si no
+     * hay proyecto.
+     *
+     * <p>Empieza siempre por {@code main.pig}, que es el punto de partida del
+     * proyecto: es el que se lee primero y el que manda. Al compilarlo se cargan
+     * los archivos que sus imports mencionan, y el resto del proyecto se compila
+     * despues, tambien para no dejar ningun archivo fuera.</p>
+     */
+    private List<File> compileTargets() {
+        List<File> targets = fileTreePanelInstance.allSourceFiles();
+        if (!targets.isEmpty()) {
+            return startingAtMain(targets);
+        }
+        // Sin carpeta de proyecto se compila lo que este abierto, para no dejar al
+        // usuario sin poder compilar por no haber abierto un proyecto.
+        for (EditorPanel editor : editorTabs.getAllEditors()) {
+            File file = editor.getFile();
+            if (file != null && file.isFile()) {
+                targets.add(file);
+            }
+        }
+        return targets;
+    }
+
+    /**
+     * Pone {@code main.pig} el primero, dejando el resto en el mismo orden.
+     *
+     * <p>Si hay varios (main.pig en distintas carpetas) gana el de la ruta mas
+     * corta, que es el de la raiz del proyecto.</p>
+     */
+    private static List<File> startingAtMain(List<File> targets) {
+        File main = null;
+        for (File file : targets) {
+            if (!MAIN_FILE.equalsIgnoreCase(file.getName())) {
+                continue;
+            }
+            if (main == null || file.getAbsolutePath().length() < main.getAbsolutePath().length()) {
+                main = file;
+            }
+        }
+        if (main == null) {
+            return targets;
+        }
+        List<File> ordered = new ArrayList<>(targets.size());
+        ordered.add(main);
+        for (File file : targets) {
+            if (!file.equals(main)) {
+                ordered.add(file);
+            }
+        }
+        return ordered;
+    }
+
+    /** true si ese archivo es el punto de partida del proyecto. */
+    private static boolean isMainFile(File file) {
+        return file != null && MAIN_FILE.equalsIgnoreCase(file.getName());
+    }
+
+    /**
+     * Compila un archivo y guarda una copia de todo lo que produce.
+     *
+     * <p>Si el archivo esta abierto en una pestana se compila lo que hay escrito
+     * en ella, no lo que hay en disco, para que no haga falta guardar antes de
+     * comprobar si lo escrito compila.</p>
+     */
+    private FileResult compileOne(File file) {
+        EditorPanel editor = editorOf(file);
+        String language = editor != null
+                ? editor.getLanguageId()
+                : LanguageCompilerFactory.detectLanguageId(file.getName());
+        String source;
+        if (editor != null) {
+            source = editor.getCodeText();
+        } else {
+            try {
+                source = Files.readString(file.toPath());
+            } catch (IOException e) {
+                CompilationError io = new CompilationError(ErrorType.SEMANTICO,
+                        "No se pudo leer el archivo: " + e.getMessage(),
+                        -1, -1) // sin posicion: no hay linea a la que saltar
+                        .inFile(file.getName());
+                return new FileResult(file, language, false, "", List.of(), List.of(),
+                        List.of(io), 0, 0, "", "", "", "", "", List.of());
+            }
+        }
+
+        boolean ok = compiler.compile(source, language);
+        List<CompilationError> errors = new ArrayList<>();
+        for (CompilationError e : compiler.getErrors()) {
+            errors.add(e.inFile(file.getName()));
+        }
+        List<Symbol> symbols = new ArrayList<>(compiler.getSymbols());
+        // Los simbolos que salieron de un import ya saben de que archivo
+        // vienen; estos son los del propio archivo, que se completan aqui
+        // porque el backend no sabe como se llama.
+        for (Symbol s : symbols) {
+            if (s.getSourceFile() == null) {
+                s.inFile(file.getName());
+            }
+        }
+        return new FileResult(file, language, ok,
+                compiler.getAstDot(), symbols,
+                new ArrayList<>(compiler.getParseSteps()), errors,
+                compiler.getQuadrupleList().size(), compiler.getIcm().getTriplets().size(),
+                compiler.getTriplets(), compiler.getQuadruples(), compiler.getC3DCode(),
+                compiler.getCCode(), compiler.getTranslatedCode(),
+                compiler.getImportedFiles());
+    }
+
+    /** Editor abierto de un archivo, o null si no esta en ninguna pestana. */
+    private EditorPanel editorOf(File file) {
+        for (EditorPanel editor : editorTabs.getAllEditors()) {
+            File candidate = editor.getFile();
+            if (candidate != null && candidate.equals(file)) {
+                return editor;
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Reparte el resultado de la compilacion del proyecto entre los paneles.
+     *
+     * <p>Los errores se juntan todos: la tabla de errores es del proyecto, que es
+     * lo que interesa saber. El AST, los simbolos, la pila y las consolas si son
+     * de un solo archivo, el de la pestana activa, porque en una ventana solo cabe
+     * un grafo y tiene que ser el que se esta editando.</p>
+     */
+    private void publishResults(List<FileResult> results) {
+        List<CompilationError> allErrors = new ArrayList<>();
+        for (FileResult r : results) {
+            allErrors.addAll(r.errors());
+        }
+        FileResult focus = focusedResult(results);
+        lastErrors = List.copyOf(allErrors);
+        lastTargets = results.stream().map(FileResult::file).toList();
+        lastFocusFile = focus == null ? null : focus.file();
 
         // Las cuatro vistas viven en la ventana flotante. Si esta cerrada solo se
         // encolan los resultados y se pintan al volver a abrirla, para no gastar
         // en dibujar un grafo que nadie esta mirando.
         toolWindow.postResults(() -> {
-            astPanel.renderGraph(compiler.getAstDot());
-            symbolPanel.loadSymbols(compiler.getSymbols());
-            stackPanel.loadStates(compiler.getStackStates());
-            errorPanel.loadErrors(errors);
-            toolWindowDock.setErrorCount(errors.size());
-            if (!errors.isEmpty() && errorPanel.getErrorTable().getRowCount() > 0) {
+            astPanel.renderGraph(focus == null ? "" : focus.astDot());
+            symbolPanel.loadSymbols(focus == null ? List.of() : focus.symbols());
+            stackPanel.loadSteps(focus == null ? List.of() : focus.steps());
+            errorPanel.loadErrors(allErrors);
+            toolWindowDock.setErrorCount(allErrors.size());
+            if (errorPanel.getErrorCount() > 0) {
                 errorPanel.getErrorTable().setRowSelectionInterval(0, 0);
             }
         });
 
-        consoleDock.setTriplets(compiler.getTriplets());
-        consoleDock.setQuadruples(compiler.getQuadruples());
-        consoleDock.setC3D(compiler.getC3DCode());
-        consoleDock.setCCode(compiler.getCCode());
-        consoleDock.setSummary(compiler.getTranslatedCode());
+        consoleDock.setTriplets(focus == null ? "" : focus.tripletsCode());
+        consoleDock.setQuadruples(focus == null ? "" : focus.quadruplesCode());
+        consoleDock.setC3D(focus == null ? "" : focus.c3dCode());
+        consoleDock.setCCode(focus == null ? "" : focus.cCode());
+        consoleDock.setSummary(focus == null ? "" : focus.translated());
         consoleDock.setStatus("Modo de generación de C: " + TopToolbar.modeLabel(currentCMode));
 
-        statusBar.setResult(ok, errors.size());
-        statusBar.setCounts(compiler.getQuadrupleList().size(),
-                compiler.getIcm().getTriplets().size());
+        statusBar.setResult(allErrors.isEmpty(), allErrors.size());
+        statusBar.setCounts(focus == null ? 0 : focus.quadruples(),
+                focus == null ? 0 : focus.triplets());
 
-        if (!errors.isEmpty()) {
+        if (!allErrors.isEmpty()) {
             // Los errores siempre se enseñan: si la ventana estaba cerrada se
             // abre, y al abrir se pintan los resultados que quedaban encolados.
             showToolView(ToolWindowDock.View.ERRORES);
-            CompilationError first = errors.get(0);
+            CompilationError first = allErrors.get(0);
             if (first.getLine() > 0) {
-                EditorPanel editor = editorTabs.getActiveEditor();
+                EditorPanel editor = editorOf(fileNamed(first.getFileName()));
                 if (editor != null) {
                     editor.gotoLine(first.getLine());
                 }
             }
-            navText("Errores de compilación (" + errors.size() + ")");
+            navText(allErrors.size() + (allErrors.size() == 1
+                    ? " error de compilación" : " errores de compilación"));
         } else {
-            navText("Compilación correcta / " + compiler.getLanguage());
+            navText("Compilación correcta / " + results.size()
+                    + (results.size() == 1 ? " archivo" : " archivos"));
         }
-        consoleDock.appendConsole(buildReport(errors));
+        consoleDock.appendConsole(buildReport(results, allErrors, focus));
     }
 
-    private String buildReport(List<CompilationError> errors) {
+    /**
+     * Vacía todo lo que dejó la compilación anterior: simbolos, errores, pila,
+     * AST, las cuatro consolas y los contadores.
+     *
+     * <p>Se llama al empezar a compilar, no al terminar, para que una compilación
+     * se pinte siempre desde cero. Si una tabla, el grafo o una consola se
+     * quedaron con datos de la vuelta anterior, esa fila, ese nodo o esa linea no
+     * puede sobrevivir a la nueva: si el archivo ya no da error, su error
+     * anterior tiene que desaparecer, y si el grafo no se puede construir, el
+     * grafo viejo tampoco puede quedarse ahi.</p>
+     */
+    private void limpiarResultados() {
+        lastErrors = List.of();
+        lastTargets = List.of();
+        lastFocusFile = null;
+
+        astPanel.clear();
+        symbolPanel.clear();
+        errorPanel.clear();
+        stackPanel.clear();
+        toolWindowDock.setErrorCount(0);
+        consoleDock.clearAll();
+
+        statusBar.setCounts(0, 0);
+        statusBar.setIdle();
+        navText("Compilando...");
+    }
+
+    /**
+     * Busca un archivo de la compilacion actual por su nombre.
+     *
+     * <p>Los errores guardan el nombre y no la ruta, asi que se localiza cual de
+     * los archivos compilados responde a ese nombre.</p>
+     */
+    private File fileNamed(String name) {
+        if (name == null) {
+            return null;
+        }
+        for (File file : lastTargets) {
+            if (file.getName().equals(name)) {
+                return file;
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Abre el archivo de un error de la tabla y se para en su linea.
+     *
+     * <p>La tabla es del proyecto entero, asi que un error puede estar en un archivo
+     * distinto del que se esta editando. Al abrirlo, el editor activo pasa a ser
+     * ese y la vista de herramientas queda con lo suyo al volver a compilar.</p>
+     */
+    private void jumpToError(int row) {
+        // La tabla puede tener un filtro puesto, asi que el numero de fila que
+        // llega no es el indice en la lista de errores: lo resuelve la propia
+        // tabla, que es quien sabe que hay en cada fila.
+        CompilationError error = errorPanel.errorAt(row);
+        if (error == null) {
+            return;
+        }
+        File file = fileNamed(error.getFileName());
+        if (file == null) {
+            promptInfo("El archivo de este error ya no esta en el proyecto:\n"
+                            + error.getFileName(),
+                    "Archivo no encontrado", JOptionPane.WARNING_MESSAGE);
+            return;
+        }
+        if (file.isFile()) {
+            // Si esta abierto y con cambios se guarda antes de saltar, para no
+            // dejar el archivo a medias entre dos pestanas.
+            EditorPanel editor = editorOf(file);
+            if (editor != null && editor.isModified()) {
+                editorTabs.save(editor);
+            }
+        }
+        openInEditor(file);
+        EditorPanel target = editorOf(file);
+        if (target != null && error.getLine() > 0) {
+            target.gotoLine(error.getLine());
+        }
+        navText(error.getFileName() + " / línea " + error.getLine());
+    }
+
+    /**
+     * Abre la declaracion del simbolo de la fila indicada.
+     *
+     * <p>La tabla de simbolos es del archivo de la pestana activa, asi que el salto
+     * va ahi, salvo que el simbolo venga de un import: en ese caso se abre el
+     * archivo del que venia, que es donde esta su linea. Los simbolos que el
+     * compilador genera sin escribir (el {@code this} implicito se anota con el
+     * metodo al que pertenece, asi que casi nunca pasa) no tienen linea a la que
+     * saltar y se avisa en vez de hacer nada en silencio.</p>
+     */
+    private void jumpToSymbol(int row) {
+        Symbol symbol = symbolPanel.symbolAt(row);
+        if (symbol == null) {
+            return;
+        }
+        if (symbol.getLine() <= 0) {
+            promptInfo("«" + symbol.getName() + "» lo genera el compilador, "
+                            + "no aparece escrito en el fuente.\n"
+                            + "No hay ninguna línea a la que saltar.",
+                    "Símbolo sin posición", JOptionPane.INFORMATION_MESSAGE);
+            return;
+        }
+        File destino = archivoDelSimbolo(symbol);
+        if (destino == null) {
+            return;
+        }
+        if (destino.isFile()) {
+            openInEditor(destino);
+        }
+        EditorPanel target = editorOf(destino);
+        if (target != null) {
+            target.gotoLine(symbol.getLine());
+        }
+        navText(destino.getName() + " / línea " + symbol.getLine()
+                + " / " + symbol.getName());
+    }
+
+    /**
+     * Archivo donde se declaro un simbolo de la tabla.
+     *
+     * <p>Si el simbolo vino de un import se devuelve ese archivo; si no, el de la
+     * pestana activa, que es al que pertenece la tabla.</p>
+     */
+    private File archivoDelSimbolo(Symbol symbol) {
+        String origen = symbol.getSourceFile();
+        File contenedor = currentContainer();
+        if (origen == null || lastFocusFile == null
+                || origen.equals(lastFocusFile.getName())) {
+            return lastFocusFile;
+        }
+        if (contenedor == null) {
+            return lastFocusFile;
+        }
+        File importado = new File(contenedor, origen);
+        return importado.isFile() ? importado : lastFocusFile;
+    }
+
+    /**
+     * Resultado que se enseña en el AST, los simbolos y la pila.
+     *
+     * <p>Se prefiere el de la pestana activa y, si no esta, el de
+     * {@code main.pig}, que es el principal del proyecto. Solo si tampoco hay
+     * {@code main.pig} se recurre al primero que haya producido un arbol, para
+     * que la ventana no se quede con las vistas vacias sin motivo.</p>
+     */
+    private FileResult focusedResult(List<FileResult> results) {
+        EditorPanel active = editorTabs.getActiveEditor();
+        if (active != null && active.getFile() != null) {
+            for (FileResult r : results) {
+                if (r.file().equals(active.getFile())) {
+                    return r;
+                }
+            }
+        }
+        for (FileResult r : results) {
+            if (isMainFile(r.file())) {
+                return r;
+            }
+        }
+        for (FileResult r : results) {
+            if (!r.astDot().isBlank()) {
+                return r;
+            }
+        }
+        return results.isEmpty() ? null : results.get(0);
+    }
+
+    /** Por que se enseña el resultado de este archivo y no el de otro. */
+    private String focusReason(FileResult focus) {
+        if (focus == null) {
+            return "";
+        }
+        EditorPanel active = editorTabs.getActiveEditor();
+        if (active != null && active.getFile() != null && focus.file().equals(active.getFile())) {
+            return "pestaña activa";
+        }
+        if (isMainFile(focus.file())) {
+            return MAIN_FILE + " (principal)";
+        }
+        return "primer archivo del proyecto";
+    }
+
+    /** Informe por consola, archivo a archivo, al estilo de un build. */
+    private String buildReport(List<FileResult> results, List<CompilationError> allErrors,
+                               FileResult focus) {
         StringBuilder sb = new StringBuilder();
-        if (errors.isEmpty()) {
-            sb.append("Compilación correcta.\n");
+        for (FileResult r : results) {
+            sb.append(r.ok() ? "  OK    " : "  ERROR ")
+                    .append(r.file().getName());
+            if (isMainFile(r.file())) {
+                sb.append("  <- principal");
+            }
+            sb.append("  (").append(UiTheme.prettifyLanguage(r.language())).append(')');
+            if (!r.ok()) {
+                sb.append("  ").append(r.errors().size())
+                        .append(r.errors().size() == 1 ? " error" : " errores");
+            } else {
+                sb.append("  ").append(r.quadruples()).append(" cuartetas");
+            }
+            if (!r.imports().isEmpty()) {
+                sb.append("  importa: ").append(String.join(", ", r.imports()));
+            }
+            sb.append('\n');
+        }
+
+        sb.append('\n');
+        if (allErrors.isEmpty()) {
+            sb.append("Compilación correcta: ").append(results.size())
+                    .append(results.size() == 1 ? " archivo." : " archivos.")
+                    .append('\n');
         } else {
-            sb.append(errors.size()).append(errors.size() == 1
-                    ? " error encontrado:\n" : " errores encontrados:\n");
-            for (CompilationError e : errors) {
+            sb.append(allErrors.size())
+                    .append(allErrors.size() == 1 ? " error encontrado:\n"
+                            : " errores encontrados:\n");
+            for (CompilationError e : allErrors) {
                 sb.append("  ").append(e).append('\n');
             }
         }
-        sb.append("\n").append(compiler.getTranslatedCode());
-        sb.append("\nAST generado: ").append(compiler.getAstDot().isBlank() ? "no" : "si");
-        sb.append("   Símbolos: ").append(compiler.getSymbols().size());
-        sb.append("   Pila: ").append(compiler.getStackStates().size()).append(" estados\n");
+
+        if (focus != null) {
+            sb.append("\n--- Salidas de ").append(focus.file().getName())
+                    .append(" (").append(focusReason(focus)).append(") ---\n");
+            sb.append(focus.translated());
+            sb.append("\nAST generado: ").append(focus.astDot().isBlank() ? "no" : "sí")
+                    .append("   Símbolos: ").append(focus.symbols().size())
+                    .append("   Pila del parser: ").append(focus.steps().size())
+                    .append(" pasos\n");
+        }
         return sb.toString();
     }
 
@@ -1119,13 +1598,32 @@ public class MainWindow extends JFrame {
 
     private void symbolTableButtonActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_symbolTableButtonActionPerformed
         showToolView(ToolWindowDock.View.SIMBOLOS);
-        navText("Tabla de símbolos (" + symbolPanel.getSymbolCount() + ")");
+        navText("Tabla de símbolos (" + cuentaDeSimbolos() + ")");
     }//GEN-LAST:event_symbolTableButtonActionPerformed
+
+    /**
+     * Cuenta de simbolos que se enseña: con el filtro puesto se dice cuantas hay
+     * de cuantas son, para que quede claro que el filtro esta escondiendo.
+     */
+    private String cuentaDeSimbolos() {
+        if (symbolPanel.getSymbolCount() == symbolPanel.getTotalSymbolCount()) {
+            return String.valueOf(symbolPanel.getTotalSymbolCount());
+        }
+        return symbolPanel.getSymbolCount() + " de " + symbolPanel.getTotalSymbolCount();
+    }
 
     private void lexerErrorButtonActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_lexerErrorButtonActionPerformed
         showToolView(ToolWindowDock.View.ERRORES);
-        navText("Tabla de errores (" + errorPanel.getErrorCount() + ")");
+        navText("Tabla de errores (" + cuentaDeErrores() + ")");
     }//GEN-LAST:event_lexerErrorButtonActionPerformed
+
+    /** Cuenta de errores que se enseña, con la misma regla que la de simbolos. */
+    private String cuentaDeErrores() {
+        if (errorPanel.getErrorCount() == errorPanel.getTotalErrorCount()) {
+            return String.valueOf(errorPanel.getTotalErrorCount());
+        }
+        return errorPanel.getErrorCount() + " de " + errorPanel.getTotalErrorCount();
+    }
 
     private void stackButtonActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_stackButtonActionPerformed
         showToolView(ToolWindowDock.View.PILA);
@@ -1245,6 +1743,21 @@ public class MainWindow extends JFrame {
     /** Acceso al arbol de archivos, util para pruebas. */
     public FileTreePanel getFileTree() {
         return fileTreePanelInstance;
+    }
+
+    /** Acceso a la vista de arbol AST, util para pruebas. */
+    public ParserTreePanel getAstPanel() {
+        return astPanel;
+    }
+
+    /** Acceso a la vista de tabla de simbolos, util para pruebas. */
+    public SymbolTablePanel getSymbolPanel() {
+        return symbolPanel;
+    }
+
+    /** Acceso a la vista de pila de procesos, util para pruebas. */
+    public StackVisualizerPanel getStackPanel() {
+        return stackPanel;
     }
 
     /** Acceso a la barra de estado, util para pruebas. */

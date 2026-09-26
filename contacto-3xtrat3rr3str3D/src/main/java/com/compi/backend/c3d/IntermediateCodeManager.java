@@ -21,11 +21,11 @@ public class IntermediateCodeManager {
     }
 
     /**
-     * Carga un conjunto de cuartetas y deriva automaticamente los tripletes
+     * Carga un conjunto de cuartetas y deriva automáticamente los tripletes
      * correspondientes. Cada cuarteta {@code (op, a1, a2, r)} produce un unico
-     * triplete {@code (op, a1, a2)}: el triplete es la misma instruccion en su
-     * forma de tres campos, con el destino implicito. La etiqueta de los saltos
-     * se lleva al segundo operando porque es el unico hueco disponible.
+     * triplete {@code (op, a1, a2)}: el triplete es la misma instrucción en su
+     * forma de tres campos, con el destino implícito. La etiqueta de los saltos
+     * se lleva al segundo operando porque es el único hueco disponible.
      *
      * @param source cuartetas generadas por el visitor C3D del lenguaje
      */

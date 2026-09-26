@@ -31,7 +31,8 @@ public class ZetarianoC3DVisitor extends ZetarianoBaseVisitor<String> {
         // Los atributos se vuelven a declarar aqui: cuando corre esta segunda
         // pasada la tabla de simbolos ya no tiene el ambito de la clase. El
         // offset es el mismo que asigno el analizador semantico (orden de
-        // declaracion), para que this.campo calcule la misma direccion.
+        // declaracion), para que this.campo calcule la misma direccion. Se
+        // marcan como copias de trabajo para no salir duplicados en la tabla.
         int offset = 0;
         for (ZetarianoParser.MiembroClaseContext mc : ctx.miembroClase()) {
             if (mc.atributoDef() == null) {
@@ -39,7 +40,7 @@ public class ZetarianoC3DVisitor extends ZetarianoBaseVisitor<String> {
             }
             String fieldName = mc.atributoDef().ID().getText();
             symbolTable.define(new Symbol(fieldName, typeOfField(fieldName),
-                    SymbolCategory.FIELD, offset++, false));
+                    SymbolCategory.FIELD, offset++, false).at(mc.atributoDef()).markWorking());
         }
 
         for (ZetarianoParser.MiembroClaseContext mc : ctx.miembroClase()) {
@@ -96,7 +97,7 @@ public class ZetarianoC3DVisitor extends ZetarianoBaseVisitor<String> {
     private void defineParameter(ZetarianoParser.ParametroContext pCtx) {
         int offset = symbolTable.getCurrentScope().allocateOffset(1);
         symbolTable.define(new Symbol(pCtx.ID().getText(), Type.UNKNOWN,
-                SymbolCategory.PARAMETER, offset, false));
+                SymbolCategory.PARAMETER, offset, false).at(pCtx).markWorking());
     }
 
     /** Tipo declarado de un atributo de la clase en curso. */
@@ -112,11 +113,16 @@ public class ZetarianoC3DVisitor extends ZetarianoBaseVisitor<String> {
     /**
      * Declara la referencia implicita {@code this} en el offset 0, igual que
      * hace el analizador semantico.
+     *
+     * <p>Se anota con la posicion del metodo o constructor al que pertenece, como
+     * alli. Es una copia de trabajo ({@code markWorking}) y no sale en la tabla,
+     * pero asi las dos declaraciones coinciden en todo.</p>
      */
-    private void defineThis() {
+    private void defineThis(org.antlr.v4.runtime.ParserRuleContext owner) {
         Symbol cls = symbolTable.getClass(currentClassName);
         if (cls != null) {
-            symbolTable.define(new Symbol("this", cls.getType(), SymbolCategory.VARIABLE, 0, false));
+            symbolTable.define(new Symbol("this", cls.getType(), SymbolCategory.VARIABLE, 0, false)
+                    .at(owner).markWorking());
         }
     }
 
@@ -125,7 +131,7 @@ public class ZetarianoC3DVisitor extends ZetarianoBaseVisitor<String> {
         String funcName = currentClassName + "_" + ctx.ID().getText();
         c3d.emit(QuadrupleOp.FUNCTION_START, null, null, funcName);
         symbolTable.enterScope("constructor_" + funcName, 1);
-        defineThis();
+        defineThis(ctx);
         if (ctx.parametros() != null) {
             for (ZetarianoParser.ParametroContext pCtx : ctx.parametros().parametro()) {
                 defineParameter(pCtx);
@@ -145,7 +151,7 @@ public class ZetarianoC3DVisitor extends ZetarianoBaseVisitor<String> {
         String methodName = currentClassName + "_" + ctx.ID().getText();
         c3d.emit(QuadrupleOp.FUNCTION_START, null, null, methodName);
         symbolTable.enterScope("method_" + methodName, 1);
-        defineThis();
+        defineThis(ctx);
         if (ctx.parametros() != null) {
             for (ZetarianoParser.ParametroContext pCtx : ctx.parametros().parametro()) {
                 defineParameter(pCtx);
@@ -167,7 +173,7 @@ public class ZetarianoC3DVisitor extends ZetarianoBaseVisitor<String> {
         // inicial: sin esto las referencias posteriores quedarian colgando.
         int offset = symbolTable.getCurrentScope().allocateOffset(1);
         Symbol declared = new Symbol(varName, Type.UNKNOWN,
-                SymbolCategory.VARIABLE, offset, false);
+                SymbolCategory.VARIABLE, offset, false).at(ctx).markWorking();
         symbolTable.define(declared);
         Symbol s = symbolTable.resolve(varName);
         if (s == null) {
@@ -405,7 +411,16 @@ public class ZetarianoC3DVisitor extends ZetarianoBaseVisitor<String> {
     public String visitNewObjectExpr(ZetarianoParser.NewObjectExprContext ctx) {
         String className = ctx.ID().getText();
         Symbol cls = symbolTable.getClass(className);
-        int fieldCount = (cls != null) ? cls.getMembers().size() : 2;
+        // En el Heap se reserva una casilla por atributo. Los metodos y el
+        // constructor tambien son miembros de la clase, pero no ocupan memoria.
+        int fieldCount = 0;
+        if (cls != null) {
+            for (Symbol m : cls.getMembers()) {
+                if (m.getCategory() == SymbolCategory.FIELD) {
+                    fieldCount++;
+                }
+            }
+        }
 
         // Reservar memoria en Heap: t_heap = H; H = H + size;
         String heapStart = c3d.newTemp();

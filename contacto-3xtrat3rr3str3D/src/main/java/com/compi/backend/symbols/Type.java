@@ -114,4 +114,40 @@ public class Type {
         }
         return dataType.name().toLowerCase();
     }
+
+    /**
+     * El tipo escrito en espanol, que es como se enseña en la tabla de simbolos.
+     *
+     * <p>Los nombres propios ({@code Contador}, una estructura o una clase) se
+     * dejan tal cual: son identificadores del fuente, no palabras del lenguaje.
+     * Los basicos si se traducen, porque {@code boolean} o {@code void} no le
+     * dicen nada a quien lee la tabla en espanol.</p>
+     */
+    public String label() {
+        if (dataType == DataType.ARRAY) {
+            String base = elementType == null ? "desconocido" : elementType.label();
+            return base + "[]".repeat(Math.max(1, dimensions));
+        }
+        if (dataType == DataType.STRUCT || dataType == DataType.CLASS) {
+            return customTypeName != null ? customTypeName : labelDe(dataType);
+        }
+        return labelDe(dataType);
+    }
+
+    private static String labelDe(DataType type) {
+        return switch (type) {
+            // int, double y char se escriben igual en espanol.
+            case INT -> "int";
+            case DOUBLE -> "double";
+            case CHAR -> "char";
+            case BOOLEAN -> "booleano";
+            case STRING -> "cadena";
+            case VOID -> "vacío";
+            case NULL -> "nulo";
+            case STRUCT -> "estructura";
+            case CLASS -> "clase";
+            case ARRAY -> "arreglo";
+            case UNKNOWN -> "desconocido";
+        };
+    }
 }

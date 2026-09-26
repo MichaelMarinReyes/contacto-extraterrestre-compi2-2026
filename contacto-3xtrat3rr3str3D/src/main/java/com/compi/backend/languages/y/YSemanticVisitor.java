@@ -3,7 +3,7 @@ package com.compi.backend.languages.y;
 import com.compi.YBaseVisitor;
 import com.compi.YParser;
 import com.compi.backend.errors.CompilationError;
-import com.compi.backend.errors.ErrorType;
+import com.compi.backend.errors.Diagnostico;
 import com.compi.backend.symbols.*;
 
 import java.util.ArrayList;
@@ -28,7 +28,8 @@ public class YSemanticVisitor extends YBaseVisitor<Type> {
         for (YParser.Estructura_defContext structCtx : ctx.estructura_def()) {
             if (structCtx.ID() != null) {
                 String structName = structCtx.ID().getText();
-                Symbol structSymbol = new Symbol(structName, Type.structType(structName), SymbolCategory.STRUCT);
+                Symbol structSymbol = new Symbol(structName, Type.structType(structName),
+                        SymbolCategory.STRUCT).at(structCtx);
                 symbolTable.addStruct(structSymbol);
 
                 int offset = 0;
@@ -42,7 +43,8 @@ public class YSemanticVisitor extends YBaseVisitor<Type> {
                             fieldType = Type.array(fieldType, fieldCtx.CORCHETE_IZQ().size());
                         }
 
-                        Symbol fieldSymbol = new Symbol(fieldName, fieldType, SymbolCategory.FIELD, offset++, false);
+                        Symbol fieldSymbol = new Symbol(fieldName, fieldType, SymbolCategory.FIELD,
+                                offset++, false).at(fieldCtx);
                         structSymbol.addMember(fieldSymbol);
                     }
                 }
@@ -60,7 +62,7 @@ public class YSemanticVisitor extends YBaseVisitor<Type> {
         }
         currentFunctionReturnType = returnType;
 
-        Symbol funcSymbol = new Symbol(funcName, returnType, SymbolCategory.FUNCTION);
+        Symbol funcSymbol = new Symbol(funcName, returnType, SymbolCategory.FUNCTION).at(ctx);
         funcSymbol.setReturnType(returnType);
 
         symbolTable.enterScope("func_" + funcName, 0);
@@ -83,13 +85,13 @@ public class YSemanticVisitor extends YBaseVisitor<Type> {
                 }
 
                 int offset = symbolTable.getCurrentScope().allocateOffset(1);
-                Symbol paramSymbol = new Symbol(paramName, paramType, SymbolCategory.PARAMETER, offset, false);
+                Symbol paramSymbol = new Symbol(paramName, paramType, SymbolCategory.PARAMETER,
+                        offset, false).at(paramCtx);
                 paramSymbol.setByReference(isByRef);
                 funcSymbol.addParameter(paramSymbol);
 
                 if (!symbolTable.define(paramSymbol)) {
-                    errors.add(new CompilationError(ErrorType.SEMANTICO, "Parámetro duplicado: " + paramName,
-                            paramCtx.getStart().getLine(), paramCtx.getStart().getCharPositionInLine()));
+                    errors.add(Diagnostico.parametroDuplicado(paramName, paramCtx));
                 }
             }
         }
@@ -117,21 +119,20 @@ public class YSemanticVisitor extends YBaseVisitor<Type> {
         }
 
         int offset = symbolTable.getCurrentScope().allocateOffset(1);
-        Symbol varSymbol = new Symbol(varName, varType, SymbolCategory.VARIABLE, offset, false);
+        Symbol varSymbol = new Symbol(varName, varType, SymbolCategory.VARIABLE, offset, false).at(ctx);
 
         if (!symbolTable.define(varSymbol)) {
-            errors.add(new CompilationError(ErrorType.SEMANTICO, "Variable ya definida en este ámbito: " + varName,
-                    ctx.getStart().getLine(), ctx.getStart().getCharPositionInLine()));
+            errors.add(Diagnostico.variableYaDeclarada(varName, ctx));
         }
 
         if (ctx.expresion_inicializacion() != null) {
             // Validar compatibilidad de tipo si hay expresión
             if (ctx.expresion_inicializacion().expresion() != null) {
                 Type initType = visit(ctx.expresion_inicializacion().expresion());
-                if (initType != null && !initType.isAssignableTo(varType)) {
-                    errors.add(new CompilationError(ErrorType.SEMANTICO,
-                            "Tipo incompatible en inicialización de '" + varName + "'. Se esperaba " + varType + " pero se obtuvo " + initType,
-                            ctx.getStart().getLine(), ctx.getStart().getCharPositionInLine()));
+                if (esConocido(initType) && esConocido(varType)
+                        && !initType.isAssignableTo(varType)) {
+                    errors.add(Diagnostico.inicializacionIncompatible(
+                            varName, varType, initType, ctx));
                 }
             }
         }
@@ -148,8 +149,7 @@ public class YSemanticVisitor extends YBaseVisitor<Type> {
             name = ctx.ID().getText();
             Symbol s = symbolTable.resolve(name);
             if (s == null) {
-                errors.add(new CompilationError(ErrorType.SEMANTICO, "Variable no declarada: " + name,
-                        ctx.getStart().getLine(), ctx.getStart().getCharPositionInLine()));
+                errors.add(Diagnostico.variableNoDeclarada(name, ctx));
             } else {
                 targetType = s.getType();
                 if (ctx.CORCHETE_IZQ() != null && targetType.isArray()) {
@@ -161,10 +161,9 @@ public class YSemanticVisitor extends YBaseVisitor<Type> {
         }
 
         Type exprType = ctx.expresion().isEmpty() ? Type.UNKNOWN : visit(ctx.expresion(ctx.expresion().size() - 1));
-        if (targetType != Type.UNKNOWN && exprType != null && !exprType.isAssignableTo(targetType)) {
-            errors.add(new CompilationError(ErrorType.SEMANTICO,
-                    "Asignación incompatible. Tipo destino: " + targetType + ", tipo expresión: " + exprType,
-                    ctx.getStart().getLine(), ctx.getStart().getCharPositionInLine()));
+        if (esConocido(targetType) && esConocido(exprType)
+                && !exprType.isAssignableTo(targetType)) {
+            errors.add(Diagnostico.asignacionIncompatible(targetType, exprType, ctx));
         }
 
         return targetType;
@@ -177,10 +176,10 @@ public class YSemanticVisitor extends YBaseVisitor<Type> {
             returnValType = visit(ctx.expresion());
         }
 
-        if (currentFunctionReturnType != null && !returnValType.isAssignableTo(currentFunctionReturnType)) {
-            errors.add(new CompilationError(ErrorType.SEMANTICO,
-                    "Tipo de retorno incorrecto. Se esperaba " + currentFunctionReturnType + " pero se retornó " + returnValType,
-                    ctx.getStart().getLine(), ctx.getStart().getCharPositionInLine()));
+        if (esConocido(currentFunctionReturnType) && esConocido(returnValType)
+                && !returnValType.isAssignableTo(currentFunctionReturnType)) {
+            errors.add(Diagnostico.tipoDeRetornoErroneo(
+                    currentFunctionReturnType, returnValType, ctx));
         }
 
         return returnValType;
@@ -213,9 +212,10 @@ public class YSemanticVisitor extends YBaseVisitor<Type> {
 
         if (ctx.operador_negacion() != null) {
             Type t = visit(ctx.expresion(0));
-            if (t.getDataType() != DataType.BOOLEAN) {
-                errors.add(new CompilationError(ErrorType.SEMANTICO, "Operador de negación '!' requiere tipo booleano",
-                        ctx.getStart().getLine(), ctx.getStart().getCharPositionInLine()));
+            // Con una expresion que ya fallo el tipo puede venir nulo: entonces el
+            // error ya esta reportado y aqui solo habria un NullPointerException.
+            if (esConocido(t) && t.getDataType() != DataType.BOOLEAN) {
+                errors.add(Diagnostico.operadorNegacionNoBooleano(ctx));
             }
             return Type.BOOLEAN;
         }
@@ -243,8 +243,7 @@ public class YSemanticVisitor extends YBaseVisitor<Type> {
             String name = ctx.ID().getText();
             Symbol s = symbolTable.resolve(name);
             if (s == null) {
-                errors.add(new CompilationError(ErrorType.SEMANTICO, "Símbolo no resuelto: " + name,
-                        ctx.getStart().getLine(), ctx.getStart().getCharPositionInLine()));
+                errors.add(Diagnostico.simboloNoResuelto(name, ctx));
                 return Type.UNKNOWN;
             }
             return s.getType();
@@ -266,8 +265,7 @@ public class YSemanticVisitor extends YBaseVisitor<Type> {
         String funcName = ctx.ID().getText();
         Symbol func = symbolTable.getFunction(funcName);
         if (func == null) {
-            errors.add(new CompilationError(ErrorType.SEMANTICO, "Llamada a función no definida: " + funcName,
-                    ctx.getStart().getLine(), ctx.getStart().getCharPositionInLine()));
+            errors.add(Diagnostico.funcionNoDefinida(funcName, ctx));
             return Type.UNKNOWN;
         }
         return func.getReturnType() != null ? func.getReturnType() : Type.VOID;
@@ -278,8 +276,7 @@ public class YSemanticVisitor extends YBaseVisitor<Type> {
         String baseName = ctx.ID(0).getText();
         Symbol baseSymbol = symbolTable.resolve(baseName);
         if (baseSymbol == null) {
-            errors.add(new CompilationError(ErrorType.SEMANTICO, "Variable no resuelta: " + baseName,
-                    ctx.getStart().getLine(), ctx.getStart().getCharPositionInLine()));
+            errors.add(Diagnostico.variableNoDeclarada(baseName, ctx));
             return Type.UNKNOWN;
         }
 
@@ -293,9 +290,8 @@ public class YSemanticVisitor extends YBaseVisitor<Type> {
                     if (member != null) {
                         currentType = member.getType();
                     } else {
-                        errors.add(new CompilationError(ErrorType.SEMANTICO,
-                                "El miembro '" + memberName + "' no existe en la estructura " + currentType.getCustomTypeName(),
-                                ctx.getStart().getLine(), ctx.getStart().getCharPositionInLine()));
+                        errors.add(Diagnostico.miembroNoExiste(memberName,
+                                currentType.getCustomTypeName(), ctx));
                         return Type.UNKNOWN;
                     }
                 }
@@ -321,5 +317,17 @@ public class YSemanticVisitor extends YBaseVisitor<Type> {
                 }
                 return new Type(DataType.STRUCT, name);
         }
+    }
+
+    /**
+     * true si el tipo se conoce de verdad.
+     *
+     * <p>Un tipo desconocido o nulo significa que la expresion que lo produce ya
+     * fallo: el aviso de verdad se dio ahi. Comprobar los tipos con un
+     * desconocido daria un segundo error, mas corto y mas generico, que solo
+     * tapa el primero.</p>
+     */
+    private static boolean esConocido(Type t) {
+        return t != null && t != Type.UNKNOWN;
     }
 }

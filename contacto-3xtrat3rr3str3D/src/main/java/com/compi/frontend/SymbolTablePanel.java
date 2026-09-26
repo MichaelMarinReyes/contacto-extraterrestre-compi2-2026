@@ -2,24 +2,59 @@ package com.compi.frontend;
 
 import com.compi.backend.symbols.Symbol;
 import java.awt.BorderLayout;
+import java.awt.CardLayout;
+import java.awt.event.MouseAdapter;
+import java.awt.event.MouseEvent;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.function.IntConsumer;
+import javax.swing.JLabel;
+import javax.swing.JPanel;
 import javax.swing.JScrollPane;
 import javax.swing.JTable;
 import javax.swing.JTextArea;
 import javax.swing.ListSelectionModel;
+import javax.swing.SwingConstants;
+import javax.swing.SwingUtilities;
 import javax.swing.table.DefaultTableModel;
 
 /**
  * Vista de la tabla de simbolos construida por el analizador semantico.
  *
- * Muestra una fila por simbolo con su ambito, tipo, categoria, offset y
- * detalles extra (parametros de funciones, miembros de estructuras).
+ * <p>Una fila por simbolo con su posicion en el fuente, tipo, categoria, ambito,
+ * lenguaje de origen y offset. Con la posicion a la vista la tabla deja de ser
+ * solo un listado: al hacer doble clic se salta a la declaracion en el editor.</p>
  */
 public class SymbolTablePanel extends javax.swing.JPanel {
+
+    /**
+     * Sin posicion en el fuente.
+     *
+     * <p>Un guion y no un 0: el 0 es un numero valido y aqui solo puede
+     * significar "esto no lo dice el fuente", que se distingue de un simbolo de
+     * verdad en la columna 1. Deberia ser practicamente imposible verlo, porque
+     * hasta los simbolos que genera el compilador (el {@code this} implicito)
+     * se anotan con la declaracion a la que pertenecen.</p>
+     */
+    private static final String SIN_POSICION = "-";
+
+    private static final String CARD_TABLE = "tabla";
+    private static final String CARD_EMPTY = "vacio";
 
     private JTable table;
     private DefaultTableModel tableModel;
     private JTextArea detailsArea;
+    private JLabel emptyMessageLabel;
+    private CardLayout cards;
+    private JPanel content;
+    private IntConsumer onSymbolActivated;
+    private TableFilterBar filterBar;
+
+    /** Todos los simbolos cargados, para volver a pintar al cambiar el filtro. */
+    private List<Symbol> allSymbols = List.of();
+
+    /** Los simbolos mostrados, para resolver la fila pulsada desde MainWindow. */
+    private List<Symbol> shown = List.of();
 
     /**
      * Creates new form SymbolTablePanel
@@ -58,7 +93,8 @@ public class SymbolTablePanel extends javax.swing.JPanel {
         this.setLayout(new BorderLayout());
 
         tableModel = new DefaultTableModel(
-                new Object[]{"Símbolo", "Tipo", "Categoría", "Ámbito", "Offset", "Detalle"}, 0) {
+                new Object[]{"Línea", "Col", "Símbolo", "Tipo", "Categoría", "Ámbito",
+                        "Lenguaje", "Offset"}, 0) {
             @Override
             public boolean isCellEditable(int row, int column) {
                 return false;
@@ -69,7 +105,6 @@ public class SymbolTablePanel extends javax.swing.JPanel {
         table.setFont(UiTheme.mono(12));
         table.setRowHeight(24);
         table.setShowGrid(true);
-        table.setAutoResizeMode(JTable.AUTO_RESIZE_LAST_COLUMN);
         table.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
         table.getTableHeader().setFont(UiTheme.sansBold(12));
         table.getTableHeader().setReorderingAllowed(false);
@@ -78,10 +113,58 @@ public class SymbolTablePanel extends javax.swing.JPanel {
         table.setGridColor(UiTheme.separator());
         table.setSelectionBackground(UiTheme.accent());
 
-        int[] widths = {110, 90, 90, 70, 60, 160};
+        // La ultima columna se estira para llenar el ancho que sobra. Y la tabla
+        // ocupa todo el alto del panel: si no, se queda con el alto justo de sus
+        // filas y el resto queda en blanco, que con dos o tres simbolos parece
+        // que la tabla este rota.
+        table.setAutoResizeMode(JTable.AUTO_RESIZE_LAST_COLUMN);
+        table.setFillsViewportHeight(true);
+        int[] widths = {50, 40, 120, 100, 90, 130, 90, 60};
         for (int i = 0; i < widths.length; i++) {
             table.getColumnModel().getColumn(i).setPreferredWidth(widths[i]);
         }
+
+        // Linea, columna y offset son numeros: alineados a la derecha se leen de
+        // un vistazo sin confoundirse con el nombre del simbolo.
+        rightAlign(0);
+        rightAlign(1);
+        rightAlign(7);
+
+        table.getSelectionModel().addListSelectionListener(e -> {
+            if (!e.getValueIsAdjusting()) {
+                showDetails();
+            }
+        });
+
+        // Doble clic: saltar a la declaracion del simbolo.
+        table.addMouseListener(new MouseAdapter() {
+            @Override
+            public void mouseClicked(MouseEvent e) {
+                if (e.getClickCount() == 2 && SwingUtilities.isLeftMouseButton(e)) {
+                    int row = table.rowAtPoint(e.getPoint());
+                    if (row >= 0 && onSymbolActivated != null) {
+                        onSymbolActivated.accept(row);
+                    }
+                }
+            }
+        });
+
+        JScrollPane scroll = new JScrollPane(table);
+        scroll.setBorder(javax.swing.BorderFactory.createEmptyBorder());
+        scroll.getVerticalScrollBar().setUnitIncrement(24);
+
+        // Igual que en la tabla de errores: el aviso va en un CardLayout y no
+        // encima de la tabla, porque superponerlo lo dejaba todo tapado.
+        emptyMessageLabel = new JLabel("Sin símbolos", SwingConstants.CENTER);
+        emptyMessageLabel.setFont(UiTheme.sans(12));
+        emptyMessageLabel.setForeground(UiTheme.dim());
+        emptyMessageLabel.setBorder(UiTheme.pad(20, 0, 20, 0));
+
+        cards = new CardLayout();
+        content = new JPanel(cards);
+        content.add(scroll, CARD_TABLE);
+        content.add(emptyMessageLabel, CARD_EMPTY);
+        cards.show(content, CARD_EMPTY);
 
         detailsArea = new JTextArea();
         detailsArea.setEditable(false);
@@ -93,14 +176,30 @@ public class SymbolTablePanel extends javax.swing.JPanel {
         detailsArea.setBorder(UiTheme.pad(6, 8, 6, 8));
         detailsArea.setVisible(false);
 
-        table.getSelectionModel().addListSelectionListener(e -> {
-            if (!e.getValueIsAdjusting()) {
-                showDetails();
-            }
-        });
+        filterBar = new TableFilterBar("Filtrar símbolos");
+        filterBar.setBorder(UiTheme.pad(6, 8, 6, 8));
+        filterBar.setOnFilterChanged(this::applyFilter);
+        // Sin simbolos no hay nada que filtrar, asi que la barra no aparece.
+        filterBar.setVisible(false);
 
-        add(new JScrollPane(table), BorderLayout.CENTER);
+        add(filterBar, BorderLayout.NORTH);
+        add(content, BorderLayout.CENTER);
         add(detailsArea, BorderLayout.SOUTH);
+    }
+
+    /** Alinea una columna a la derecha (renderer por defecto, sin clases extra). */
+    private void rightAlign(int index) {
+        table.getColumnModel().getColumn(index).setCellRenderer(
+                new javax.swing.table.DefaultTableCellRenderer() {
+                    @Override
+                    public java.awt.Component getTableCellRendererComponent(
+                            JTable t, Object value, boolean selected,
+                            boolean focused, int row, int column) {
+                        super.getTableCellRendererComponent(t, value, selected, focused, row, column);
+                        setHorizontalAlignment(SwingConstants.RIGHT);
+                        return this;
+                    }
+                });
     }
 
     // ====================== API ======================
@@ -111,33 +210,154 @@ public class SymbolTablePanel extends javax.swing.JPanel {
      * @param symbols simbolos a mostrar; null o vacio limpia la vista
      */
     public void loadSymbols(List<Symbol> symbols) {
+        allSymbols = symbols == null ? List.of() : List.copyOf(symbols);
+        filterBar.setVisible(!allSymbols.isEmpty());
+        applyFilter();
+    }
+
+    /**
+     * Repinta la tabla con los simbolos que pasan el filtro.
+     *
+     * <p>La seleccion se pierde al filtrar porque las filas cambian, y por eso
+     * el detalle se esconde: si no, se queda mostrando la ficha del simbolo
+     * anterior como si fuera de una fila que ya no existe.</p>
+     */
+    private void applyFilter() {
         tableModel.setRowCount(0);
-        if (symbols == null || symbols.isEmpty()) {
+        shown = new ArrayList<>(allSymbols.size());
+        for (Symbol s : allSymbols) {
+            if (acepta(s)) {
+                shown.add(s);
+            }
+        }
+        for (Symbol s : shown) {
+            tableModel.addRow(fila(s));
+        }
+
+        filterBar.setCounts(shown.size(), allSymbols.size());
+        if (allSymbols.isEmpty()) {
+            emptyMessageLabel.setText("Sin símbolos: compila un archivo para verlos");
+        } else if (shown.isEmpty()) {
+            emptyMessageLabel.setText("Ningún símbolo coincide con el filtro «"
+                    + filterBar.texto() + "»");
+        } else {
+            emptyMessageLabel.setText("");
+        }
+        cards.show(content, shown.isEmpty() ? CARD_EMPTY : CARD_TABLE);
+
+        if (shown.isEmpty()) {
+            detailsArea.setVisible(false);
+        } else {
+            showDetails();
+        }
+        revalidate();
+        repaint();
+    }
+
+    private static Object[] fila(Symbol s) {
+        return new Object[]{
+                s.getLine() > 0 ? String.valueOf(s.getLine()) : SIN_POSICION,
+                s.getColumn() > 0 ? String.valueOf(s.getColumn()) : SIN_POSICION,
+                s.getName(),
+                typeOf(s),
+                s.getCategory() == null ? "?" : s.getCategory().label(),
+                scopeOf(s),
+                s.getLanguage() == null ? "?" : s.getLanguage(),
+                s.getOffset()
+        };
+    }
+
+    /** true si el simbolo tiene que verse con el filtro puesto. */
+    private boolean acepta(Symbol s) {
+        return filterBar.acepta(
+                s.getName(),
+                typeOf(s),
+                s.getCategory() == null ? "" : s.getCategory().label(),
+                scopeOf(s),
+                s.getLanguage(),
+                s.getSourceFile(),
+                s.getLine() > 0 ? String.valueOf(s.getLine()) : SIN_POSICION);
+    }
+
+    /** Vacia el filtro. */
+    public void limpiarFiltro() {
+        filterBar.limpiar();
+    }
+
+    /** Tipo del simbolo escrito en espanol, como el resto de la tabla. */
+    private static String typeOf(Symbol s) {
+        return s.getType() == null ? "?" : s.getType().label();
+    }
+
+    /**
+     * Ambito del simbolo.
+     *
+     * <p>Si el analizador dejo el nombre del ambito se usa ese, que es lo
+     * informative ({@code global}, {@code metodo_salario}, {@code Empleado}).
+     * Si no, se cae al global/local de toda la vida.</p>
+     */
+    private static String scopeOf(Symbol s) {
+        String scope = s.getScope();
+        if (scope != null && !scope.isBlank()) {
+            return scope;
+        }
+        return s.isGlobal() ? "global" : "local";
+    }
+
+    /** Simbolo de la fila indicada, o null si la fila no existe. */
+    public Symbol symbolAt(int row) {
+        if (row < 0 || row >= shown.size()) {
+            return null;
+        }
+        return shown.get(row);
+    }
+
+    private void showDetails() {
+        int row = table.getSelectedRow();
+        Symbol s = symbolAt(row);
+        if (s == null) {
             detailsArea.setVisible(false);
             return;
         }
-        for (Symbol s : symbols) {
-            tableModel.addRow(new Object[]{
-                    s.getName(),
-                    s.getType() == null ? "?" : s.getType().toString(),
-                    s.getCategory() == null ? "?" : s.getCategory().toString(),
-                    s.isGlobal() ? "global" : "local",
-                    s.getOffset(),
-                    describe(s)
-            });
+        StringBuilder sb = new StringBuilder();
+        for (int col = 0; col < tableModel.getColumnCount(); col++) {
+            String value = String.valueOf(tableModel.getValueAt(row, col));
+            if (value != null && !value.isBlank()) {
+                sb.append(tableModel.getColumnName(col)).append(": ").append(value).append('\n');
+            }
         }
+        // La columna Detalle se saco de la tabla, pero la info de funciones y
+        // estructuras sigue siendo util: va aqui, en el detalle de la fila.
+        String extra = describe(s);
+        if (!extra.isEmpty()) {
+            sb.append("Detalle: ").append(extra).append('\n');
+        }
+        detailsArea.setText(sb.toString());
+        detailsArea.setCaretPosition(0);
+        detailsArea.setVisible(true);
+        revalidate();
+        repaint();
     }
 
     private static String describe(Symbol s) {
         StringBuilder sb = new StringBuilder();
+        // De que archivo viene el simbolo solo importa cuando hay imports: si
+        // viene de otro, su linea es la de ese otro y el salto tiene que ir
+        // ahi, no a la pestana activa.
+        if (s.getSourceFile() != null && !s.getSourceFile().isBlank()) {
+            sb.append("de ").append(s.getSourceFile());
+        }
         if (s.getParameters() != null && !s.getParameters().isEmpty()) {
+            if (sb.length() > 0) {
+                sb.append(' ');
+            }
             sb.append("params(");
             for (int i = 0; i < s.getParameters().size(); i++) {
                 if (i > 0) {
                     sb.append(", ");
                 }
                 Symbol p = s.getParameters().get(i);
-                sb.append(p.getName()).append(":").append(p.getType());
+                sb.append(p.getName()).append(":").append(p.getType() == null ? "?" : p.getType().label());
             }
             sb.append(')');
         }
@@ -151,7 +371,7 @@ public class SymbolTablePanel extends javax.swing.JPanel {
                     sb.append(", ");
                 }
                 Symbol m = s.getMembers().get(i);
-                sb.append(m.getName()).append(":").append(m.getType());
+                sb.append(m.getName()).append(":").append(m.getType() == null ? "?" : m.getType().label());
             }
             sb.append('}');
         }
@@ -159,37 +379,41 @@ public class SymbolTablePanel extends javax.swing.JPanel {
             if (sb.length() > 0) {
                 sb.append(' ');
             }
-            sb.append("-> ").append(s.getReturnType());
+            sb.append("-> ").append(s.getReturnType().label());
         }
         return sb.length() == 0 ? "" : sb.toString();
     }
 
-    private void showDetails() {
-        int row = table.getSelectedRow();
-        if (row < 0 || row >= tableModel.getRowCount()) {
-            detailsArea.setVisible(false);
-            return;
-        }
-        StringBuilder sb = new StringBuilder();
-        for (int col = 0; col < tableModel.getColumnCount(); col++) {
-            String value = String.valueOf(tableModel.getValueAt(row, col));
-            if (value != null && !value.isBlank()) {
-                sb.append(tableModel.getColumnName(col)).append(": ").append(value).append('\n');
-            }
-        }
-        detailsArea.setText(sb.toString());
-        detailsArea.setCaretPosition(0);
-        detailsArea.setVisible(true);
-        revalidate();
-        repaint();
+    /**
+     * Callback al hacer doble clic en una fila.
+     *
+     * @param consumer recibe el indice de la fila pulsada
+     */
+    public void setOnSymbolActivated(IntConsumer consumer) {
+        this.onSymbolActivated = consumer;
     }
 
     public JTable getTable() {
         return table;
     }
 
+    /** Filas que se ven ahora mismo, con el filtro puesto o sin el. */
     public int getSymbolCount() {
-        return tableModel.getRowCount();
+        return shown.size();
+    }
+
+    /** Simbolos que hay en total, se vean o no. */
+    public int getTotalSymbolCount() {
+        return allSymbols.size();
+    }
+
+    /** Nombres de las columnas, en el orden en que se muestran. */
+    public List<String> getColumnNames() {
+        List<String> names = new ArrayList<>(tableModel.getColumnCount());
+        for (int i = 0; i < tableModel.getColumnCount(); i++) {
+            names.add(tableModel.getColumnName(i));
+        }
+        return names;
     }
 
     /** Limpia la vista. */

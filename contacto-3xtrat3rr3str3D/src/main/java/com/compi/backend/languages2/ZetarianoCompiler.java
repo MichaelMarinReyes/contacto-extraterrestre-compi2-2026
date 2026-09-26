@@ -9,11 +9,8 @@ import com.compi.backend.languages.zetariano.ZetarianoC3DVisitor;
 import com.compi.backend.languages.zetariano.ZetarianoSemanticVisitor;
 import com.compi.backend.symbols.SymbolTable;
 import java.util.List;
-import org.antlr.v4.runtime.BaseErrorListener;
 import org.antlr.v4.runtime.CharStreams;
 import org.antlr.v4.runtime.CommonTokenStream;
-import org.antlr.v4.runtime.RecognitionException;
-import org.antlr.v4.runtime.Recognizer;
 import org.antlr.v4.runtime.tree.ParseTree;
 
 /**
@@ -39,28 +36,14 @@ public class ZetarianoCompiler extends AbstractLanguageCompiler {
     @Override
     public ParseTree parse(String source, List<CompilationError> errors) {
         try {
-            List<CompilationError> sink = errors;
-
-            BaseErrorListener lexListener = new BaseErrorListener() {
-                @Override
-                public void syntaxError(Recognizer<?, ?> r, Object o, int l, int c, String m,
-                                        RecognitionException e) {
-                    sink.add(new CompilationError(ErrorType.LEXICO, m, l, c));
-                }
-            };
-            BaseErrorListener parListener = new BaseErrorListener() {
-                @Override
-                public void syntaxError(Recognizer<?, ?> r, Object o, int l, int c, String m,
-                                        RecognitionException e) {
-                    sink.add(new CompilationError(ErrorType.SINTACTICO, m, l, c));
-                }
-            };
-
             ZetarianoLexer lexer = new ZetarianoLexer(CharStreams.fromString(source));
-            installErrorListener(lexer, lexListener);
+            installErrorListener(lexer,
+                    errorCollector(lexer.getVocabulary(), errors, ErrorType.LEXICO));
             CommonTokenStream tokens = new CommonTokenStream(lexer);
             ZetarianoParser parser = new ZetarianoParser(tokens);
-            installErrorListener(parser, parListener);
+            installErrorListener(parser,
+                    errorCollector(parser.getVocabulary(), errors, ErrorType.SINTACTICO));
+            rememberParser(parser);
 
             return parser.programa();
         } catch (Exception e) {
@@ -79,7 +62,9 @@ public class ZetarianoCompiler extends AbstractLanguageCompiler {
             semantic.visit(tree);
             errors.addAll(semantic.getErrors());
         } catch (Exception e) {
-            errors.add(internalError(displayName(), e));
+            // Con el arbol a mano el error sale en la linea en la que esta el
+            // fuente, y no sin posicion.
+            errors.add(internalError(displayName(), e, tree));
         }
     }
 

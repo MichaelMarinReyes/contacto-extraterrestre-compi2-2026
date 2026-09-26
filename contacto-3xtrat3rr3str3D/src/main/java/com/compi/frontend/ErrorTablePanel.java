@@ -2,8 +2,12 @@ package com.compi.frontend;
 
 import com.compi.backend.errors.CompilationError;
 import java.awt.BorderLayout;
+import java.awt.CardLayout;
 import java.awt.Color;
+import java.awt.event.MouseAdapter;
+import java.awt.event.MouseEvent;
 import java.awt.Component;
+import java.util.ArrayList;
 import java.util.List;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
@@ -26,6 +30,34 @@ public class ErrorTablePanel extends javax.swing.JPanel {
     private DefaultTableModel tableModel;
     private JScrollPane scrollPane;
     private JLabel emptyMessageLabel;
+    private CardLayout cards;
+    private JPanel content;
+    private MouseAdapter doubleClick;
+    private TableFilterBar filterBar;
+
+    /** Todos los errores cargados, para volver a pintar al cambiar el filtro. */
+    private List<CompilationError> allErrors = List.of();
+
+    /**
+     * Errores que se ven ahora, en el mismo orden que las filas.
+     *
+     * <p>El doble clic llega como numero de fila, asi que hace falta saber que
+     * error hay en cada fila: con el filtro puesto, la fila 0 no es el error
+     * 0.</p>
+     */
+    private List<CompilationError> shown = List.of();
+
+    private static final String CARD_TABLE = "tabla";
+    private static final String CARD_EMPTY = "vacio";
+
+    /**
+     * Sin posicion en el fuente.
+     *
+     * <p>Un guion y no un 0, que es un numero valido: aqui solo puede significar
+     * "el error no viene de una posicion del fuente" (un archivo que no se pudo
+     * leer, un fallo interno del compilador).</p>
+     */
+    private static final String SIN_POSICION = "-";
 
     /**
      * Creates new form ErrorTablePanel
@@ -64,7 +96,7 @@ public class ErrorTablePanel extends javax.swing.JPanel {
         setLayout(new BorderLayout());
 
         tableModel = new DefaultTableModel(
-                new Object[]{"#", "Tipo", "Línea", "Col.", "Descripción"}, 0) {
+                new Object[]{"#", "Archivo", "Tipo", "Línea", "Col.", "Descripción"}, 0) {
             @Override
             public boolean isCellEditable(int row, int column) {
                 return false;
@@ -75,6 +107,9 @@ public class ErrorTablePanel extends javax.swing.JPanel {
         errorTable.setFont(UiTheme.mono(12));
         errorTable.setRowHeight(24);
         errorTable.setAutoResizeMode(JTable.AUTO_RESIZE_LAST_COLUMN);
+        // Igual que en la tabla de simbolos: si no, se queda con el alto justo de
+        // sus filas y el resto del panel queda vacio.
+        errorTable.setFillsViewportHeight(true);
         errorTable.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
         errorTable.setBackground(UiTheme.toolWindowBg());
         errorTable.setForeground(UiTheme.fg());
@@ -82,7 +117,7 @@ public class ErrorTablePanel extends javax.swing.JPanel {
         errorTable.getTableHeader().setFont(UiTheme.sansBold(12));
         errorTable.getTableHeader().setReorderingAllowed(false);
 
-        int[] widths = {34, 100, 52, 52, 240};
+        int[] widths = {34, 150, 100, 52, 52, 240};
         for (int i = 0; i < widths.length; i++) {
             errorTable.getColumnModel().getColumn(i).setPreferredWidth(widths[i]);
         }
@@ -101,7 +136,15 @@ public class ErrorTablePanel extends javax.swing.JPanel {
                 return comp;
             }
         };
-        errorTable.getColumnModel().getColumn(1).setCellRenderer(typeRenderer);
+        errorTable.getColumnModel().getColumn(2).setCellRenderer(typeRenderer);
+
+        // Numero de error, linea y columna son numeros: alineados a la derecha se
+        // leen de un vistazo. Hace falta fijarlo porque llegan como texto (para
+        // poder poner el guion de "sin posicion") y el renderer por defecto solo
+        // alinea a la derecha lo que es un numero.
+        rightAlign(0);
+        rightAlign(3);
+        rightAlign(4);
 
         emptyMessageLabel = new JLabel("Sin errores de compilación", SwingConstants.CENTER);
         emptyMessageLabel.setFont(UiTheme.sans(12));
@@ -110,10 +153,28 @@ public class ErrorTablePanel extends javax.swing.JPanel {
 
         scrollPane = new JScrollPane(errorTable);
         scrollPane.setBorder(javax.swing.BorderFactory.createEmptyBorder());
-        scrollPane.setVisible(false);
+        scrollPane.getVerticalScrollBar().setUnitIncrement(24);
 
-        add(scrollPane, BorderLayout.CENTER);
-        add(emptyMessageLabel, BorderLayout.CENTER);
+        filterBar = new TableFilterBar("Filtrar errores");
+        filterBar.setBorder(UiTheme.pad(6, 8, 6, 8));
+        filterBar.setOnFilterChanged(this::applyFilter);
+        // Sin errores no hay nada que filtrar, asi que la barra no aparece: solo
+        // ocupa sitio y hace creer que falta algo.
+        filterBar.setVisible(false);
+
+        // El filtro va arriba, fijo, y debajo un CardLayout con la tabla o el
+        // aviso. Un CardLayout y no dos componentes en CENTER: superponer el
+        // aviso a la tabla dejaba la tabla tapada, y con errores no se veia
+        // ninguna fila.
+        cards = new CardLayout();
+        content = new JPanel(cards);
+        content.add(scrollPane, CARD_TABLE);
+        content.add(emptyMessageLabel, CARD_EMPTY);
+        cards.show(content, CARD_EMPTY);
+
+        setLayout(new BorderLayout());
+        add(filterBar, BorderLayout.NORTH);
+        add(content, BorderLayout.CENTER);
     }
 
     private Color colorForType(String type) {
@@ -125,54 +186,159 @@ public class ErrorTablePanel extends javax.swing.JPanel {
         };
     }
 
+    /** Alinea una columna a la derecha (renderer por defecto, sin clases extra). */
+    private void rightAlign(int index) {
+        errorTable.getColumnModel().getColumn(index).setCellRenderer(
+                new DefaultTableCellRenderer() {
+                    @Override
+                    public Component getTableCellRendererComponent(
+                            JTable t, Object value, boolean selected,
+                            boolean focused, int row, int column) {
+                        super.getTableCellRendererComponent(t, value, selected, focused, row, column);
+                        setHorizontalAlignment(SwingConstants.RIGHT);
+                        return this;
+                    }
+                });
+    }
+
     // ====================== API ======================
 
     /**
      * Carga la lista de errores.
+     *
+     * <p>Linea y columna salen en base 1, como las cuenta el editor; un error
+     * que no tiene posicion en el fuente (no se pudo leer el archivo, por
+     * ejemplo) muestra un guion en vez de un 0.</p>
+     *
+     * <p>El filtro se conserva: quien compila dos veces seguidas con el mismo
+     * filtro puesto quiere seguir viendo lo mismo, no empezar de cero.</p>
      */
     public void loadErrors(List<CompilationError> errors) {
+        allErrors = errors == null ? List.of() : List.copyOf(errors);
+        filterBar.setVisible(!allErrors.isEmpty());
+        applyFilter();
+    }
+
+    /**
+     * Repinta la tabla con los errores que pasan el filtro.
+     *
+     * <p>Se recorre la lista entera cada vez que cambia una letra, que es lo
+     * barato: un proyecto de este trabajo tiene decenas de errores, no miles.</p>
+     */
+    private void applyFilter() {
         tableModel.setRowCount(0);
-        if (errors == null || errors.isEmpty()) {
-            scrollPane.setVisible(false);
-            emptyMessageLabel.setVisible(true);
+        shown = new ArrayList<>(allErrors.size());
+        for (int i = 0; i < allErrors.size(); i++) {
+            CompilationError e = allErrors.get(i);
+            if (acepta(e)) {
+                // La numeracion es la de la lista completa y no la de las filas
+                // que se ven: si no, al filtrar los numeros se renumerarian y
+                // dejarian de coincidir con los que dice la consola.
+                tableModel.addRow(fila(e, i + 1));
+                shown.add(e);
+            }
+        }
+
+        filterBar.setCounts(shown.size(), allErrors.size());
+        if (allErrors.isEmpty()) {
             emptyMessageLabel.setText("Sin errores de compilación");
-            revalidate();
-            repaint();
-            return;
+        } else if (shown.isEmpty()) {
+            emptyMessageLabel.setText("Ningún error coincide con el filtro «"
+                    + filterBar.texto() + "»");
+        } else {
+            emptyMessageLabel.setText("");
         }
-        int i = 1;
-        for (CompilationError e : errors) {
-            tableModel.addRow(new Object[]{
-                    i++,
-                    e.getType(),
-                    e.getLine(),
-                    e.getColumn(),
-                    e.getMessage()
-            });
-        }
-        scrollPane.setVisible(true);
-        emptyMessageLabel.setVisible(false);
+        cards.show(content, shown.isEmpty() ? CARD_EMPTY : CARD_TABLE);
         revalidate();
         repaint();
+    }
+
+    private static Object[] fila(CompilationError e, int numero) {
+        return new Object[]{
+                numero,
+                e.getFileName() == null ? "" : e.getFileName(),
+                e.getType(),
+                e.getLine() > 0 ? String.valueOf(e.getLine()) : SIN_POSICION,
+                e.getColumn() > 0 ? String.valueOf(e.getColumn()) : SIN_POSICION,
+                e.getMessage()
+        };
+    }
+
+    /** true si el error tiene que verse con el filtro puesto. */
+    private boolean acepta(CompilationError e) {
+        return filterBar.acepta(
+                e.getFileName(),
+                e.getType(),
+                e.getLine() > 0 ? String.valueOf(e.getLine()) : SIN_POSICION,
+                e.getMessage());
+    }
+
+    /** Vacia el filtro. */
+    public void limpiarFiltro() {
+        filterBar.limpiar();
     }
 
     public JTable getErrorTable() {
         return errorTable;
     }
 
+    /** Filas que se ven ahora mismo, con el filtro puesto o sin el. */
     public int getErrorCount() {
-        return tableModel.getRowCount();
+        return shown.size();
+    }
+
+    /** Errores que hay en total, se vean o no. */
+    public int getTotalErrorCount() {
+        return allErrors.size();
+    }
+
+    /**
+     * Error de la fila indicada, o null si la fila no existe.
+     *
+     * <p>Con el filtro puesto la fila 0 no es el error 0, asi que la cuenta la
+     * hace la lista de lo que se ve y no la que entro.</p>
+     */
+    public CompilationError errorAt(int row) {
+        if (row < 0 || row >= shown.size()) {
+            return null;
+        }
+        return shown.get(row);
     }
 
     /**
      * Devuelve el error de la fila seleccionada, o null.
      */
-    public CompilationError getSelectedError(List<CompilationError> errors) {
-        int row = errorTable.getSelectedRow();
-        if (row < 0 || errors == null || row >= errors.size()) {
-            return null;
+    public CompilationError getSelectedError() {
+        return errorAt(errorTable.getSelectedRow());
+    }
+
+    /**
+     * Avisa cuando se pide abrir un error de la tabla.
+     *
+     * <p>Se pasa el numero de fila y no el error porque la tabla es del proyecto y
+     * quien la llena decide de donde salio cada fila.</p>
+     *
+     * @param onErrorActivated recibe la fila elegida, o -1 si no hay ninguna
+     */
+    public void setOnErrorActivated(java.util.function.IntConsumer onErrorActivated) {
+        errorTable.removeMouseListener(doubleClick);
+        if (onErrorActivated == null) {
+            return;
         }
-        return errors.get(row);
+        java.util.function.IntConsumer listener = onErrorActivated;
+        doubleClick = new MouseAdapter() {
+            @Override
+            public void mouseClicked(MouseEvent e) {
+                if (e.getClickCount() != 2) {
+                    return;
+                }
+                int row = errorTable.rowAtPoint(e.getPoint());
+                if (row >= 0) {
+                    listener.accept(row);
+                }
+            }
+        };
+        errorTable.addMouseListener(doubleClick);
     }
 
     /** Limpia la vista. */
