@@ -1032,7 +1032,7 @@ public class MainWindow extends JFrame {
             }
         }
 
-        boolean ok = compiler.compile(source, language);
+        boolean ok = compiler.compile(source, language, file.getName());
         List<CompilationError> errors = new ArrayList<>();
         for (CompilationError e : compiler.getErrors()) {
             errors.add(e.inFile(file.getName()));

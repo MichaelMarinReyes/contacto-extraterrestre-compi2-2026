@@ -2,13 +2,17 @@ package com.compi.backend.languages.zetariano;
 
 import com.compi.ZetarianoBaseVisitor;
 import com.compi.ZetarianoParser;
+import com.compi.backend.c3d.Arreglos;
 import com.compi.backend.c3d.C3DGenerator;
 import com.compi.backend.c3d.QuadrupleOp;
 import com.compi.backend.symbols.Symbol;
 import com.compi.backend.symbols.SymbolCategory;
 import com.compi.backend.symbols.SymbolTable;
 import com.compi.backend.symbols.Type;
+import org.antlr.v4.runtime.tree.ParseTree;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Stack;
 
 public class ZetarianoC3DVisitor extends ZetarianoBaseVisitor<String> {
@@ -38,8 +42,7 @@ public class ZetarianoC3DVisitor extends ZetarianoBaseVisitor<String> {
             if (mc.atributoDef() == null) {
                 continue;
             }
-            String fieldName = mc.atributoDef().ID().getText();
-            symbolTable.define(new Symbol(fieldName, typeOfField(fieldName),
+            symbolTable.define(new Symbol(mc.atributoDef().ID().getText(), typeOfField(mc.atributoDef()),
                     SymbolCategory.FIELD, offset++, false).at(mc.atributoDef()).markWorking());
         }
 
@@ -101,13 +104,27 @@ public class ZetarianoC3DVisitor extends ZetarianoBaseVisitor<String> {
     }
 
     /** Tipo declarado de un atributo de la clase en curso. */
-    private Type typeOfField(String fieldName) {
+    /**
+     * El tipo de un atributo, tal y como lo dejo el analizador semantico.
+     *
+     * <p>Un atributo de arreglo se declara sin tamano, asi que aqui se completa
+     * con la forma de su inicializador: sin ella no se podria colocar
+     * {@code tabla[1][0]}.</p>
+     */
+    private Type typeOfField(ZetarianoParser.AtributoDefContext ctx) {
+        Type type = Type.UNKNOWN;
         Symbol cls = symbolTable.getClass(currentClassName);
-        if (cls == null) {
-            return Type.UNKNOWN;
+        if (cls != null) {
+            Symbol member = cls.getMember(ctx.ID().getText());
+            if (member != null && member.getType() != null) {
+                type = member.getType();
+            }
         }
-        Symbol member = cls.getMember(fieldName);
-        return member == null ? Type.UNKNOWN : member.getType();
+        if (type.isArray() && !type.tieneTamanos()
+                && ctx.expresion() instanceof ZetarianoParser.LiteralArregloExprContext arreglo) {
+            type = Type.arrayOf(type.getElementType(), formasDe(arreglo.literalArreglo()));
+        }
+        return type;
     }
 
     /**
@@ -166,13 +183,41 @@ public class ZetarianoC3DVisitor extends ZetarianoBaseVisitor<String> {
     }
 
     @Override
+    public String visitAtributoDef(ZetarianoParser.AtributoDefContext ctx) {
+        if (ctx.expresion() == null) {
+            return null;
+        }
+        // El valor inicial se guarda en el hueco del atributo. Si es un arreglo,
+        // lo que se guarda es la direccion de la primera celda, que es lo que
+        // devuelve la reserva.
+        Symbol field = symbolTable.resolve(ctx.ID().getText());
+        if (field != null) {
+            store(field, visit(ctx.expresion()));
+        }
+        return null;
+    }
+
+    @Override
     public String visitDeclaracionVariable(ZetarianoParser.DeclaracionVariableContext ctx) {
         String varName = ctx.ID().getText();
+
+        // En Zetariano el tamano no se escribe, asi que un arreglo solo tiene
+        // forma si viene con valores: se la copia del inicializador. Sin ella
+        // solo se sabe cuantas dimensiones tiene, que es lo que hace falta para
+        // colocar "cubo[1][0][1]".
+        Type tipo = Type.UNKNOWN;
+        if (ctx.LBRACK().size() > 0) {
+            if (ctx.expresion() instanceof ZetarianoParser.LiteralArregloExprContext arreglo) {
+                tipo = Type.arrayOf(Type.UNKNOWN, formasDe(arreglo.literalArreglo()));
+            } else {
+                tipo = Type.arrayOf(Type.UNKNOWN, new int[ctx.LBRACK().size()]);
+            }
+        }
 
         // La declaracion reserva su hueco en la pila aunque no lleve valor
         // inicial: sin esto las referencias posteriores quedarian colgando.
         int offset = symbolTable.getCurrentScope().allocateOffset(1);
-        Symbol declared = new Symbol(varName, Type.UNKNOWN,
+        Symbol declared = new Symbol(varName, tipo,
                 SymbolCategory.VARIABLE, offset, false).at(ctx).markWorking();
         symbolTable.define(declared);
         Symbol s = symbolTable.resolve(varName);
@@ -181,9 +226,163 @@ public class ZetarianoC3DVisitor extends ZetarianoBaseVisitor<String> {
         }
 
         if (ctx.expresion() != null) {
+            // Para un arreglo entre llaves, visit() devuelve la direccion de la
+            // primera celda, que es lo que guarda la variable.
             store(s, visit(ctx.expresion()));
         }
         return null;
+    }
+
+    // ===================== Arreglos y matrices =====================
+
+    /**
+     * Un arreglo entre llaves reserva sus celdas en el heap y deja en el temporal
+     * la direccion de la primera.
+     *
+     * <p>Las dimensiones no se escriben en Zetariano ({@code int[][] cubo = ...}),
+     * asi que los tamanos se cuentan sobre las llaves del propio literal. Como en
+     * los otros lenguajes, las celdas quedan contiguas: una matriz de 2x2 son
+     * cuatro celdas, no un arreglo de filas.</p>
+     */
+    @Override
+    public String visitLiteralArregloExpr(ZetarianoParser.LiteralArregloExprContext ctx) {
+        int[] sizes = formasDe(ctx.literalArreglo());
+        int celdas = Type.arrayOf(Type.UNKNOWN, sizes).totalSize();
+        if (celdas <= 0) {
+            return "0";
+        }
+        String base = Arreglos.reservar(c3d, celdas);
+        llenar(base, ctx.literalArreglo(), sizes, new int[sizes.length], 0);
+        return base;
+    }
+
+    /**
+     * Los tamanos de un literal, deducidos de como estan escritas las llaves.
+     *
+     * <p>Se toma la forma de la primera fila y se supone que todas las demas
+     * tienen la misma; si no, el analizador semantico ya lo ha avisado.</p>
+     */
+    private int[] formasDe(ZetarianoParser.LiteralArregloContext ctx) {
+        List<ParseTree> valores = valoresDe(ctx);
+        int[] formaFila = new int[0];
+        for (ParseTree valor : valores) {
+            ZetarianoParser.LiteralArregloContext fila = filaDe(valor);
+            if (fila != null) {
+                formaFila = formasDe(fila);
+                break;
+            }
+        }
+        int[] sizes = new int[formaFila.length + 1];
+        sizes[0] = valores.size();
+        System.arraycopy(formaFila, 0, sizes, 1, formaFila.length);
+        return sizes;
+    }
+
+    /** Los valores de una lista, en el orden en que estan escritos. */
+    private static List<ParseTree> valoresDe(ZetarianoParser.LiteralArregloContext ctx) {
+        List<ParseTree> valores = new ArrayList<>();
+        for (int i = 0; i < ctx.getChildCount(); i++) {
+            ParseTree hijo = ctx.getChild(i);
+            if (hijo instanceof ZetarianoParser.ExpresionContext) {
+                valores.add(hijo);
+            }
+        }
+        return valores;
+    }
+
+    /**
+     * La lista de llaves de un valor, o null si el valor no es una lista.
+     *
+     * <p>Una lista anidada llega como una "expresion" mas, porque es una
+     * alternativa de esa regla, asi que hay que mirar primero ese caso.</p>
+     */
+    private static ZetarianoParser.LiteralArregloContext filaDe(ParseTree valor) {
+        if (valor instanceof ZetarianoParser.LiteralArregloExprContext anidada) {
+            return anidada.literalArreglo();
+        }
+        if (valor instanceof ZetarianoParser.LiteralArregloContext directa) {
+            return directa;
+        }
+        return null;
+    }
+
+    /**
+     * Escribe los valores de un inicializador celda a celda.
+     *
+     * <p>El recorrido sigue las llaves: cada nivel es una dimension y el numero
+     * de valor dentro del nivel es el indice de esa dimension.</p>
+     */
+    private void llenar(String base, ZetarianoParser.LiteralArregloContext ctx, int[] sizes,
+                        int[] indices, int dimension) {
+        List<ParseTree> valores = valoresDe(ctx);
+        for (int i = 0; i < valores.size() && dimension < indices.length; i++) {
+            ParseTree valor = valores.get(i);
+            indices[dimension] = i;
+            ZetarianoParser.LiteralArregloContext fila = filaDe(valor);
+            if (fila != null) {
+                llenar(base, fila, sizes, indices, dimension + 1);
+            } else {
+                Arreglos.escribirConstante(c3d, base, indices, sizes,
+                        visit((ZetarianoParser.ExpresionContext) valor));
+            }
+        }
+    }
+
+    /**
+     * Lee el elemento al que apunta una cadena de indices.
+     *
+     * @return el temporal con el valor, o null si la cadena no agota todas las
+     *         dimensiones del arreglo
+     */
+    private String leerCelda(ZetarianoParser.AccesoMiembroContext ctx) {
+        Symbol base = symbolTable.resolve(ctx.ID().getText());
+        if (base == null || base.getType() == null || !base.getType().isArray()) {
+            return null;
+        }
+        int[] sizes = base.getType().getSizes();
+        List<String> indices = indicesDe(ctx);
+        if (!base.getType().tieneTamanos() || indices == null || indices.size() != sizes.length) {
+            return null;
+        }
+        return Arreglos.leer(c3d, load(base), indices, sizes);
+    }
+
+    /**
+     * Los indices de una cadena de acceso, en el orden en que se escribieron.
+     *
+     * @return null si la cadena baja a un miembro, porque entonces los indices
+     *         pertenecen a arreglos distintos
+     */
+    private List<String> indicesDe(ZetarianoParser.AccesoMiembroContext ctx) {
+        List<String> indices = new ArrayList<>();
+        for (ZetarianoParser.MiembroAccesoContext mac : ctx.miembroAcceso()) {
+            if (mac.DOT() != null) {
+                return null;
+            }
+            for (ZetarianoParser.ExpresionContext indice : mac.expresion()) {
+                indices.add(visit(indice));
+            }
+        }
+        return indices;
+    }
+
+    /**
+     * Escribe en el elemento de un arreglo al que apunta una cadena de indices.
+     *
+     * @return true si la cadena era un acceso a arreglo y se ha escrito la celda
+     */
+    private boolean escribirCelda(ZetarianoParser.AccesoMiembroContext ctx, String valor) {
+        Symbol base = symbolTable.resolve(ctx.ID().getText());
+        if (base == null || base.getType() == null || !base.getType().isArray()) {
+            return false;
+        }
+        int[] sizes = base.getType().getSizes();
+        List<String> indices = indicesDe(ctx);
+        if (!base.getType().tieneTamanos() || indices == null || indices.size() != sizes.length) {
+            return false;
+        }
+        Arreglos.escribir(c3d, load(base), indices, sizes, valor);
+        return true;
     }
 
     @Override
@@ -196,6 +395,10 @@ public class ZetarianoC3DVisitor extends ZetarianoBaseVisitor<String> {
                 store(target, applyCompound(ctx, target, val));
             }
         } else if (ctx.accesoMiembro() != null) {
+            // "cubo[1][0] = 7": el valor va a una celda del heap, no al atributo.
+            if (escribirCelda(ctx.accesoMiembro(), val)) {
+                return null;
+            }
             Symbol field = resolveMember(ctx.accesoMiembro());
             if (field != null) {
                 store(field, applyCompound(ctx, field, val));
@@ -243,30 +446,102 @@ public class ZetarianoC3DVisitor extends ZetarianoBaseVisitor<String> {
 
     @Override
     public String visitMemberAccessExpr(ZetarianoParser.MemberAccessExprContext ctx) {
+        // "cubo[1][0]" es una celda del heap; "obj.campo" es un atributo.
+        String celda = leerCelda(ctx.accesoMiembro());
+        if (celda != null) {
+            return celda;
+        }
         Symbol field = resolveMember(ctx.accesoMiembro());
         return field == null ? visit(ctx.accesoMiembro().ID()) : load(field);
     }
 
     @Override
     public String visitSentenciaIf(ZetarianoParser.SentenciaIfContext ctx) {
-        String cond = visit(ctx.expresion(0));
-        String trueLabel = c3d.newLabel();
-        String falseLabel = c3d.newLabel();
-        String endLabel = c3d.newLabel();
+        // El "if / else if / else" se recorre como una cadena: la rama falsa de
+        // cada prueba es la que sigue, y todas las ramas saltan al mismo final.
+        // Asi el codigo sale como lo escribio el docente:
+        //   if (x > z) goto et1
+        //   goto et2
+        //   et1: ... goto et3
+        //   et2: ... (else if) ...
+        //   et3:
+        String fin = c3d.newLabel();
 
-        c3d.emit(QuadrupleOp.IF_TRUE, cond, null, trueLabel);
-        c3d.emitGoto(falseLabel);
-
-        c3d.emitLabel(trueLabel);
-        visit(ctx.bloque(0));
-        c3d.emitGoto(endLabel);
-
-        c3d.emitLabel(falseLabel);
-        if (ctx.ELSE() != null) {
-            visit(ctx.bloque(ctx.bloque().size() - 1));
+        List<ZetarianoParser.ExpresionContext> condiciones = new ArrayList<>();
+        List<ZetarianoParser.BloqueContext> bloques = new ArrayList<>();
+        condiciones.add(ctx.expresion(0));
+        bloques.add(ctx.bloque(0));
+        // Los "else if" son bloques mas, en el orden en que aparecen.
+        for (int i = 1; i < ctx.bloque().size(); i++) {
+            condiciones.add(ctx.expresion(i));
+            bloques.add(ctx.bloque(i));
         }
-        c3d.emitLabel(endLabel);
+
+        int conPrueba = condiciones.size();
+        for (int i = 0; i < conPrueba; i++) {
+            String verdadera = c3d.newLabel();
+            boolean ultima = i == conPrueba - 1 && bloques.size() == conPrueba;
+            // La prueba de la ultima rama cae directo al final: detras no queda
+            // nada mas que ejecutar, asi que su goto falso se ahorra.
+            String falsa = ultima ? fin : c3d.newLabel();
+
+            emitirSaltoDeCondicion(condiciones.get(i), verdadera, falsa);
+            c3d.emitLabel(verdadera);
+            visit(bloques.get(i));
+            c3d.emitGoto(fin);
+            if (!ultima) {
+                c3d.emitLabel(falsa);
+            }
+        }
+        // El "else" final, el que no lleva condicion, entra en la rama falsa de
+        // la ultima prueba y cae al final de la cadena sin saltar.
+        for (int i = conPrueba; i < bloques.size(); i++) {
+            visit(bloques.get(i));
+        }
+
+        c3d.emitLabel(fin);
         return null;
+    }
+
+    /**
+     * Emite la prueba de una condicion: si es una comparacion, el salto
+     * relacional directo ({@code if (x &gt; z) goto et1}); si es una expresion mas
+     * complicated, se evalua en un temporal booleano y se salta ese.
+     *
+     * @param verdadera etiqueta a la que se salta cuando la condicion se cumple
+     * @param falsa      etiqueta del camino contrario, o null si no hace falta
+     *                  saltar (en el {@code do while} la caida ya va al final)
+     */
+    private void emitirSaltoDeCondicion(ZetarianoParser.ExpresionContext condicion,
+                                        String verdadera, String falsa) {
+        if (condicion instanceof ZetarianoParser.RelationalExprContext relacional) {
+            c3d.emit(relacionalDe(relacional.getChild(1).getText()),
+                    visit(relacional.expresion(0)), visit(relacional.expresion(1)),
+                    verdadera);
+        } else if (condicion instanceof ZetarianoParser.EqualityExprContext igualdad) {
+            c3d.emit(igualdadDe(igualdad.getChild(1).getText()),
+                    visit(igualdad.expresion(0)), visit(igualdad.expresion(1)),
+                    verdadera);
+        } else {
+            c3d.emit(QuadrupleOp.IF_TRUE, visit(condicion), null, verdadera);
+        }
+        if (falsa != null) {
+            c3d.emitGoto(falsa);
+        }
+    }
+
+    private QuadrupleOp relacionalDe(String operador) {
+        return switch (operador) {
+            case "<" -> QuadrupleOp.IF_LT;
+            case "<=" -> QuadrupleOp.IF_LE;
+            case ">" -> QuadrupleOp.IF_GT;
+            case ">=" -> QuadrupleOp.IF_GE;
+            default -> QuadrupleOp.IF_EQ;
+        };
+    }
+
+    private QuadrupleOp igualdadDe(String operador) {
+        return "!=".equals(operador) ? QuadrupleOp.IF_NE : QuadrupleOp.IF_EQ;
     }
 
     @Override
@@ -298,11 +573,11 @@ public class ZetarianoC3DVisitor extends ZetarianoBaseVisitor<String> {
 
         c3d.emitLabel(condLabel);
         if (ctx.expresion() != null) {
-            c3d.emit(QuadrupleOp.IF_TRUE, visit(ctx.expresion()), null, bodyLabel);
+            emitirSaltoDeCondicion(ctx.expresion(), bodyLabel, endLabel);
         } else {
             c3d.emitGoto(bodyLabel);
+            c3d.emitGoto(endLabel);
         }
-        c3d.emitGoto(endLabel);
 
         c3d.emitLabel(bodyLabel);
         visit(ctx.bloque());
@@ -332,7 +607,7 @@ public class ZetarianoC3DVisitor extends ZetarianoBaseVisitor<String> {
         visit(ctx.bloque());
 
         c3d.emitLabel(condLabel);
-        c3d.emit(QuadrupleOp.IF_TRUE, visit(ctx.expresion()), null, bodyLabel);
+        emitirSaltoDeCondicion(ctx.expresion(), bodyLabel, null);
 
         c3d.emitLabel(endLabel);
         breakLabels.pop();
@@ -350,9 +625,7 @@ public class ZetarianoC3DVisitor extends ZetarianoBaseVisitor<String> {
         continueLabels.push(condLabel);
 
         c3d.emitLabel(condLabel);
-        String cond = visit(ctx.expresion());
-        c3d.emit(QuadrupleOp.IF_TRUE, cond, null, bodyLabel);
-        c3d.emitGoto(endLabel);
+        emitirSaltoDeCondicion(ctx.expresion(), bodyLabel, endLabel);
 
         c3d.emitLabel(bodyLabel);
         visit(ctx.bloque());
@@ -524,17 +797,11 @@ public class ZetarianoC3DVisitor extends ZetarianoBaseVisitor<String> {
                           String operator) {
         String left = visit(leftCtx);
         String right = visit(rightCtx);
-        QuadrupleOp op = switch (operator) {
-            case "<" -> QuadrupleOp.IF_LT;
-            case "<=" -> QuadrupleOp.IF_LE;
-            case ">" -> QuadrupleOp.IF_GT;
-            case ">=" -> QuadrupleOp.IF_GE;
-            case "==" -> QuadrupleOp.IF_EQ;
-            case "!=" -> QuadrupleOp.IF_NE;
-            default -> null;
-        };
+        QuadrupleOp op = "==".equals(operator) || "!=".equals(operator)
+                ? igualdadDe(operator)
+                : relacionalDe(operator);
         String temp = c3d.newTemp();
-        c3d.emit(op == null ? QuadrupleOp.IF_EQ : op, left, right, temp);
+        c3d.emit(op, left, right, temp);
         return temp;
     }
 
@@ -557,6 +824,15 @@ public class ZetarianoC3DVisitor extends ZetarianoBaseVisitor<String> {
         // La negacion logica se expresa como "igual a cero".
         String temp = c3d.newTemp();
         c3d.emit(QuadrupleOp.IF_EQ, visit(ctx.expresion()), "0", temp);
+        return temp;
+    }
+
+    @Override
+    public String visitNegExpr(ZetarianoParser.NegExprContext ctx) {
+        // El menos unario es una instruccion propia, no un 0 menos: asi el
+        // codigo de tres direcciones se lee "t3 = -x".
+        String temp = c3d.newTemp();
+        c3d.emit(QuadrupleOp.NEG, visit(ctx.expresion()), null, temp);
         return temp;
     }
 

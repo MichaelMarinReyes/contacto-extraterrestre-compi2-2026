@@ -59,8 +59,10 @@ public class YCompiler extends AbstractLanguageCompiler {
             return;
         }
         try {
+            int antes = symbolTable.getAllSymbols().size();
             YSemanticVisitor semantic = new YSemanticVisitor(symbolTable);
             semantic.visit(tree);
+            marcarLenguaje(symbolTable, antes, displayName());
             errors.addAll(semantic.getErrors());
         } catch (Exception e) {
             // Con el arbol a mano el error sale en la linea en la que esta el

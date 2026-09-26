@@ -17,6 +17,7 @@ import java.util.List;
 import org.antlr.v4.runtime.CharStreams;
 import org.antlr.v4.runtime.CommonTokenStream;
 import org.antlr.v4.runtime.tree.ParseTree;
+import org.antlr.v4.runtime.tree.TerminalNode;
 
 /**
  * Pipeline de PigLatin: lexer, parser, semantico y C3D.
@@ -63,8 +64,10 @@ public class PigLatinCompiler extends AbstractLanguageCompiler {
             return;
         }
         try {
+            int antes = symbolTable.getAllSymbols().size();
             PigLatinSemanticVisitor semantic = new PigLatinSemanticVisitor(symbolTable);
             semantic.visit(tree);
+            marcarLenguaje(symbolTable, antes, displayName());
             errors.addAll(semantic.getErrors());
         } catch (Exception e) {
             // Con el arbol a mano el error sale en la linea en la que esta el
@@ -130,14 +133,7 @@ public class PigLatinCompiler extends AbstractLanguageCompiler {
                                     SymbolTable symbolTable, C3DGenerator generator,
                                     List<CompilationError> errors, List<String> cargados) {
         List<String> nuevos = new ArrayList<>();
-        StringBuilder rawPath = new StringBuilder();
-        for (int i = 0; i < impCtx.VARIABLE().size(); i++) {
-            if (i > 0) {
-                rawPath.append('/');
-            }
-            rawPath.append(impCtx.VARIABLE(i).getText());
-        }
-        String path = rawPath.toString();
+        String path = rutaDelImport(impCtx);
 
         File found = resolveImportFile(path);
         if (found == null) {
@@ -166,9 +162,12 @@ public class PigLatinCompiler extends AbstractLanguageCompiler {
         }
 
         // El archivo importado se compila con el compilador de su propia extension,
-        // que es lo unico que decide como se lee.
-        LanguageCompiler target = LanguageCompilerFactory
-                .getCompiler(LanguageCompilerFactory.extensionOf(found.getName()));
+        // que es lo unico que decide como se lee. Se le pasa el nombre del archivo
+        // y no solo la extension porque no todas coinciden con su identificador de
+        // lenguaje: la extension de Zetariano es "z" pero su id es "zet", asi que
+        // buscar por "z" solo no encontraba nada y el import de un .z fallaba
+        // dizendo que el lenguaje no estava soportado.
+        LanguageCompiler target = LanguageCompilerFactory.getCompiler(found.getName());
         if (target == null) {
             errors.add(new CompilationError(ErrorType.SEMANTICO,
                     "El archivo importado \"" + key + "\" no es de un lenguaje soportado",
@@ -176,6 +175,9 @@ public class PigLatinCompiler extends AbstractLanguageCompiler {
             return nuevos;
         }
         target.setWorkingDirectory(getWorkingDirectory());
+        // El archivo importado tambien dice como se llama: Zetariano lo necesita
+        // para comprobar que el .z coincide con la clase que declara.
+        target.setSourceFileName(found.getName());
 
         // Los errores del archivo importado se anotan con su nombre, para que en
         // la tabla se sepa de que archivo son y no del que lo importa.
@@ -209,12 +211,48 @@ public class PigLatinCompiler extends AbstractLanguageCompiler {
         }
     }
 
-    /** Busca el archivo de un import, con cualquiera de las extensiones admitidas. */
+    /**
+     * Ruta del archivo al que apunta un import, tal y como se busca en disco.
+     *
+     * <p>El enunciado escribe el import con la extension del archivo, como en
+     * {@code import carpeta.Objeto1.z}, y el lexer parte el nombre por los
+     * puntos, de modo que esa extension llega como un segmento mas. Aqui se
+     * pega otra vez a su nombre, para que la ruta sea la del archivo de verdad.
+     * El import sin extension, como {@code import datos.Globales}, se deja como
+     * estaba: la resolucion prueba entonces con las extensiones admitidas.</p>
+     */
+    private String rutaDelImport(PigLatinParser.Import_declaracionContext impCtx) {
+        List<String> partes = new ArrayList<>();
+        for (TerminalNode v : impCtx.VARIABLE()) {
+            partes.add(v.getText());
+        }
+        int ultimo = partes.size() - 1;
+        if (ultimo >= 1
+                && LanguageCompilerFactory.byExtensionLanguage(partes.get(ultimo)) != null) {
+            partes.set(ultimo - 1, partes.get(ultimo - 1) + "." + partes.get(ultimo));
+            partes.remove(ultimo);
+        }
+        return String.join("/", partes);
+    }
+
+    /**
+     * Busca el archivo de un import.
+     *
+     * <p>Con la extension escrita, como en {@code import carpeta.Objeto1.z}, se
+     * busca ese archivo tal cual. Sin ella se prueba con cada una de las
+     * extensiones admitidas, en orden.</p>
+     */
     private File resolveImportFile(String path) {
+        if (LanguageCompilerFactory.hasAllowedExtension(path)) {
+            File talCual = new File(getWorkingDirectory(), path);
+            if (talCual.isFile()) {
+                return talCual;
+            }
+        }
         for (String ext : LanguageCompilerFactory.allowedExtensions()) {
-            File directo = new File(getWorkingDirectory(), path + "." + ext);
-            if (directo.isFile()) {
-                return directo;
+            File conExtension = new File(getWorkingDirectory(), path + "." + ext);
+            if (conExtension.isFile()) {
+                return conExtension;
             }
         }
         // El import puede escrito desde la raiz mientras el archivo esta en una
@@ -255,7 +293,10 @@ public class PigLatinCompiler extends AbstractLanguageCompiler {
             return false;
         }
         String relative = relativeToProject(file).replace(File.separatorChar, '/');
-        return relative.equals(path + "." + ext);
+        // La ruta buscada ya puede traer la extension (import carpeta.Objeto1.z);
+        // si no la trae, se le prueba la del archivo que se esta mirando.
+        String esperada = path.endsWith("." + ext) ? path : path + "." + ext;
+        return relative.equals(esperada);
     }
 
     /** Ruta del archivo respecto a la carpeta del proyecto, para el informe. */

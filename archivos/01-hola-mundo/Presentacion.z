@@ -1,0 +1,13 @@
+public class Presentacion {
+    String mensaje;
+    int repeticiones;
+
+    public Presentacion(String mensaje, int repeticiones) {
+        this.mensaje = mensaje;
+        this.repeticiones = repeticiones;
+    }
+
+    public void mostrar() {
+        println(mensaje);
+    }
+}

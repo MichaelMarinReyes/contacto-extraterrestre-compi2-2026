@@ -356,4 +356,64 @@ public final class Diagnostico {
         return en("El operador " + dato("!") + " solo se puede aplicar a una expresión booleana",
                 ctx);
     }
+
+    public static CompilationError operadorMenosNoNumerico(ParserRuleContext ctx) {
+        return en("El operador " + dato("-") + " solo se puede aplicar a una expresión numérica",
+                ctx);
+    }
+
+    // ====================== Arreglos y matrices ======================
+
+    public static CompilationError noEsArreglo(String nombre, Type tipo,
+                                                ParserRuleContext ctx) {
+        return en("No se puede indexar " + dato(nombre) + ": es de tipo "
+                + dato(tipo(tipo)) + " y un arreglo es lo unico que lleva índice", ctx);
+    }
+
+    public static CompilationError dimensionesDeIndice(String nombre, int indices,
+                                                        int declaradas,
+                                                        ParserRuleContext ctx) {
+        return en("El acceso " + dato(nombre) + " usa " + dato(String.valueOf(indices))
+                + " índice" + (indices == 1 ? "" : "s")
+                + " pero el arreglo tiene " + dato(String.valueOf(declaradas))
+                + " dimensión" + (declaradas == 1 ? "" : "es"), ctx);
+    }
+
+    public static CompilationError formaDelInicializador(String nombre, int declaradas,
+                                                         int encontradas,
+                                                         ParserRuleContext ctx) {
+        return en("La forma no coincide con la declaración de " + dato(nombre) + ": se declararon "
+                + dato(String.valueOf(declaradas)) + " dimensión"
+                + (declaradas == 1 ? "" : "es") + " pero el inicializador tiene "
+                + dato(String.valueOf(encontradas)), ctx);
+    }
+
+    public static CompilationError filasDesiguales(String nombre, int fila, int esperadas,
+                                                   int encontradas,
+                                                   ParserRuleContext ctx) {
+        return en("La fila " + dato(String.valueOf(fila)) + " de " + dato(nombre) + " tiene "
+                + dato(String.valueOf(encontradas)) + " elemento"
+                + (encontradas == 1 ? "" : "s") + " y se declararon "
+                + dato(String.valueOf(esperadas)), ctx);
+    }
+
+    public static CompilationError elementoIncompatible(String nombre, Type esperado,
+                                                         Type obtenido,
+                                                         ParserRuleContext ctx) {
+        return en("Elemento de " + dato(nombre) + " de tipo " + dato(tipo(esperado))
+                + ": no se puede guardar un valor de tipo " + dato(tipo(obtenido)), ctx);
+    }
+
+    public static CompilationError indiceFueraDeRango(String nombre, int indice, int limite,
+                                                      ParserRuleContext ctx) {
+        return en("Índice fuera de rango: " + dato(nombre) + "[" + dato(String.valueOf(indice))
+                + "] y la dimensión va de 0 a " + dato(String.valueOf(limite - 1)), ctx);
+    }
+
+    public static CompilationError arregloSinTamano(String nombre,
+                                                    ParserRuleContext ctx) {
+        return en("No se puede reservar memoria para " + dato(nombre)
+                + ": su tamaño no se conoce. Decláralo con el tamaño"
+                + " (por ejemplo [3][2]) o inicialízalo con valores", ctx);
+    }
 }

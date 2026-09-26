@@ -13,7 +13,7 @@ public class PruebaEntradaTexto {
     public static void main(String[] args) throws Exception {
         testLang("pig", "src/test/resources/piglatin.pig");
         testLang("y", "src/test/resources/y.y");
-        testLang("zet", "src/test/resources/zetariano.z");
+        testLang("zet", "src/test/resources/Contador.z");
     }
 
     private static void testLang(String lang, String path) throws Exception {

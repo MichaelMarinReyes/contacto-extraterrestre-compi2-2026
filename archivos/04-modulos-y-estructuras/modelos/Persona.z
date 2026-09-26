@@ -1,0 +1,26 @@
+// Clase de Zetariano que main.pig usa como tipo de estructura.
+// Sus metodos se pueden llamar desde el archivo que la importa.
+
+public class Persona {
+    String nombre;
+    int edad;
+    String ciudad;
+
+    public Persona(String nombre, int edad, String ciudad) {
+        this.nombre = nombre;
+        this.edad = edad;
+        this.ciudad = ciudad;
+    }
+
+    public void saludar() {
+        println("Hola, soy " + nombre);
+    }
+
+    public int calcularAnioNacimiento(int anioActual) {
+        return anioActual - edad;
+    }
+
+    public boolean esMayorDeEdad() {
+        return edad >= 18;
+    }
+}

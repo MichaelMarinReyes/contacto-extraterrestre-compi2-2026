@@ -5,11 +5,12 @@ import java.util.List;
 
 public class TripletGenerator {
     private int tempCounter = 0;
-    private int labelCounter = 0;
+    /** Las etiquetas se numeran desde 1, como en el ejemplo del docente. */
+    private int labelCounter = 1;
     private final List<Triplet> triplets = new ArrayList<>();
 
     public String newTemp(){ return "t"+(tempCounter++); }
-    public String newLabel(){ return "L"+(labelCounter++); }
+    public String newLabel(){ return "et"+(labelCounter++); }
 
     public void emit(QuadrupleOp op, String arg1, String arg2){
         emit(op, arg1, arg2, null);
@@ -24,7 +25,7 @@ public class TripletGenerator {
     public void emitAssign(String target, String source){ triplets.add(new Triplet(QuadrupleOp.ASSIGN, source, target)); }
 
     public List<Triplet> getTriplets(){ return triplets; }
-    public void clear(){ triplets.clear(); tempCounter=0; labelCounter=0; }
+    public void clear(){ triplets.clear(); tempCounter=0; labelCounter=1; }
 
     public String toString(){
         StringBuilder sb=new StringBuilder();

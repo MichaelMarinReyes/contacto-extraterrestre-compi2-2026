@@ -55,7 +55,7 @@ public class Quadruple {
             case IF_TRUE:
                 return "if (" + arg1 + ") goto " + result + ";";
             case IF_FALSE:
-                return "if_false (" + arg1 + ") goto " + result + ";";
+                return "if (!(" + arg1 + ")) goto " + result + ";";
             case IF_EQ:
             case IF_NE:
             case IF_LT:
@@ -75,6 +75,8 @@ public class Quadruple {
                 return result + " = " + arg1 + " " + op.getSymbol() + " " + arg2 + ";";
             case NOT:
                 return result + " = !" + arg1 + ";";
+            case NEG:
+                return result + " = -" + arg1 + ";";
             case CALL:
                 return (result != null ? result + " = " : "") + "call " + arg1 + (arg2 != null ? ", " + arg2 : "") + ";";
             case PARAM:

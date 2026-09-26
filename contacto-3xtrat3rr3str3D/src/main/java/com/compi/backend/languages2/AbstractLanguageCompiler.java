@@ -3,6 +3,8 @@ package com.compi.backend.languages2;
 import com.compi.backend.errors.CompilationError;
 import com.compi.backend.errors.Diagnostico;
 import com.compi.backend.errors.ErrorType;
+import com.compi.backend.symbols.Symbol;
+import com.compi.backend.symbols.SymbolTable;
 import java.io.File;
 import java.util.List;
 import org.antlr.v4.runtime.BaseErrorListener;
@@ -107,6 +109,27 @@ public abstract class AbstractLanguageCompiler implements LanguageCompiler {
     /** Traduce una excepcion inesperada en error semantico, sin posicion. */
     protected CompilationError internalError(String language, Exception e) {
         return internalError(language, e, null);
+    }
+
+    /**
+     * Anota el lenguaje de origen de los simbolos que acaba de anadir una visita
+     * semantica.
+     *
+     * <p>Se hace aqui, y no en la fachada que compila el proyecto, porque los
+     * archivos de un mismo programa son de los tres lenguajes: si el que se
+     * compilara fuera el unico que pusiera el nombre, todos los simbolos de la
+     * tabla saldrian con el lenguaje del {@code main.pig} y los de Y y Zetariano
+     * aparecerian como PigLatin.</p>
+     *
+     * @param symbolTable tabla compartida del proyecto
+     * @param antes       cuantos simbolos habia antes de la visita
+     * @param lenguaje    nombre legible del lenguaje que se esta analizando
+     */
+    protected void marcarLenguaje(SymbolTable symbolTable, int antes, String lenguaje) {
+        List<Symbol> simbolos = symbolTable.getAllSymbols();
+        for (int i = Math.max(0, antes); i < simbolos.size(); i++) {
+            simbolos.get(i).inLanguage(lenguaje);
+        }
     }
 
     /**

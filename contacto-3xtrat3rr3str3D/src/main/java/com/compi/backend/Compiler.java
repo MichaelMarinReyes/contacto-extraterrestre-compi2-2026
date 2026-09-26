@@ -42,6 +42,14 @@ public class Compiler {
     private String language = "pig";
     private Mode cMode = Mode.QUADRUPLES;
 
+    /**
+     * Nombre del archivo que se esta compilando, con su extension.
+     *
+     * <p>Lo usan los lenguajes cuya gramatica depende de el; hoy solo Zetariano,
+     * que exige que el archivo se llame como la clase que declara.</p>
+     */
+    private String sourceFileName;
+
     private final SymbolTable symbolTable = new SymbolTable();
     private final Stack processStack = new Stack();
     private final List<CompilationError> errors = new ArrayList<>();
@@ -94,7 +102,23 @@ public class Compiler {
      * @return true si no se registraron errores
      */
     public boolean compile(String source, String language) {
+        return compile(source, language, null);
+    }
+
+    /**
+     * Compila el texto fuente indicando de que archivo viene.
+     *
+     * <p>El nombre solo lo necesita Zetariano, que exige que el archivo se llame
+     * como la clase que declara; los demas lenguajes lo ignoran.</p>
+     *
+     * @param source   texto completo del archivo
+     * @param language pig, y o zet (tambien acepta el nombre del archivo)
+     * @param fileName nombre del archivo con su extension, o null si se desconoce
+     * @return true si no se registraron errores
+     */
+    public boolean compile(String source, String language, String fileName) {
         this.source = source == null ? "" : source;
+        this.sourceFileName = fileName;
         reset();
 
         LanguageCompiler compiler = LanguageCompilerFactory.getCompiler(language);
@@ -106,6 +130,7 @@ public class Compiler {
         }
         this.language = compiler.id();
         compiler.setWorkingDirectory(workingDirectory);
+        compiler.setSourceFileName(fileName);
         importedFiles = List.of();
 
         try {
@@ -195,25 +220,11 @@ public class Compiler {
                     "Error interno de compilación: " + msg, -1, -1));
         }
 
-        // Cada simbolo se anota con el lenguaje en el que se declaro. Se hace
-        // aqui, en la fachada, y no en cada visitor: los tres visitantes no
-        // tienen por que saber como se llama su lenguaje.
-        tagSymbolsLanguage(compiler.displayName());
-
+        // El lenguaje de cada simbolo lo pone el propio visitor del lenguaje que
+        // lo declaro (ver AbstractLanguageCompiler.marcarLenguaje). Anotarlo aqui
+        // todo con el nombre del archivo que se esta compilando es lo que hacia que
+        // los simbolos de Y y de Zetariano salieran en la tabla como PigLatin.
         return errors.isEmpty();
-    }
-
-    /**
-     * Anota el lenguaje de origen de todos los simbolos de la tabla.
-     *
-     * <p>Se usa el nombre legible ({@code PigLatin}) y no el identificador
-     * interno ({@code pig}) porque esto sale tal cual en la tabla de simbolos de
-     * la interfaz.</p>
-     */
-    private void tagSymbolsLanguage(String languageName) {
-        for (Symbol s : symbolTable.getAllSymbols()) {
-            s.inLanguage(languageName);
-        }
     }
 
     /** Limpia todo el estado de una compilacion anterior. */
@@ -318,6 +329,7 @@ public class Compiler {
             case ADD, SUB, MUL, DIV, MOD, AND, OR ->
                     res + " = " + a1 + " " + op.getSymbol() + " " + a2 + ";\n";
             case NOT -> res + " = !" + a1 + ";\n";
+            case NEG -> res + " = -(" + a1 + ");\n";
             case CALL -> a1 + "(" + a2 + ");\n";
             case PARAM -> "/* parametro */ " + a1 + ";\n";
             case RETURN -> a1.isEmpty() ? "return;\n" : "return " + a1 + ";\n";

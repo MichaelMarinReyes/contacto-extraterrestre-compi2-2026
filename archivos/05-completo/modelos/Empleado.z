@@ -1,0 +1,49 @@
+// Clase de Zetariano que main.pig usa como estructura y como
+// arreglo de estructuras. Metodos que llaman a otros metodos.
+
+public class Empleado {
+    String nombre;
+    String cargo;
+    double salario;
+    boolean activo;
+
+    public Empleado(String nombre, String cargo, double salario, boolean activo) {
+        this.nombre = nombre;
+        this.cargo = cargo;
+        this.salario = salario;
+        this.activo = activo;
+    }
+
+    public void saludar() {
+        println("Hola, soy " + nombre + " y soy " + cargo);
+    }
+
+    public String estado() {
+        if (activo) {
+            return "activo";
+        } else {
+            return "inactivo";
+        }
+    }
+
+    public double aumento(double porcentaje) {
+        return salario * porcentaje;
+    }
+
+    public int compararSalario(Empleado otro) {
+        if (salario > otro.salario) {
+            return 1;
+        } else if (salario < otro.salario) {
+            return 0;
+        } else {
+            return 0;
+        }
+    }
+
+    public void resumen() {
+        print(nombre);
+        print(" esta ");
+        print(estado());
+        println("");
+    }
+}

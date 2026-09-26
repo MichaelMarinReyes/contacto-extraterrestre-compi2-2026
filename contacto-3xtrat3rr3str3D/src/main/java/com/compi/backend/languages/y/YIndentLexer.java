@@ -3,17 +3,29 @@ package com.compi.backend.languages.y;
 import com.compi.YLexer;
 import org.antlr.v4.runtime.CharStream;
 import org.antlr.v4.runtime.CommonToken;
+import org.antlr.v4.runtime.IntStream;
 import org.antlr.v4.runtime.Token;
 
 import java.util.LinkedList;
 import java.util.Queue;
 import java.util.Stack;
 
+/**
+ * Lexer de Y que convierte la sangria del codigo en tokens INDENT y DEDENT.
+ *
+ * Solo las lineas que realmente contienen codigo deciden la sangria:
+ *  - una linea en blanco, o que solo tiene un comentario, no abre ni cierra
+ *    bloques (su tabulacion es irrelevante);
+ *  - dentro de parentesis, corchetes o llaves la sangria tambien es
+ *    irrelevante, asi que alli no se generan INDENT ni DEDENT. Eso permite
+ *    escribir inicializadores de arreglos en varias lineas.
+ */
 public class YIndentLexer extends YLexer {
     private final Stack<Integer> indentStack = new Stack<>();
     private final Queue<Token> pendingTokens = new LinkedList<>();
     private boolean atStartOfLine = true;
     private Token lastToken = null;
+    private int nivelCorchetes = 0;
 
     public YIndentLexer(CharStream input) {
         super(input);
@@ -47,17 +59,20 @@ public class YIndentLexer extends YLexer {
         }
 
         if (token.getType() == YLexer.NUEVA_LINEA) {
-            String text = token.getText();
-            int spaces = calculateIndent(text);
+            // La sangria solo cuenta si la linea que empieza aqui tiene codigo
+            // y no estamos dentro de parentesis, corchetes o llaves.
+            if (nivelCorchetes == 0 && !lineaVaciaNiSoloComentario()) {
+                int spaces = calculateIndent(token.getText());
 
-            int currentIndent = indentStack.peek();
-            if (spaces > currentIndent) {
-                indentStack.push(spaces);
-                pendingTokens.add(createToken(com.compi.YParser.INDENT, ""));
-            } else if (spaces < currentIndent) {
-                while (!indentStack.isEmpty() && indentStack.peek() > spaces) {
-                    indentStack.pop();
-                    pendingTokens.add(createToken(com.compi.YParser.DEDENT, ""));
+                int currentIndent = indentStack.peek();
+                if (spaces > currentIndent) {
+                    indentStack.push(spaces);
+                    pendingTokens.add(createToken(com.compi.YParser.INDENT, ""));
+                } else if (spaces < currentIndent) {
+                    while (!indentStack.isEmpty() && indentStack.peek() > spaces) {
+                        indentStack.pop();
+                        pendingTokens.add(createToken(com.compi.YParser.DEDENT, ""));
+                    }
                 }
             }
 
@@ -66,8 +81,34 @@ public class YIndentLexer extends YLexer {
             return token;
         }
 
+        if (token.getType() == YLexer.LLAVE_IZQ || token.getType() == YLexer.CORCHETE_IZQ
+                || token.getType() == YLexer.PARENTESIS_IZQ) {
+            nivelCorchetes++;
+        } else if (token.getType() == YLexer.LLAVE_DER || token.getType() == YLexer.CORCHETE_DER
+                || token.getType() == YLexer.PARENTESIS_DER) {
+            if (nivelCorchetes > 0) {
+                nivelCorchetes--;
+            }
+        }
+
         lastToken = token;
         return token;
+    }
+
+    /**
+     * La linea que empieza despues del salto de linea actual esta vacia o
+     * contiene nada mas que un comentario? En ese caso su sangria no cuenta.
+     */
+    private boolean lineaVaciaNiSoloComentario() {
+        int primero = getInputStream().LA(1);
+        if (primero == '\n' || primero == '\r' || primero == IntStream.EOF) {
+            return true;
+        }
+        if (primero == '/') {
+            int segundo = getInputStream().LA(2);
+            return segundo == '/' || segundo == '*';
+        }
+        return false;
     }
 
     private int calculateIndent(String text) {

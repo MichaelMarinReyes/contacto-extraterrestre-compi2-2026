@@ -132,4 +132,13 @@ public interface LanguageCompiler {
      */
     default void setWorkingDirectory(java.io.File directory) {
     }
+
+    /**
+     * Nombre del archivo que se esta compilando, con su extension.
+     *
+     * <p>Lo necesita Zetariano, que exige que el archivo se llame como la clase
+     * que declara dentro. Los demas lenguajes lo ignoran.</p>
+     */
+    default void setSourceFileName(String fileName) {
+    }
 }

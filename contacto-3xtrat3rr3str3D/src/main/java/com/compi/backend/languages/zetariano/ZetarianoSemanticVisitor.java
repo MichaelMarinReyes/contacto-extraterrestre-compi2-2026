@@ -6,6 +6,7 @@ import com.compi.backend.errors.CompilationError;
 import com.compi.backend.errors.Diagnostico;
 import com.compi.backend.symbols.*;
 import org.antlr.v4.runtime.ParserRuleContext;
+import org.antlr.v4.runtime.tree.ParseTree;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -39,7 +40,12 @@ public class ZetarianoSemanticVisitor extends ZetarianoBaseVisitor<Type> {
             if (mc.atributoDef() != null) {
                 ZetarianoParser.AtributoDefContext attrCtx = mc.atributoDef();
                 String attrName = attrCtx.ID().getText();
-                Type attrType = resolveType(attrCtx.tipoDato().getText());
+                // Un par de corchetes por dimension, y sin tamano: lo daria el
+                // inicializador, si lo hay.
+                Type attrType = attrCtx.LBRACK().isEmpty()
+                        ? resolveType(attrCtx.tipoDato().getText())
+                        : Type.arrayOf(resolveType(attrCtx.tipoDato().getText()),
+                                new int[attrCtx.LBRACK().size()]);
                 Symbol attrSym = new Symbol(attrName, attrType, SymbolCategory.FIELD,
                         fieldOffset++, false).at(attrCtx);
                 currentClass.addMember(attrSym);
@@ -131,8 +137,42 @@ public class ZetarianoSemanticVisitor extends ZetarianoBaseVisitor<Type> {
     @Override
     public Type visitDeclaracionVariable(ZetarianoParser.DeclaracionVariableContext ctx) {
         String typeStr = ctx.tipoDato().getText();
-        Type varType = resolveType(typeStr);
         String varName = ctx.ID().getText();
+
+        // Un par de corchetes por dimension. En Zetariano el tamano no se escribe
+        // ("int[][] cubo"), asi que se deja sinTamano y lo deduce el
+        // inicializador; si no hay inicializador, se avisa de que no se puede
+        // reservar el arreglo.
+        int dimensiones = ctx.LBRACK().size();
+        Type varType = dimensiones == 0
+                ? resolveType(typeStr)
+                : Type.arrayOf(resolveType(typeStr), new int[dimensiones]);
+
+        Type initType = Type.UNKNOWN;
+        if (ctx.expresion() != null) {
+            if (ctx.expresion() instanceof ZetarianoParser.LiteralArregloExprContext arreglo) {
+                // Un arreglo con llaves: de su forma se deducen los tamanos.
+                initType = tipoDeLiteralArreglo(varName, arreglo.literalArreglo(), ctx);
+                varType = LiteralDeArreglo.completarTamanos(varType, initType);
+                if (varType.tieneTamanos()) {
+                    CompilationError error =
+                            LiteralDeArreglo.validar(varName, varType, initType, ctx);
+                    if (error != null) {
+                        errors.add(error);
+                    }
+                }
+            } else {
+                initType = visit(ctx.expresion());
+            }
+            if (esConocido(initType) && esConocido(varType) && !initType.isAssignableTo(varType)) {
+                errors.add(Diagnostico.inicializacionIncompatible(
+                        varName, varType, initType, ctx));
+            }
+        }
+
+        if (dimensiones > 0 && !varType.tieneTamanos()) {
+            errors.add(Diagnostico.arregloSinTamano(varName, ctx));
+        }
 
         int offset = symbolTable.getCurrentScope().allocateOffset(1);
         Symbol varSym = new Symbol(varName, varType, SymbolCategory.VARIABLE, offset, false).at(ctx);
@@ -141,16 +181,79 @@ public class ZetarianoSemanticVisitor extends ZetarianoBaseVisitor<Type> {
             errors.add(Diagnostico.variableYaDeclarada(varName, ctx));
         }
 
-        if (ctx.expresion() != null) {
-            Type initType = visit(ctx.expresion());
-            if (esConocido(initType) && esConocido(varType)
-                    && !initType.isAssignableTo(varType)) {
-                errors.add(Diagnostico.inicializacionIncompatible(
-                        varName, varType, initType, ctx));
+        return varType;
+    }
+
+    /**
+     * Tipo de un literal de arreglo, deducido de las llaves que lo envuelven.
+     *
+     * <p>Es recursivo porque las matrices se inicializan anidando llaves: una
+     * lista de valores es una dimension, y cada nivel de llaves anidadas es una
+     * dimension mas. Todas las filas tienen que tener la misma forma, asi que se
+     * toma la primera y se compara el resto con ella.</p>
+     */
+    private Type tipoDeLiteralArreglo(String nombre, ZetarianoParser.LiteralArregloContext ctx,
+                                      ParserRuleContext donde) {
+        // Los valores de una lista pueden ser terminos o listas mas profundas, y se
+        // alternan: "expresion" y "literalArreglo" son dos listas distintas, asi
+        // que unirlas perderia el orden. Se recorre el arbol en el orden en que
+        // esta escrito, que es el orden de las filas.
+        //
+        // Ojo: una lista de llaves tambien es una "expresion", porque es una
+        // alternativa de esa regla, asi que hay que mirar primero la lista
+        // anidada o se leeria como un valor suelto.
+        List<ParseTree> elementos = new ArrayList<>();
+        for (int i = 0; i < ctx.getChildCount(); i++) {
+            ParseTree hijo = ctx.getChild(i);
+            if (hijo instanceof ZetarianoParser.ExpresionContext) {
+                elementos.add(hijo);
             }
         }
 
-        return varType;
+        int filas = elementos.size();
+        Type tipoFila = Type.UNKNOWN;
+        int[] formaFila = new int[0];
+        for (int f = 0; f < filas; f++) {
+            Type tipo = tipoDeValor(nombre, elementos.get(f), donde);
+            if (tipo == null) {
+                tipo = Type.UNKNOWN;
+            }
+            // Un valor que no es un arreglo no aporta ninguna dimension mas: la
+            // lista de {1, 2, 3} es de una sola dimension.
+            int[] forma = tipo.isArray() ? tipo.getSizes() : new int[0];
+            if (f == 0) {
+                tipoFila = tipo.isArray() ? tipo.getElementType() : tipo;
+                formaFila = forma;
+            } else if (!java.util.Arrays.equals(forma, formaFila)) {
+                errors.add(Diagnostico.filasDesiguales(nombre, f + 1,
+                        anchoDe(formaFila), anchoDe(forma), donde));
+            }
+        }
+        int[] sizes = new int[formaFila.length + 1];
+        sizes[0] = filas;
+        System.arraycopy(formaFila, 0, sizes, 1, formaFila.length);
+        return Type.arrayOf(tipoFila, sizes);
+    }
+
+    /**
+     * Tipo de un valor dentro de una lista: un termino, o otra lista de llaves.
+     *
+     * <p>Una lista anidada llega como una "expresion" mas (es una alternativa de
+     * esa regla), y hay que desenrollarla para poder medirla.</p>
+     */
+    private Type tipoDeValor(String nombre, ParseTree valor, ParserRuleContext donde) {
+        if (valor instanceof ZetarianoParser.LiteralArregloExprContext anidada) {
+            return tipoDeLiteralArreglo(nombre, anidada.literalArreglo(), donde);
+        }
+        if (valor instanceof ZetarianoParser.LiteralArregloContext directa) {
+            return tipoDeLiteralArreglo(nombre, directa, donde);
+        }
+        return visit((ZetarianoParser.ExpresionContext) valor);
+    }
+
+    /** Cuantos elementos se ven en la primera dimension de una fila. */
+    private static int anchoDe(int[] forma) {
+        return forma.length > 0 ? forma[0] : 1;
     }
 
     @Override
@@ -246,6 +349,17 @@ public class ZetarianoSemanticVisitor extends ZetarianoBaseVisitor<Type> {
     }
 
     @Override
+    public Type visitNegExpr(ZetarianoParser.NegExprContext ctx) {
+        // El menos unario no cambia el tipo de lo que se le aplica.
+        Type t = visit(ctx.expresion());
+        if (esConocido(t) && !t.isNumeric()) {
+            errors.add(Diagnostico.operadorMenosNoNumerico(ctx));
+            return Type.UNKNOWN;
+        }
+        return esConocido(t) ? t : Type.UNKNOWN;
+    }
+
+    @Override
     public Type visitMulDivModExpr(ZetarianoParser.MulDivModExprContext ctx) {
         Type t1 = visit(ctx.expresion(0));
         Type t2 = visit(ctx.expresion(1));
@@ -304,6 +418,20 @@ public class ZetarianoSemanticVisitor extends ZetarianoBaseVisitor<Type> {
         }
 
         Type current = base.getType();
+        if (current == null) {
+            return Type.UNKNOWN;
+        }
+
+        int indices = contarIndices(ctx);
+        if (indices > 0 && !tienePuntos(ctx) && current.isArray()
+                && indices > current.getDimensions()) {
+            errors.add(Diagnostico.dimensionesDeIndice(baseName, indices,
+                    current.getDimensions(), ctx));
+            return Type.UNKNOWN;
+        }
+
+        // Se recorre en orden: cada punto baja al miembro indicado y cada
+        // corchete quita una dimension del arreglo.
         for (ZetarianoParser.MiembroAccesoContext mac : ctx.miembroAcceso()) {
             if (mac.DOT() != null) {
                 String memberName = mac.ID().getText();
@@ -312,13 +440,66 @@ public class ZetarianoSemanticVisitor extends ZetarianoBaseVisitor<Type> {
                     if (cls != null) {
                         Symbol member = cls.getMember(memberName);
                         if (member != null) {
+                            // Un miembro empieza su propia cuenta de dimensiones.
                             current = member.getType();
                         }
                     }
                 }
+            } else {
+                for (ZetarianoParser.ExpresionContext indice : mac.expresion()) {
+                    visit(indice);
+                    if (!current.isArray()) {
+                        errors.add(Diagnostico.noEsArreglo(baseName, current, ctx));
+                        return Type.UNKNOWN;
+                    }
+                    comprobarIndice(indice, current, baseName);
+                    current = current.desindexar(1);
+                }
             }
         }
         return current;
+    }
+
+    /** Cuantos corchetes lleva la cadena de acceso. */
+    private static int contarIndices(ZetarianoParser.AccesoMiembroContext ctx) {
+        int indices = 0;
+        for (ZetarianoParser.MiembroAccesoContext mac : ctx.miembroAcceso()) {
+            if (mac.DOT() == null) {
+                indices += mac.expresion().size();
+            }
+        }
+        return indices;
+    }
+
+    /** true si la cadena baja a algun miembro, en cuyo caso los indices pueden
+     *  ser de arreglos distintos y no se pueden contar juntos. */
+    private static boolean tienePuntos(ZetarianoParser.AccesoMiembroContext ctx) {
+        for (ZetarianoParser.MiembroAccesoContext mac : ctx.miembroAcceso()) {
+            if (mac.DOT() != null) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Avisa si el indice se sale del arreglo.
+     *
+     * <p>Solo se comprueba cuando el indice es un numero escrito en el fuente;
+     * con una variable el valor no se conoce al compilar.</p>
+     */
+    private void comprobarIndice(ZetarianoParser.ExpresionContext indice, Type arreglo,
+                                 String nombre) {
+        // Solo se puede comprobar si el indice es un numero escrito en el fuente.
+        String texto = indice.getText();
+        if (!texto.matches("\\d+")) {
+            return;
+        }
+        int[] sizes = arreglo.getSizes();
+        int valor = Integer.parseInt(texto);
+        if (sizes.length > 0 && sizes[0] > 0 && valor >= sizes[0]) {
+            errors.add(Diagnostico.indiceFueraDeRango(nombre, valor, sizes[0], indice));
+        }
     }
 
     /**
@@ -339,11 +520,8 @@ public class ZetarianoSemanticVisitor extends ZetarianoBaseVisitor<Type> {
         }
     }
 
-    private Type resolveType(String text) {        if (text == null) return Type.UNKNOWN;
-        if (text.endsWith("[]")) {
-            String base = text.substring(0, text.length() - 2);
-            return Type.array(resolveType(base), 1);
-        }
+    private Type resolveType(String text) {
+        if (text == null) return Type.UNKNOWN;
         switch (text) {
             case "int": return Type.INT;
             case "double": return Type.DOUBLE;

@@ -1,0 +1,50 @@
+// Por el enunciado, el nombre del archivo .z tiene que ser el de la clase.
+
+public class Estadisticas {
+    int[] datos;
+    double precioBase;
+
+    public Estadisticas() {
+        datos = {4, 8, 15, 16};
+        precioBase = 100.0;
+    }
+
+    public void cargar(int posicion, int valor) {
+        datos[posicion] = valor;
+    }
+
+    public int suma(int largo) {
+        int i;
+        int total;
+        total = 0;
+        for (i = 0; i < largo; i++) {
+            total = total + datos[i];
+        }
+        return total;
+    }
+
+    public int promedioEntero(int largo) {
+        return suma(largo) / largo;
+    }
+
+    public double precioMedio() {
+        return precioBase * 1.15;
+    }
+
+    public String resumen(int largo) {
+        if (largo == 0) {
+            return "sin datos";
+        } else {
+            return "con datos";
+        }
+    }
+
+    public void mostrar(int largo) {
+        int i;
+        for (i = 0; i < largo; i++) {
+            print(datos[i]);
+            print(" ");
+        }
+        println(resumen(largo));
+    }
+}

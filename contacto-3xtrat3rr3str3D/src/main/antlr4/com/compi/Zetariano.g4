@@ -9,7 +9,9 @@ miembroClase: atributoDef
                 | metodoDef
                 ;
 
-atributoDef: tipoDato ID (ASSIGN expresion)? SEMICOLON;
+atributoDef: tipoDato ID (LBRACK RBRACK)* (ASSIGN expresion)? SEMICOLON
+           | tipoDato LBRACK RBRACK (LBRACK RBRACK)* ID (ASSIGN expresion)? SEMICOLON
+           ;
 
 constructorDef: PUBLIC? ID LPAREN parametros? RPAREN bloque;
 
@@ -84,10 +86,11 @@ expresion: expresion TernaryOp expresion COLON expresion # TernaryExpr
          | expresion AND expresion # AndExpr
          | expresion OR expresion # OrExpr
          | NOT expresion # NotExpr
+         | MINUS expresion # NegExpr
          | INCREMENTO_PRE=(INCREMENT | DECREMENT) (ID | accesoMiembro) # PreIncDecExpr
          | NEW ID LPAREN argumentos? RPAREN # NewObjectExpr
          | NEW tipoDato LBRACK expresion RBRACK (LBRACK expresion RBRACK)* # NewArrayExpr
-         | LBRACE expresion (COMMA expresion)* RBRACE # ArrayLiteralExpr
+         | literalArreglo # LiteralArregloExpr
          | NULL # NullExpr
          | ID # IdExpr
          | accesoMiembro # MemberAccessExpr
@@ -100,6 +103,9 @@ expresion: expresion TernaryOp expresion COLON expresion # TernaryExpr
          | LPAREN expresion RPAREN # ParenExpr
          | llamadaFuncionSemilla # FunctionCallExpr
          ;
+
+literalArreglo: LBRACE (expresion | literalArreglo)
+                      (COMMA (expresion | literalArreglo))* RBRACE;
 
 accesoMiembro: ID miembroAcceso+;
 
@@ -114,7 +120,6 @@ tipoDato: INT_TYPE
         | STRING_TYPE
         | VOID
         | ID
-        | tipoDato LBRACK RBRACK
         ;
 
 // LEXER

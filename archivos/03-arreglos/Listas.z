@@ -1,0 +1,36 @@
+public class Listas {
+    int[] numeros;
+    int[][] matriz;
+    int[] copia;
+
+    public Listas() {
+        numeros = {1, 2, 3, 4};
+        matriz = {{1, 2}, {3, 4}};
+        copia = {9, 8, 7, 6};
+    }
+
+    public int primero() {
+        return numeros[0];
+    }
+
+    public int mayor(int largo) {
+        int i;
+        int mejor;
+        mejor = copia[0];
+        for (i = 1; i < largo; i++) {
+            if (copia[i] > mejor) {
+                mejor = copia[i];
+            }
+        }
+        return mejor;
+    }
+
+    public void imprimirTodo(int largo) {
+        int i;
+        for (i = 0; i < largo; i++) {
+            print(numeros[i]);
+            print(" ");
+        }
+        println("");
+    }
+}

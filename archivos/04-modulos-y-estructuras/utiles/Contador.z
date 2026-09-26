@@ -1,0 +1,23 @@
+// Por el enunciado, el nombre del archivo .z tiene que ser el de la clase.
+
+public class Contador {
+    int valor;
+    int limite;
+
+    public Contador(int limite) {
+        this.limite = limite;
+        this.valor = 0;
+    }
+
+    public void avanzar(int paso) {
+        valor = valor + paso;
+        if (valor > limite) {
+            println("Se paso del limite");
+        }
+    }
+
+    public int reiniciar() {
+        valor = 0;
+        return valor;
+    }
+}

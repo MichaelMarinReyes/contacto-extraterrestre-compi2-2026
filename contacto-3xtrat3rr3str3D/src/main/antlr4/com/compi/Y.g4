@@ -5,29 +5,14 @@ tokens {
     DEDENT
 }
 
-@lexer::members {
-    private java.util.Stack<Integer> indents = new java.util.Stack<Integer>() {{
-        push(0);
-    }};
-    private int dedentsCount = 0;
-    private java.util.Queue<Token> tokenQueue = new java.util.LinkedList<>();
-
-    @Override
-    public Token nextToken() {
-        if (!tokenQueue.isEmpty()) {
-            return tokenQueue.poll();
-        }
-        Token next = super.nextToken();
-        return next;
-    }
-}
-
 // GRAMÁTICA
 init: archivo EOF;
 
-archivo: estructuras_seccion? funciones_seccion;
+archivo: estructuras_seccion saltos? funciones_seccion
+       | funciones_seccion
+       ;
 
-estructuras_seccion: ESTRUCTURAS_SEC NUEVA_LINEA* estructura_def+;
+estructuras_seccion: ESTRUCTURAS_SEC NUEVA_LINEA* estructura_def (saltos estructura_def)*;
 
 estructura_def: ESTRUCTURA ID DOS_PUNTOS NUEVA_LINEA INDENT campo_struct+ DEDENT
               | ESTRUCTURA ID DOS_PUNTOS campo_struct*
@@ -36,12 +21,12 @@ estructura_def: ESTRUCTURA ID DOS_PUNTOS NUEVA_LINEA INDENT campo_struct+ DEDENT
 
 estructura_anidada_o_variable: ID ID;
 
-campo_struct: tipo_dato ID (CORCHETE_IZQ NUMERO_ENTERO CORCHETE_DER)* NUEVA_LINEA?
-            | ID ID (CORCHETE_IZQ NUMERO_ENTERO CORCHETE_DER)* NUEVA_LINEA?
-            | estructura_anidada_o_variable NUEVA_LINEA?
+campo_struct: tipo_dato ID (CORCHETE_IZQ NUMERO_ENTERO CORCHETE_DER)* saltos
+            | ID ID (CORCHETE_IZQ NUMERO_ENTERO CORCHETE_DER)* saltos
+            | estructura_anidada_o_variable saltos
             ;
 
-funciones_seccion: FUNCIONES_SEC NUEVA_LINEA* funcion_def+;
+funciones_seccion: FUNCIONES_SEC NUEVA_LINEA* funcion_def (saltos funcion_def)*;
 
 funcion_def: DEFINIR ID PARENTESIS_IZQ parametros? PARENTESIS_DER (FLECHA tipo_dato)? DOS_PUNTOS bloque;
 
@@ -81,45 +66,55 @@ declaracion_variable: tipo_dato ID (CORCHETE_IZQ NUMERO_ENTERO CORCHETE_DER)* (A
                     | BOOL_TIPO
                     ;
 
-expresion_inicializacion: expresion
-                        | LLAVE_IZQ elemento_lista (COMA elemento_lista)* LLAVE_DER
+expresion_inicializacion: LLAVE_IZQ saltos elemento_lista (COMA saltos elemento_lista)* saltos LLAVE_DER
+                        | expresion
                         ;
 
-elemento_lista: expresion | LLAVE_IZQ elemento_lista (COMA elemento_lista)* LLAVE_DER;
+elemento_lista: LLAVE_IZQ saltos elemento_lista (COMA saltos elemento_lista)* saltos LLAVE_DER
+              | expresion;
 
 asignacion: acceso_miembro ASIGNACION expresion
           | ID ASIGNACION expresion
-          | ID CORCHETE_IZQ expresion CORCHETE_DER ASIGNACION expresion
+          | ID (CORCHETE_IZQ expresion CORCHETE_DER)+ ASIGNACION expresion
           ;
 
-// CORREGIDO: Soporta tanto arreglos puros (misNumeros[i]) como llamadas a miembros (p1.promedio)
 acceso_miembro: ID (CORCHETE_IZQ expresion CORCHETE_DER)* (PUNTO ID (CORCHETE_IZQ expresion CORCHETE_DER)*)+
               | ID (CORCHETE_IZQ expresion CORCHETE_DER)+
               ;
 
-si_sentencia: SI PARENTESIS_IZQ condicion PARENTESIS_DER ENTONCES bloque (sino_si_bloque)* (sino_bloque)? (contrario_bloque)?;
+si_sentencia: SI PARENTESIS_IZQ condicion PARENTESIS_DER (ENTONCES)? DOS_PUNTOS? bloque
+              (saltos sino_si_bloque)*
+              (saltos sino_bloque)?
+              (saltos contrario_bloque)?
+              ;
 
-sino_si_bloque: SINO PARENTESIS_IZQ condicion PARENTESIS_DER ENTONCES bloque;
+sino_si_bloque: SINO PARENTESIS_IZQ condicion PARENTESIS_DER (ENTONCES)? DOS_PUNTOS? bloque;
 
-sino_bloque: SINO PARENTESIS_IZQ condicion PARENTESIS_DER ENTONCES bloque
-           | SINO ENTONCES bloque
+sino_bloque: SINO PARENTESIS_IZQ condicion PARENTESIS_DER (ENTONCES)? DOS_PUNTOS? bloque
+           | SINO (ENTONCES)? DOS_PUNTOS? bloque
            ;
 
-contrario_bloque: CONTRARIO bloque;
+contrario_bloque: CONTRARIO DOS_PUNTOS? bloque;
 
-elegir_sentencia: ELEGIR PARENTESIS_IZQ expresion PARENTESIS_DER LLAVE_IZQ NUEVA_LINEA* caso_bloque+ siempre_bloque? LLAVE_DER;
+saltos: NUEVA_LINEA*;
 
-caso_bloque: CASO expresion DOS_PUNTOS bloque_interno_opcional ROMPER PUNTO_COMA? NUEVA_LINEA*;
+elegir_sentencia: ELEGIR PARENTESIS_IZQ expresion PARENTESIS_DER (LLAVE_IZQ)? DOS_PUNTOS?
+                  (NUEVA_LINEA INDENT caso_bloque+ siempre_bloque? DEDENT
+                  | saltos caso_bloque+ siempre_bloque?)
+                  (LLAVE_DER)?
+                  ;
 
-siempre_bloque: SIEMPRE DOS_PUNTOS bloque_interno_opcional ROMPER PUNTO_COMA? NUEVA_LINEA*;
+caso_bloque: CASO expresion DOS_PUNTOS bloque_interno_opcional (ROMPER PUNTO_COMA?)? NUEVA_LINEA*;
+
+siempre_bloque: SIEMPRE DOS_PUNTOS bloque_interno_opcional (ROMPER PUNTO_COMA?)? NUEVA_LINEA*;
 
 bloque_interno_opcional: NUEVA_LINEA INDENT sentencia+ DEDENT | sentencia*;
 
-para_sentencia: PARA PARENTESIS_IZQ (declaracion_variable | asignacion) PUNTO_COMA condicion PUNTO_COMA incremento_decremento PARENTESIS_DER DOS_PUNTOS bloque;
+para_sentencia: PARA PARENTESIS_IZQ (declaracion_variable | asignacion) PUNTO_COMA condicion PUNTO_COMA incremento_decremento PARENTESIS_DER DOS_PUNTOS? bloque;
 
-mientras_sentencia: MIENTRAS PARENTESIS_IZQ condicion PARENTESIS_DER HACER bloque;
+mientras_sentencia: MIENTRAS PARENTESIS_IZQ condicion PARENTESIS_DER (HACER)? DOS_PUNTOS? bloque;
 
-hacer_mientras_sentencia: HACER DOS_PUNTOS bloque MIENTRAS PARENTESIS_IZQ condicion PARENTESIS_DER;
+hacer_mientras_sentencia: HACER DOS_PUNTOS? bloque saltos MIENTRAS PARENTESIS_IZQ condicion PARENTESIS_DER PUNTO_COMA?;
 
 retornar_sentencia: RETORNAR expresion?;
 
@@ -154,7 +149,8 @@ termino: ID
        | VERDADERO
        | FALSO
        | PARENTESIS_IZQ expresion PARENTESIS_DER
-       | LLAVE_IZQ elemento_lista (COMA elemento_lista)* LLAVE_DER
+       | LLAVE_IZQ saltos elemento_lista (COMA saltos elemento_lista)* saltos LLAVE_DER
+       | MENOS termino
        ;
 
 leer_funcion: LEER PARENTESIS_IZQ PARENTESIS_DER;

@@ -17,10 +17,13 @@ declaracion: ESTO VARIABLE DOS_PUNTOS? tipo_dato expresion PUNTO_COMA
            | ESTO VARIABLE DOS_PUNTOS? expresion PUNTO_COMA
            | arreglo_declaracion;
 
-arreglo_declaracion: SERIES VARIABLE CORCHETE_IZQ NUMERO_ENTERO CORCHETE_DER DOS_PUNTOS? tipo_dato (LLAVE_IZQ elemento_arreglo? LLAVE_DER)? PUNTO_COMA
-                   | SERIES VARIABLE CORCHETE_IZQ NUMERO_ENTERO CORCHETE_DER DOS_PUNTOS? VARIABLE (LLAVE_IZQ elemento_arreglo_struct? LLAVE_DER)? PUNTO_COMA;
+arreglo_declaracion: SERIES VARIABLE (CORCHETE_IZQ NUMERO_ENTERO CORCHETE_DER)+ DOS_PUNTOS? tipo_dato (LLAVE_IZQ elemento_arreglo? LLAVE_DER)? PUNTO_COMA
+                   | SERIES VARIABLE (CORCHETE_IZQ NUMERO_ENTERO CORCHETE_DER)+ DOS_PUNTOS? VARIABLE (LLAVE_IZQ elemento_arreglo_struct? LLAVE_DER)? PUNTO_COMA;
 
-elemento_arreglo: expresion (COMA expresion)*;
+elemento_arreglo: elemento_arreglo_valor (COMA elemento_arreglo_valor)*;
+
+elemento_arreglo_valor: expresion
+                      | LLAVE_IZQ elemento_arreglo? LLAVE_DER;
 
 elemento_arreglo_struct: structura_instanciacion (COMA structura_instanciacion)*;
 
@@ -49,7 +52,8 @@ termino: VARIABLE
        | VERUM
        | FALSUS
        | llamada_funcion
-       | NOVUS VARIABLE PARENTESIS_IZQ argumentos? PARENTESIS_DER;
+       | NOVUS VARIABLE PARENTESIS_IZQ argumentos? PARENTESIS_DER
+       | MENOS termino;
 
 acceso_miembro: VARIABLE (PUNTO VARIABLE | CORCHETE_IZQ expresion CORCHETE_DER)+;
 
@@ -120,7 +124,7 @@ primaria_logica
 
 operador_relacional: MAYOR_IGUAL | MENOR_IGUAL | IGUAL | NO_IGUAL | MENOR_QUE | MAYOR_QUE;
 
-llamada_funcion: VARIABLE PARENTESIS_IZQ argumentos? PARENTESIS_DER;
+llamada_funcion: (VARIABLE | acceso_miembro) PARENTESIS_IZQ argumentos? PARENTESIS_DER;
 
 argumentos: expresion (COMA expresion)*;
 

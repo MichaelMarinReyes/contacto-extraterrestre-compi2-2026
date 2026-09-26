@@ -7,10 +7,11 @@ public class IntermediateCodeManager {
     private final TripletGenerator tripletGen = new TripletGenerator();
     private final List<Quadruple> quadruples = new ArrayList<>();
     private int tempCounter = 0;
-    private int labelCounter = 0;
+    /** Las etiquetas se numeran desde 1, como en el ejemplo del docente. */
+    private int labelCounter = 1;
 
     public String newTemp(){ return "t"+(tempCounter++); }
-    public String newLabel(){ return "L"+(labelCounter++); }
+    public String newLabel(){ return "et"+(labelCounter++); }
 
     public void emitTriplet(QuadrupleOp op, String arg1, String arg2){
         tripletGen.emit(op, arg1, arg2);
@@ -58,7 +59,7 @@ public class IntermediateCodeManager {
         tripletGen.clear();
         quadruples.clear();
         tempCounter = 0;
-        labelCounter = 0;
+        labelCounter = 1;
     }
 
     public String getTripletsString(){

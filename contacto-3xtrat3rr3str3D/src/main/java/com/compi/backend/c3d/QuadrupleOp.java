@@ -7,6 +7,8 @@ public enum QuadrupleOp {
     MUL("*"),
     DIV("/"),
     MOD("%"),
+    /** Menos unario: resultado = -arg1, como en "t3 = -x". */
+    NEG("-"),
 
     // Lógica
     AND("&&"),

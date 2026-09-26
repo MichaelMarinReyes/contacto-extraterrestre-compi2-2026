@@ -80,6 +80,7 @@ public class StackSimulator {
 
             // Consume 1 y produce 1
             case NOT:
+            case NEG:
                 pop(1);
                 push(q.getResult());
                 break;

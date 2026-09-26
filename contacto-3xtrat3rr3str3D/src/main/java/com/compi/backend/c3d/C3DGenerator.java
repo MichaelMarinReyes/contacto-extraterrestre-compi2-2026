@@ -7,7 +7,8 @@ import java.util.Set;
 
 public class C3DGenerator {
     private int tempCounter = 0;
-    private int labelCounter = 0;
+    /** Las etiquetas se numeran desde 1, como en el ejemplo del docente. */
+    private int labelCounter = 1;
     private final List<Quadruple> quadruples = new ArrayList<>();
     private final Set<String> declaredTemps = new HashSet<>();
 
@@ -20,7 +21,7 @@ public class C3DGenerator {
     }
 
     public String newLabel() {
-        return "L" + (labelCounter++);
+        return "et" + (labelCounter++);
     }
 
     public void emit(Quadruple quad) {
@@ -55,7 +56,7 @@ public class C3DGenerator {
         quadruples.clear();
         declaredTemps.clear();
         tempCounter = 0;
-        labelCounter = 0;
+        labelCounter = 1;
     }
 
     public String toC3DString() {
