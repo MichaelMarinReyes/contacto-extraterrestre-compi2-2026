@@ -1,9 +1,4 @@
 @startuml
-top to bottom direction
-skinparam packageStyle rectangle
-skinparam classAttributeIconSize 0
-skinparam linetype ortho
-hide empty members
 
 package "Código fuente Java" {
   package "com.compi" {
@@ -4643,9 +4638,4 @@ T54 o-- T48
 T154 *-- T150
 T154 o-- T153
 T154 *-- T152
-
-note top of T216
-ANTLR genera Lexer, Parser, Listener, BaseListener, Visitor y BaseVisitor desde src/main/antlr4/com/compi/*.g4.
-Se recorren todos los .java bajo target/generated-sources/antlr4; actualmente están en com/compi y declaran package com.compi.
-end note
 @enduml
