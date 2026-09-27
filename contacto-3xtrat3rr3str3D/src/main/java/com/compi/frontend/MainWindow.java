@@ -4,12 +4,11 @@ import com.compi.backend.Compiler;
 import com.compi.backend.c3d.Mode;
 import com.compi.backend.errors.CompilationError;
 import com.compi.backend.errors.ErrorType;
-import com.compi.backend.languages2.LanguageCompilerFactory;
+import com.compi.backend.languages.LanguageCompilerFactory;
 import com.compi.backend.parser.ParseStep;
 import com.compi.backend.symbols.Symbol;
 import java.awt.BorderLayout;
 import java.awt.CardLayout;
-import java.awt.Color;
 import java.awt.Dimension;
 import java.awt.event.HierarchyEvent;
 import java.awt.event.ActionEvent;
@@ -34,40 +33,18 @@ import javax.swing.KeyStroke;
 import javax.swing.SwingUtilities;
 import javax.swing.filechooser.FileNameExtensionFilter;
 
-/**
- * Ventana principal con distribucion al estilo de IntelliJ IDEA.
- *
- * <pre>
- *  +-------------------------------------------------------------+
- *  |  Barra superior: acciones de archivo, vistas, compilar, C     |
- *  +-----------+---------------------------------+---------------+
- *  |  Proyecto |  Editor multi-pestana           |  Herramientas |
- *  |  (arbol)  +---------------------------------+  (AST,        |
- *  |           |  Consolas (tripletes, cuartetas, |  simbolos,    |
- *  |           |  C3D, C, resumen)               |  pila,        |
- *  |           +---------------------------------+  errores)     |
- *  +-----------+---------------------------------+---------------+
- *  |  Barra de estado                                            |
- *  +-------------------------------------------------------------+
- * </pre>
- *
- * Los metodos generados por NetBeans ({@code initComponents}) y los
- * manejadores de eventos se respetan tal cual; toda la logica nueva vive en
- * metodos adicionales.
- */
 public class MainWindow extends JFrame {
 
     private static final String navText = "Contacto 3xtrat3rr3str3D";
     private static final String CARD_TABS = "tabs";
     private static final String CARD_WELCOME = "welcome";
-    /** Nombre que se ofrece como carpeta contenedora cuando no hay proyecto. */
+
     private static final String DEFAULT_CONTAINER_NAME = "proyecto";
-    /** Ancho inicial en pixeles del arbol de archivos. */
+
     private static final int TREE_DEFAULT_WIDTH = 280;
-    /** A partir de cuantos ignorados el aviso se resume en vez de listarlos. */
+
     private static final int IGNORED_LIST_LIMIT = 12;
 
-    // ---------- Componentes nuevos ----------
     private TopToolbar topToolbar;
     private EditorTabs editorTabs;
     private ConsoleDock consoleDock;
@@ -79,7 +56,7 @@ public class MainWindow extends JFrame {
     private CardLayout editorCards;
     private JSplitPane rootSplit;
     private JSplitPane editorSplit;
-    /** true si el ancho inicial del arbol ya se fijo a mano. */
+
     private boolean treeDividerFixed = false;
     private final ParserTreePanel astPanel = new ParserTreePanel();
     private final SymbolTablePanel symbolPanel = new SymbolTablePanel();
@@ -94,42 +71,17 @@ public class MainWindow extends JFrame {
     private final Compiler compiler = new Compiler();
     private Mode currentCMode = Mode.QUADRUPLES;
 
-    /**
-     * Errores de la ultima compilacion, en el mismo orden que las filas de la
-     * tabla. Se guardan aparte porque la tabla guarda solo el texto de cada celda
-     * y al saltar a un error hace falta saber de que archivo era.
-     */
     private List<CompilationError> lastErrors = List.of();
 
-    /**
-     * Archivos de la ultima compilacion, para resolver el nombre de un error sin
-     * tener que volver a recorrer el disco cada vez que se salta a uno.
-     */
     private List<File> lastTargets = List.of();
 
-    /**
-     * Archivo al que pertenecen los simbolos de la tabla.
-     *
-     * <p>La tabla de simbolos, a diferencia de la de errores, no es del proyecto
-     * entero sino del archivo de la pestana activa, asi que el salto a la
-     * declaracion va siempre ahi.</p>
-     */
     private File lastFocusFile;
 
-    /**
-     * Nombre del archivo que es el punto de partida de un proyecto.
-     *
-     * <p>{@code main.pig} se lee el primero, es el que se enseña por defecto y el
-     * que carga los demas a traves de sus imports.</p>
-     */
     private static final String MAIN_FILE = "main.pig";
 
     private JPanel contentArea;
     private File currentFile;
 
-    /**
-     * Creates new form MainWindow
-     */
     public MainWindow() {
         initComponents();
         setTitle("Contacto 3xtrat3rr3str3D");
@@ -140,27 +92,15 @@ public class MainWindow extends JFrame {
         initContentLayout();
         initToolbar();
         initShortcuts();
-        // Doble clic en un error: abrir su archivo y quedarse en la linea.
+
         errorPanel.setOnErrorActivated(this::jumpToError);
-        // Doble clic en un simbolo: quedarse en su declaracion.
+
         symbolPanel.setOnSymbolActivated(this::jumpToSymbol);
         initStyles();
         navText("");
         showWelcome();
     }
 
-    // ====================== Distribucion ======================
-
-    /**
-     * Reorganiza {@code sidebarPanel} como barra superior y {@code contentPane}
-     * con el arbol de proyecto, el editor, las consolas y la barra de estado.
-     * Los paneles quedan en {@link JSplitPane} para que el usuario pueda
-     * redimensionarlos.
-     *
-     * <p>Las herramientas ya no ocupan sitio aqui: viven en una ventana
-     * flotante ({@link ToolWindow}) que hay que cerrar para volver al editor,
-     * de modo que el ancho completo queda para el codigo.</p>
-     */
     private void initContentLayout() {
         contentArea = new JPanel(new BorderLayout());
         contentArea.setBackground(UiTheme.panelBg());
@@ -168,11 +108,11 @@ public class MainWindow extends JFrame {
         consoleDock = new ConsoleDock();
         toolWindowDock = new ToolWindowDock(astPanel, symbolPanel, stackPanel, errorPanel);
         toolWindow = new ToolWindow(this, toolWindowDock);
-        // Al cerrar la ventana, el boton de la barra debe quedar sin marcar.
+
         toolWindow.setOnClosed(() -> toolsToggle.setSelected(false));
         statusBar = new StatusBar();
         editorTabs = new EditorTabs(this::onActiveEditorChanged, file -> {
-            // Al cerrar la ultima pestana se muestra la bienvenida.
+
             if (editorTabs.isEmpty()) {
                 showWelcome();
             }
@@ -188,16 +128,10 @@ public class MainWindow extends JFrame {
         editorCardHost.add(welcomePanel, CARD_WELCOME);
         editorCards.show(editorCardHost, CARD_WELCOME);
 
-        // Editor + consolas (redimensionable en vertical)
         editorSplit = createSplit(JSplitPane.VERTICAL_SPLIT, editorCardHost, consoleDock, 0.68, 0.7);
 
-        // Arbol de proyecto + editor (redimensionable en horizontal)
         rootSplit = createSplit(JSplitPane.HORIZONTAL_SPLIT, fileTreePanelInstance, editorSplit, 0.17, 0.18);
 
-        // Swing reparte el ancho inicial segun el ancho preferido del arbol, que
-        // llega a 368 px por su encabezado de botones, y el 18% no llega a
-        // cumplirse. El divisor se fija a mano en cuanto aparece la ventana, y
-        // solo una vez, para no pelearse con el usuario si lo mueve luego.
         addHierarchyListener(e -> {
             boolean showing = (e.getChangeFlags() & HierarchyEvent.SHOWING_CHANGED) != 0;
             if (showing && isShowing() && !treeDividerFixed) {
@@ -211,8 +145,6 @@ public class MainWindow extends JFrame {
         body.add(rootSplit, BorderLayout.CENTER);
         body.add(statusBar, BorderLayout.SOUTH);
 
-        // Sustituye el GroupLayout de NetBeans: sidebarPanel pasa a ser la barra
-        // superior y el resto ocupa todo el ancho disponible.
         getContentPane().setLayout(new BorderLayout());
         getContentPane().removeAll();
         getContentPane().add(sidebarPanel, BorderLayout.NORTH);
@@ -223,10 +155,6 @@ public class MainWindow extends JFrame {
         wireFileTree();
     }
 
-    /**
-     * Crea un divisor con desplazamiento continuo, boton de colapso y una
-     * posicion proporcional inicial.
-     */
     private static JSplitPane createSplit(int orientation, java.awt.Component left,
                                           java.awt.Component right, double resizeWeight,
                                           double dividerRatio) {
@@ -236,7 +164,7 @@ public class MainWindow extends JFrame {
         split.setOneTouchExpandable(true);
         split.setBorder(null);
         split.setDividerSize(6);
-        // Ratio aplicado cuando Swing dimensiona por primera vez el divisor.
+
         split.setDividerLocation(dividerRatio);
         return split;
     }
@@ -245,8 +173,7 @@ public class MainWindow extends JFrame {
         fileTreePanelInstance.setOnFileSelected(file -> {
             EditorPanel editor = editorTabs.openFile(file);
             if (editor == null) {
-                // El arbol ya filtra por extension, asi que aqui solo hay error
-                // de lectura; se distingue igualmente por el mensaje.
+
                 if (!LanguageCompilerFactory.hasAllowedExtension(file.getName())) {
                     warnWrongExtension(file);
                 } else {
@@ -268,18 +195,11 @@ public class MainWindow extends JFrame {
             }
         });
         fileTreePanelInstance.setOnFilesIgnored(this::showIgnoredFiles);
-        // El boton "Abrir carpeta" pasa por la ventana principal, que valida la
-        // ruta y avisa del resultado en vez de dejar el arbol en silencio.
+
         fileTreePanelInstance.setOnOpenProjectRequest(this::openProject);
         fileTreePanelInstance.initSelectionBehavior();
     }
 
-    // ====================== Barra superior ======================
-
-    /**
-     * Coloca los botones generados por NetBeans dentro de un {@link TopToolbar}
-     * y los convierte en botones de icono plano.
-     */
     private void initToolbar() {
         cModeCombo.addItem("Cuartetas");
         cModeCombo.addItem("Tripletes");
@@ -314,7 +234,6 @@ public class MainWindow extends JFrame {
             }
         });
 
-        // Se vacia el sidebarPanel que NetBeans poblo con layout absoluto.
         sidebarPanel.removeAll();
         sidebarPanel.setLayout(new BorderLayout());
         sidebarPanel.setPreferredSize(new Dimension(100, TopToolbar.BAR_HEIGHT));
@@ -325,11 +244,6 @@ public class MainWindow extends JFrame {
         sidebarPanel.repaint();
     }
 
-    /**
-     * Abre (o trae al frente) la ventana flotante de herramientas.
-     *
-     * @param view vista a mostrar, o null para la que ya estuviera seleccionada
-     */
     private void openToolWindow(ToolWindowDock.View view) {
         toolsToggle.setSelected(true);
         if (view == null) {
@@ -338,8 +252,7 @@ public class MainWindow extends JFrame {
             toolWindow.showView(view);
         }
         if (!toolWindow.isOpen()) {
-            // Sin pantalla no se puede abrir la ventana: el boton no debe
-            // quedarse marcado como si lo estuviera.
+
             toolsToggle.setSelected(false);
         }
     }
@@ -350,8 +263,6 @@ public class MainWindow extends JFrame {
         compiler.setCMode(currentCMode);
     }
 
-    // ====================== Atajos de teclado ======================
-
     private void initShortcuts() {
         bind("control N", this::actionNewFile);
         bind("control O", this::actionOpenFile);
@@ -360,9 +271,9 @@ public class MainWindow extends JFrame {
         bind("control W", () -> editorTabs.closeActive());
         bind("control shift S", () -> editorTabs.saveAll());
         bind("control 1", () -> showToolView(ToolWindowDock.View.AST));
-        bind("control 2", () -> showToolView(ToolWindowDock.View.SIMBOLOS));
-        bind("control 3", () -> showToolView(ToolWindowDock.View.PILA));
-        bind("control 4", () -> showToolView(ToolWindowDock.View.ERRORES));
+        bind("control 2", () -> showToolView(ToolWindowDock.View.SYMBOLS));
+        bind("control 3", () -> showToolView(ToolWindowDock.View.STACK));
+        bind("control 4", () -> showToolView(ToolWindowDock.View.ERRORS));
     }
 
     private void bind(String keyStroke, Runnable action) {
@@ -377,21 +288,8 @@ public class MainWindow extends JFrame {
         getRootPane().getActionMap().put(a, a);
     }
 
-    // ====================== Acciones ======================
-
-    /**
-     * Crea un archivo vacio. Como el lenguaje ya no se elige con un desplegable,
-     * se pregunta por la extension, que es la que determina el lenguaje.
-     *
-     * <p>Si todavia no hay proyecto abierto se pide tambien la carpeta
-     * contenedora, para que el archivo nazca dentro del arbol y no quede como
-     * una pestana suelta.</p>
-     */
     private void actionNewFile() {
-        // El proyecto manda: si ya hay carpeta abierta se pregunta solo el nombre,
-        // el lenguaje y en que carpeta de esa nace. Sin proyecto hay que elegir
-        // primero la carpeta contenedora, que si no el archivo no tendria donde
-        // aparecer en el arbol.
+
         File container = currentContainer();
         if (container == null) {
             container = ensureContainer("archivo nuevo", null);
@@ -420,23 +318,10 @@ public class MainWindow extends JFrame {
         navText("Nuevo archivo / " + editor.getDisplayName());
     }
 
-    /**
-     * Pregunta como se llama el archivo nuevo, en que lenguaje y en que carpeta.
-     *
-     * <p>Se propone el lenguaje de la pestana activa, que es lo que esta
-     * escribiendo el usuario, y la carpeta donde esta el archivo abierto: es
-     * donde suele querer seguir escribiendo.</p>
-     */
     NewFileDialog.Choice promptNewFile(File container) {
         return buildNewFileDialog(container).ask();
     }
 
-    /**
-     * Monta el dialogo del archivo nuevo, sin mostrarlo.
-     *
-     * <p>Va aparte del {@link #promptNewFile} para poder inspeccionarlo en las
-     * pruebas sin abrir una ventana modal que las bloquearia.</p>
-     */
     NewFileDialog buildNewFileDialog(File container) {
         List<File> folders = fileTreePanelInstance.codeFolders();
         if (folders.isEmpty()) {
@@ -445,15 +330,12 @@ public class MainWindow extends JFrame {
         EditorPanel active = editorTabs.getActiveEditor();
         String languageId = active == null ? null : active.getLanguageId();
 
-        // Si hay un archivo abierto se propone la carpeta en la que esta; si no, la
-        // raiz del proyecto.
         File suggestedFolder = active != null && active.getFile() != null
                 ? active.getFile().getParentFile() : container;
         int selected = folders.indexOf(suggestedFolder);
         List<File> ordered = new ArrayList<>(folders);
         if (selected > 0) {
-            // NewFileDialog marca la primera carpeta del desplegable, asi que se
-            // deja la deseada en ese puesto.
+
             ordered.add(0, ordered.remove(selected));
         }
 
@@ -461,7 +343,6 @@ public class MainWindow extends JFrame {
         return new NewFileDialog(this, container, ordered, languageId, suggestedName);
     }
 
-    /** Nombre libre del estilo "archivoN", para proponerlo como punto de partida. */
     private String suggestFileName(String languageId, File container) {
         String ext = LanguageCompilerFactory.extensionOfLanguage(languageId);
         if (ext == null) {
@@ -494,8 +375,7 @@ public class MainWindow extends JFrame {
             warnWrongExtension(file);
             return;
         }
-        // Un archivo suelto tambien necesita su carpeta en el arbol: si no esta
-        // dentro de la carpeta del proyecto se le pregunta donde guardarlo.
+
         File placed = placeInContainer(file);
         if (placed == null) {
             return;
@@ -503,12 +383,6 @@ public class MainWindow extends JFrame {
         openInEditor(placed);
     }
 
-    // ====================== Dialogos ======================
-    //
-    // Los selectores y avisos estan en metodos aparte y no private para que las
-    // pruebas puedan responderlos sin montar una ventana modal de verdad.
-
-    /** Selector de un archivo de codigo, o null si se cancela. */
     File promptSourceFile() {
         JFileChooser chooser = new JFileChooser();
         chooser.setDialogTitle("Abrir archivo de código");
@@ -521,12 +395,6 @@ public class MainWindow extends JFrame {
         return approve(chooser) ? chooser.getSelectedFile() : null;
     }
 
-    /**
-     * Selector de una carpeta.
-     *
-     * @param preselected nombre a dejar escrito; null para ninguno
-     * @return la carpeta elegida, o null si se cancela
-     */
     File promptDirectory(String title, File startDir, File preselected,
                          String approveText, boolean allowCreate) {
         JFileChooser chooser = new JFileChooser();
@@ -553,14 +421,11 @@ public class MainWindow extends JFrame {
         return dir;
     }
 
-
-    /** Confirmacion si/no. */
     int promptConfirm(String message, String title) {
         return JOptionPane.showConfirmDialog(this, message, title,
                 JOptionPane.YES_NO_OPTION, JOptionPane.QUESTION_MESSAGE);
     }
 
-    /** Aviso modal. */
     void promptInfo(String message, String title, int messageType) {
         JOptionPane.showMessageDialog(this, message, title, messageType);
     }
@@ -569,17 +434,6 @@ public class MainWindow extends JFrame {
         return chooser.showOpenDialog(null) == JFileChooser.APPROVE_OPTION;
     }
 
-    /**
-     * Asegura que exista una carpeta contenedora y la deja como raiz del arbol.
-     *
-     * <p>Si ya hay un proyecto abierto se devuelve su carpeta sin preguntar nada.
-     * Si no, se pide una: el nombre por defecto es {@code proyecto} dentro de la
-     * carpeta de inicio, o la carpeta del propio archivo si se sugiere una.</p>
-     *
-     * @param purpose  texto que explica para que se necesita la carpeta
-     * @param suggested carpeta de la que partir (puede ser null)
-     * @return la carpeta contenedora, o null si el usuario cancelo
-     */
     private File ensureContainer(String purpose, File suggested) {
         File current = currentContainer();
         if (current != null) {
@@ -589,8 +443,7 @@ public class MainWindow extends JFrame {
         boolean fromSuggestion = suggested != null && suggested.isDirectory();
         File start = fromSuggestion ? suggested
                 : new File(System.getProperty("user.home", "."));
-        // Si el archivo ya esta en alguna carpeta se propone esa misma, que es
-        // lo habitual; si no se ofrece una carpeta nueva llamada "proyecto".
+
         File preselected = fromSuggestion
                 ? start : new File(start, DEFAULT_CONTAINER_NAME);
 
@@ -605,30 +458,10 @@ public class MainWindow extends JFrame {
         return dir;
     }
 
-    // ====================== Proyecto ======================
-
-    /**
-     * Abre una carpeta como proyecto, validandola y avisando del resultado.
-     *
-     * <p>Es el unico camino para poner una raiz en el arbol, de modo que siempre
-     * se sepa si funciono: si la ruta no existe, no es una carpeta o no se puede
-     * leer, se explica por que y el proyecto anterior se deja intacto.</p>
-     *
-     * @return true si la carpeta se cargo en el arbol
-     */
     boolean loadProject(File dir) {
         return loadProject(dir, true);
     }
 
-    /**
-     * Igual que {@link #loadProject(File)} pero decide siBuiltin avisar del exito.
-     *
-     * <p>Los fallos se avisan siempre. El exito solo se anuncia cuando la carpeta
-     * la eligio el usuario a proposito ({@code announce}); si se carga como paso
-     * intermedio para crear o abrir un archivo suelto, el dialogo de la accion
-     * principal ya informa y uno aqui solo estorbaría. En ese modo una carpeta
-     * sin codigo es normal todavia y no se avisa.</p>
-     */
     boolean loadProject(File dir, boolean announce) {
         if (dir == null) {
             return false;
@@ -671,12 +504,11 @@ public class MainWindow extends JFrame {
         return true;
     }
 
-    /** Informa de lo que se ha encontrado al abrir el proyecto a proposito. */
     private void announceProject(File abs) {
         int fuentes = fileTreePanelInstance.countSourceFiles();
         List<File> ignorados = fileTreePanelInstance.getIgnoredFiles();
         if (fuentes == 0) {
-            // Se avisa en vez de dejar un arbol mudo que parece un fallo.
+
             promptInfo("La carpeta se cargó, pero no contiene archivos de código.\n\n"
                             + abs.getAbsolutePath() + "\n\n"
                             + "Extensiones admitidas: "
@@ -690,19 +522,18 @@ public class MainWindow extends JFrame {
                     JOptionPane.WARNING_MESSAGE);
             return;
         }
-        String resumen = "Proyecto cargado: " + fuentes
+        String summary = "Proyecto cargado: " + fuentes
                 + (fuentes == 1 ? " archivo de código" : " archivos de código");
         if (!ignorados.isEmpty()) {
-            resumen += "\n" + ignorados.size()
+            summary += "\n" + ignorados.size()
                     + (ignorados.size() == 1
                             ? " archivo ignorado por su extensión."
                             : " archivos ignorados por su extensión.");
         }
-        promptInfo(resumen + "\n\n" + abs.getAbsolutePath(),
+        promptInfo(summary + "\n\n" + abs.getAbsolutePath(),
                 "Proyecto abierto", JOptionPane.INFORMATION_MESSAGE);
     }
 
-    /** Abre una carpeta como proyecto, preguntando cual. */
     void openProject() {
         File start = currentContainer() != null ? currentContainer()
                 : lastContainer() != null ? lastContainer()
@@ -715,23 +546,12 @@ public class MainWindow extends JFrame {
         loadProject(dir, true);
     }
 
-    /** Ultima carpeta con la que se abrio un proyecto, para retomar desde ahi. */
     private File lastContainerDir;
 
     private File lastContainer() {
         return lastContainerDir;
     }
 
-    /**
-     * Coloca un archivo recien abierto dentro de la carpeta del proyecto.
-     *
-     * <p>Si el archivo ya esta dentro, no hay nada que hacer. Si esta fuera y no
-     * hay proyecto abierto se pregunta si se mueve a la carpeta elegida; si el
-     * usuario no lo mueve, el arbol se queda con la carpeta del propio archivo
-     * para que siempre se vea lo que se esta editando.</p>
-     *
-     * @return la ruta definitiva del archivo, o null si se cancelo
-     */
     private File placeInContainer(File file) {
         File project = currentContainer();
         if (project == null || isInside(project, file)) {
@@ -747,7 +567,6 @@ public class MainWindow extends JFrame {
         return file;
     }
 
-    /** Mueve el archivo a la carpeta del proyecto, previa confirmacion. */
     private File moveToContainer(File file, File dir) {
         int answer = promptConfirm(
                 "\"" + file.getName() + "\" está fuera del proyecto.\n\n"
@@ -755,7 +574,7 @@ public class MainWindow extends JFrame {
                         + dir.getAbsolutePath(),
                 "Mover archivo al proyecto");
         if (answer != JOptionPane.YES_OPTION) {
-            // No se mueve: el arbol se queda con la carpeta del propio archivo.
+
             File parent = file.getParentFile();
             if (parent != null) {
                 loadProject(parent, false);
@@ -777,7 +596,6 @@ public class MainWindow extends JFrame {
         }
     }
 
-    /** true si {@code file} esta dentro de la carpeta {@code dir}. */
     private static boolean isInside(File dir, File file) {
         try {
             String base = dir.getCanonicalPath();
@@ -788,23 +606,11 @@ public class MainWindow extends JFrame {
         }
     }
 
-    /**
-     * Carpeta del proyecto en uso, o null si no hay ninguna valida.
-     *
-     * <p>Una raiz que ya no existe en disco (se borro la carpeta) no cuenta:
-     * entonces se vuelve a preguntar.</p>
-     */
     private File currentContainer() {
         File root = fileTreePanelInstance.getRoot();
         return root != null && root.isDirectory() ? root : null;
     }
 
-    /**
-     * Informa de que un archivo se ha dejado fuera por su extension.
-     *
-     * <p>El selector de archivos deja escribir cualquier nombre ("Todos los
-     * archivos"), asi que el caso se comprueba igual al abrir.</p>
-     */
     private void warnWrongExtension(File file) {
         String name = file == null ? "(sin nombre)" : file.getName();
         promptInfo("No se abrió \"" + name + "\".\n\n"
@@ -814,18 +620,12 @@ public class MainWindow extends JFrame {
                 "Extensión no admitida", JOptionPane.WARNING_MESSAGE);
     }
 
-    /**
-     * Avisa de los archivos del proyecto que se han ignorado por no tener una
-     * extension admitida, listando el motivo y la extension de cada uno.
-     */
     private void showIgnoredFiles(List<File> ignored) {
         if (ignored == null || ignored.isEmpty()) {
             return;
         }
         int total = ignored.size();
-        // Abrir una carpeta amplia (~, /tmp) puede dejar fuera cientos de
-        // archivos: listarlos todos convierte el aviso en un muro ilegible, asi
-        // que se enseñan unos pocos y el resto se resume.
+
         int maxListed = total > IGNORED_LIST_LIMIT ? 6 : total;
 
         StringBuilder sb = new StringBuilder();
@@ -847,7 +647,6 @@ public class MainWindow extends JFrame {
                 JOptionPane.INFORMATION_MESSAGE);
     }
 
-    /** "extensión .txt" a partir del nombre de un archivo sin extension valida. */
     private static String describeExtension(String fileName) {
         int dot = fileName.lastIndexOf('.');
         return dot < 0 || dot == fileName.length() - 1
@@ -866,27 +665,10 @@ public class MainWindow extends JFrame {
         }
     }
 
-    /**
-     * Abre la ventana de herramientas en la vista pedida.
-     *
-     * <p>Los botones de la barra superior ya no encienden y apagan un dock:
-     * cada uno abre directamente su vista.</p>
-     */
     private void showToolView(ToolWindowDock.View view) {
         openToolWindow(view);
     }
 
-    // ====================== Compilacion ======================
-
-    /**
-     * Resultado de compilar un archivo, para poder juntar en una sola pasada los
-     * de todo el proyecto.
-     *
-     * <p>Son copias y no referencias vivas: {@link Compiler} reutiliza las mismas
-     * estructuras en cada {@code compile}, asi que si se guardara el estado
-     * compartida, al terminar el bucle todas las copias apuntarian al ultimo
-     * archivo compilado.</p>
-     */
     private record FileResult(File file, String language, boolean ok,
                               String astDot, List<Symbol> symbols, List<ParseStep> steps,
                               List<CompilationError> errors, int quadruples, int triplets,
@@ -895,18 +677,9 @@ public class MainWindow extends JFrame {
                               List<String> imports) {
     }
 
-    /**
-     * Compila el proyecto entero, como haria un compilador de Java con todas sus
-     * clases: no solo el archivo de la pestana activa.
-     *
-     * <p>Con carpeta abierta se compilan todos los archivos de codigo que haya
-     * dentro, cada uno con el lenguaje que le toca por extension. Sin proyecto se
-     * compilan las pestanas abiertas, que es lo unico que hay.</p>
-     */
     private void actionCompile() {
-        // Cada compilacion arranca de cero: nada de lo que salio de la anterior
-        // puede quedarse colgando en ninguna de las vistas.
-        limpiarResultados();
+
+        clearResults();
 
         List<File> targets = compileTargets();
         if (targets.isEmpty()) {
@@ -918,23 +691,22 @@ public class MainWindow extends JFrame {
 
         File container = currentContainer();
         File main = targets.stream().filter(MainWindow::isMainFile).findFirst().orElse(null);
-        StringBuilder cabecera = new StringBuilder();
-        cabecera.append("Compilando ").append(targets.size())
+        StringBuilder header = new StringBuilder();
+        header.append("Compilando ").append(targets.size())
                 .append(targets.size() == 1 ? " archivo" : " archivos")
                 .append(container != null ? " de " + container.getName() : " abiertos")
                 .append("...\n");
         if (main != null) {
-            cabecera.append("Punto de partida: ").append(main.getName())
+            header.append("Punto de partida: ").append(main.getName())
                     .append(" (se lee primero; sus imports se cargan antes)\n");
         } else if (container != null) {
-            cabecera.append("No hay ningún ").append(MAIN_FILE)
+            header.append("No hay ningún ").append(MAIN_FILE)
                     .append(" en el proyecto: se compilan los archivos por orden de nombre\n");
         }
-        consoleDock.setConsole(cabecera.toString());
+        consoleDock.setConsole(header.toString());
 
         compiler.setCMode(currentCMode);
-        // Los imports se resuelven contra la raiz del proyecto, que es donde estan
-        // los archivos que se importan.
+
         compiler.setWorkingDirectory(container);
 
         List<FileResult> results = new ArrayList<>(targets.size());
@@ -945,22 +717,12 @@ public class MainWindow extends JFrame {
         publishResults(results);
     }
 
-    /**
-     * Archivos a compilar: los del proyecto entero, o las pestanas abiertas si no
-     * hay proyecto.
-     *
-     * <p>Empieza siempre por {@code main.pig}, que es el punto de partida del
-     * proyecto: es el que se lee primero y el que manda. Al compilarlo se cargan
-     * los archivos que sus imports mencionan, y el resto del proyecto se compila
-     * despues, tambien para no dejar ningun archivo fuera.</p>
-     */
     private List<File> compileTargets() {
         List<File> targets = fileTreePanelInstance.allSourceFiles();
         if (!targets.isEmpty()) {
             return startingAtMain(targets);
         }
-        // Sin carpeta de proyecto se compila lo que este abierto, para no dejar al
-        // usuario sin poder compilar por no haber abierto un proyecto.
+
         for (EditorPanel editor : editorTabs.getAllEditors()) {
             File file = editor.getFile();
             if (file != null && file.isFile()) {
@@ -970,12 +732,6 @@ public class MainWindow extends JFrame {
         return targets;
     }
 
-    /**
-     * Pone {@code main.pig} el primero, dejando el resto en el mismo orden.
-     *
-     * <p>Si hay varios (main.pig en distintas carpetas) gana el de la ruta mas
-     * corta, que es el de la raiz del proyecto.</p>
-     */
     private static List<File> startingAtMain(List<File> targets) {
         File main = null;
         for (File file : targets) {
@@ -999,18 +755,10 @@ public class MainWindow extends JFrame {
         return ordered;
     }
 
-    /** true si ese archivo es el punto de partida del proyecto. */
     private static boolean isMainFile(File file) {
         return file != null && MAIN_FILE.equalsIgnoreCase(file.getName());
     }
 
-    /**
-     * Compila un archivo y guarda una copia de todo lo que produce.
-     *
-     * <p>Si el archivo esta abierto en una pestana se compila lo que hay escrito
-     * en ella, no lo que hay en disco, para que no haga falta guardar antes de
-     * comprobar si lo escrito compila.</p>
-     */
     private FileResult compileOne(File file) {
         EditorPanel editor = editorOf(file);
         String language = editor != null
@@ -1023,9 +771,9 @@ public class MainWindow extends JFrame {
             try {
                 source = Files.readString(file.toPath());
             } catch (IOException e) {
-                CompilationError io = new CompilationError(ErrorType.SEMANTICO,
+                CompilationError io = new CompilationError(ErrorType.SEMANTIC,
                         "No se pudo leer el archivo: " + e.getMessage(),
-                        -1, -1) // sin posicion: no hay linea a la que saltar
+                        -1, -1)
                         .inFile(file.getName());
                 return new FileResult(file, language, false, "", List.of(), List.of(),
                         List.of(io), 0, 0, "", "", "", "", "", List.of());
@@ -1038,9 +786,7 @@ public class MainWindow extends JFrame {
             errors.add(e.inFile(file.getName()));
         }
         List<Symbol> symbols = new ArrayList<>(compiler.getSymbols());
-        // Los simbolos que salieron de un import ya saben de que archivo
-        // vienen; estos son los del propio archivo, que se completan aqui
-        // porque el backend no sabe como se llama.
+
         for (Symbol s : symbols) {
             if (s.getSourceFile() == null) {
                 s.inFile(file.getName());
@@ -1055,7 +801,6 @@ public class MainWindow extends JFrame {
                 compiler.getImportedFiles());
     }
 
-    /** Editor abierto de un archivo, o null si no esta en ninguna pestana. */
     private EditorPanel editorOf(File file) {
         for (EditorPanel editor : editorTabs.getAllEditors()) {
             File candidate = editor.getFile();
@@ -1066,14 +811,6 @@ public class MainWindow extends JFrame {
         return null;
     }
 
-    /**
-     * Reparte el resultado de la compilacion del proyecto entre los paneles.
-     *
-     * <p>Los errores se juntan todos: la tabla de errores es del proyecto, que es
-     * lo que interesa saber. El AST, los simbolos, la pila y las consolas si son
-     * de un solo archivo, el de la pestana activa, porque en una ventana solo cabe
-     * un grafo y tiene que ser el que se esta editando.</p>
-     */
     private void publishResults(List<FileResult> results) {
         List<CompilationError> allErrors = new ArrayList<>();
         for (FileResult r : results) {
@@ -1084,9 +821,6 @@ public class MainWindow extends JFrame {
         lastTargets = results.stream().map(FileResult::file).toList();
         lastFocusFile = focus == null ? null : focus.file();
 
-        // Las cuatro vistas viven en la ventana flotante. Si esta cerrada solo se
-        // encolan los resultados y se pintan al volver a abrirla, para no gastar
-        // en dibujar un grafo que nadie esta mirando.
         toolWindow.postResults(() -> {
             astPanel.renderGraph(focus == null ? "" : focus.astDot());
             symbolPanel.loadSymbols(focus == null ? List.of() : focus.symbols());
@@ -1110,9 +844,8 @@ public class MainWindow extends JFrame {
                 focus == null ? 0 : focus.triplets());
 
         if (!allErrors.isEmpty()) {
-            // Los errores siempre se enseñan: si la ventana estaba cerrada se
-            // abre, y al abrir se pintan los resultados que quedaban encolados.
-            showToolView(ToolWindowDock.View.ERRORES);
+
+            showToolView(ToolWindowDock.View.ERRORS);
             CompilationError first = allErrors.get(0);
             if (first.getLine() > 0) {
                 EditorPanel editor = editorOf(fileNamed(first.getFileName()));
@@ -1126,21 +859,47 @@ public class MainWindow extends JFrame {
             navText("Compilación correcta / " + results.size()
                     + (results.size() == 1 ? " archivo" : " archivos"));
         }
+        StringBuilder warning = new StringBuilder();
+        if (allErrors.isEmpty()) {
+            warning.append(writeCFile(results));
+        }
         consoleDock.appendConsole(buildReport(results, allErrors, focus));
+        consoleDock.appendConsole(warning.toString());
     }
 
-    /**
-     * Vacía todo lo que dejó la compilación anterior: simbolos, errores, pila,
-     * AST, las cuatro consolas y los contadores.
-     *
-     * <p>Se llama al empezar a compilar, no al terminar, para que una compilación
-     * se pinte siempre desde cero. Si una tabla, el grafo o una consola se
-     * quedaron con datos de la vuelta anterior, esa fila, ese nodo o esa linea no
-     * puede sobrevivir a la nueva: si el archivo ya no da error, su error
-     * anterior tiene que desaparecer, y si el grafo no se puede construir, el
-     * grafo viejo tampoco puede quedarse ahi.</p>
-     */
-    private void limpiarResultados() {
+    private String writeCFile(List<FileResult> results) {
+        File container = currentContainer();
+        if (container == null || results.isEmpty()) {
+            return "";
+        }
+
+        FileResult principal = null;
+        for (FileResult r : results) {
+            if (isMainFile(r.file())) {
+                principal = r;
+                break;
+            }
+            if (principal == null && r.ok()) {
+                principal = r;
+            }
+        }
+        if (principal == null || principal.cCode() == null || principal.cCode().isBlank()) {
+            return "";
+        }
+        String name = principal.file().getName();
+        int point = name.lastIndexOf('.');
+        String base = point > 0 ? name.substring(0, point) : name;
+        File target = new File(container, base + ".c");
+        try {
+            Files.writeString(target.toPath(), principal.cCode());
+            return "\nC generado: " + target.getPath() + "\n";
+        } catch (IOException e) {
+            return "\nNo se pudo escribir el C en la raiz del proyecto: "
+                    + e.getMessage() + "\n";
+        }
+    }
+
+    private void clearResults() {
         lastErrors = List.of();
         lastTargets = List.of();
         lastFocusFile = null;
@@ -1157,12 +916,6 @@ public class MainWindow extends JFrame {
         navText("Compilando...");
     }
 
-    /**
-     * Busca un archivo de la compilacion actual por su nombre.
-     *
-     * <p>Los errores guardan el nombre y no la ruta, asi que se localiza cual de
-     * los archivos compilados responde a ese nombre.</p>
-     */
     private File fileNamed(String name) {
         if (name == null) {
             return null;
@@ -1175,17 +928,8 @@ public class MainWindow extends JFrame {
         return null;
     }
 
-    /**
-     * Abre el archivo de un error de la tabla y se para en su linea.
-     *
-     * <p>La tabla es del proyecto entero, asi que un error puede estar en un archivo
-     * distinto del que se esta editando. Al abrirlo, el editor activo pasa a ser
-     * ese y la vista de herramientas queda con lo suyo al volver a compilar.</p>
-     */
     private void jumpToError(int row) {
-        // La tabla puede tener un filtro puesto, asi que el numero de fila que
-        // llega no es el indice en la lista de errores: lo resuelve la propia
-        // tabla, que es quien sabe que hay en cada fila.
+
         CompilationError error = errorPanel.errorAt(row);
         if (error == null) {
             return;
@@ -1198,8 +942,7 @@ public class MainWindow extends JFrame {
             return;
         }
         if (file.isFile()) {
-            // Si esta abierto y con cambios se guarda antes de saltar, para no
-            // dejar el archivo a medias entre dos pestanas.
+
             EditorPanel editor = editorOf(file);
             if (editor != null && editor.isModified()) {
                 editorTabs.save(editor);
@@ -1213,16 +956,6 @@ public class MainWindow extends JFrame {
         navText(error.getFileName() + " / línea " + error.getLine());
     }
 
-    /**
-     * Abre la declaracion del simbolo de la fila indicada.
-     *
-     * <p>La tabla de simbolos es del archivo de la pestana activa, asi que el salto
-     * va ahi, salvo que el simbolo venga de un import: en ese caso se abre el
-     * archivo del que venia, que es donde esta su linea. Los simbolos que el
-     * compilador genera sin escribir (el {@code this} implicito se anota con el
-     * metodo al que pertenece, asi que casi nunca pasa) no tienen linea a la que
-     * saltar y se avisa en vez de hacer nada en silencio.</p>
-     */
     private void jumpToSymbol(int row) {
         Symbol symbol = symbolPanel.symbolAt(row);
         if (symbol == null) {
@@ -1235,49 +968,35 @@ public class MainWindow extends JFrame {
                     "Símbolo sin posición", JOptionPane.INFORMATION_MESSAGE);
             return;
         }
-        File destino = archivoDelSimbolo(symbol);
-        if (destino == null) {
+        File symbolPath = symbolFile(symbol);
+        if (symbolPath == null) {
             return;
         }
-        if (destino.isFile()) {
-            openInEditor(destino);
+        if (symbolPath.isFile()) {
+            openInEditor(symbolPath);
         }
-        EditorPanel target = editorOf(destino);
+        EditorPanel target = editorOf(symbolPath);
         if (target != null) {
             target.gotoLine(symbol.getLine());
         }
-        navText(destino.getName() + " / línea " + symbol.getLine()
+        navText(symbolPath.getName() + " / línea " + symbol.getLine()
                 + " / " + symbol.getName());
     }
 
-    /**
-     * Archivo donde se declaro un simbolo de la tabla.
-     *
-     * <p>Si el simbolo vino de un import se devuelve ese archivo; si no, el de la
-     * pestana activa, que es al que pertenece la tabla.</p>
-     */
-    private File archivoDelSimbolo(Symbol symbol) {
-        String origen = symbol.getSourceFile();
-        File contenedor = currentContainer();
-        if (origen == null || lastFocusFile == null
-                || origen.equals(lastFocusFile.getName())) {
+    private File symbolFile(Symbol symbol) {
+        String origin = symbol.getSourceFile();
+        File container = currentContainer();
+        if (origin == null || lastFocusFile == null
+                || origin.equals(lastFocusFile.getName())) {
             return lastFocusFile;
         }
-        if (contenedor == null) {
+        if (container == null) {
             return lastFocusFile;
         }
-        File importado = new File(contenedor, origen);
+        File importado = new File(container, origin);
         return importado.isFile() ? importado : lastFocusFile;
     }
 
-    /**
-     * Resultado que se enseña en el AST, los simbolos y la pila.
-     *
-     * <p>Se prefiere el de la pestana activa y, si no esta, el de
-     * {@code main.pig}, que es el principal del proyecto. Solo si tampoco hay
-     * {@code main.pig} se recurre al primero que haya producido un arbol, para
-     * que la ventana no se quede con las vistas vacias sin motivo.</p>
-     */
     private FileResult focusedResult(List<FileResult> results) {
         EditorPanel active = editorTabs.getActiveEditor();
         if (active != null && active.getFile() != null) {
@@ -1300,7 +1019,6 @@ public class MainWindow extends JFrame {
         return results.isEmpty() ? null : results.get(0);
     }
 
-    /** Por que se enseña el resultado de este archivo y no el de otro. */
     private String focusReason(FileResult focus) {
         if (focus == null) {
             return "";
@@ -1315,7 +1033,6 @@ public class MainWindow extends JFrame {
         return "primer archivo del proyecto";
     }
 
-    /** Informe por consola, archivo a archivo, al estilo de un build. */
     private String buildReport(List<FileResult> results, List<CompilationError> allErrors,
                                FileResult focus) {
         StringBuilder sb = new StringBuilder();
@@ -1364,8 +1081,6 @@ public class MainWindow extends JFrame {
         return sb.toString();
     }
 
-    // ====================== Navegacion entre pestanas ======================
-
     private void onActiveEditorChanged(EditorPanel editor) {
         if (editor == null) {
             return;
@@ -1391,11 +1106,6 @@ public class MainWindow extends JFrame {
         statusBar.setCounts(0, 0);
     }
 
-    // ====================== Estilos ======================
-
-    /**
-     * Genera los estilos de los componentes.
-     */
     private void initStyles() {
         optionSelectedLabel.setOpaque(false);
         optionSelectedLabel.setForeground(UiTheme.dim());
@@ -1413,15 +1123,8 @@ public class MainWindow extends JFrame {
         }
     }
 
-    // ====================== This method is not part of NetBeans ======================
-
-    /**
-     * This method is called from within the constructor to initialize the form.
-     * WARNING: Do NOT modify this code. The content of this method is always
-     * regenerated by the Form Editor.
-     */
     @SuppressWarnings("unchecked")
-    // <editor-fold defaultstate="collapsed" desc="Generated Code">//GEN-BEGIN:initComponents
+
     private void initComponents() {
 
         sidebarPanel = new javax.swing.JPanel();
@@ -1440,7 +1143,7 @@ public class MainWindow extends JFrame {
 
         sidebarPanel.setLayout(new org.netbeans.lib.awtextra.AbsoluteLayout());
 
-        openFileButton.setIcon(new javax.swing.ImageIcon(getClass().getResource("/icons/open-file.png"))); // NOI18N
+        openFileButton.setIcon(new javax.swing.ImageIcon(getClass().getResource("/icons/open-file.png")));
         openFileButton.setBorder(new javax.swing.border.MatteBorder(null));
         openFileButton.setBorderPainted(false);
         openFileButton.setHorizontalTextPosition(javax.swing.SwingConstants.CENTER);
@@ -1456,7 +1159,7 @@ public class MainWindow extends JFrame {
         });
         sidebarPanel.add(openFileButton, new org.netbeans.lib.awtextra.AbsoluteConstraints(40, 0, 30, 30));
 
-        saveFileButton.setIcon(new javax.swing.ImageIcon(getClass().getResource("/icons/save-file.png"))); // NOI18N
+        saveFileButton.setIcon(new javax.swing.ImageIcon(getClass().getResource("/icons/save-file.png")));
         saveFileButton.setBorder(new javax.swing.border.MatteBorder(null));
         saveFileButton.setBorderPainted(false);
         saveFileButton.setHorizontalTextPosition(javax.swing.SwingConstants.CENTER);
@@ -1472,7 +1175,7 @@ public class MainWindow extends JFrame {
         });
         sidebarPanel.add(saveFileButton, new org.netbeans.lib.awtextra.AbsoluteConstraints(70, 0, 30, 30));
 
-        astButton.setIcon(new javax.swing.ImageIcon(getClass().getResource("/icons/ast.png"))); // NOI18N
+        astButton.setIcon(new javax.swing.ImageIcon(getClass().getResource("/icons/ast.png")));
         astButton.setBorder(new javax.swing.border.MatteBorder(null));
         astButton.setBorderPainted(false);
         astButton.setHorizontalTextPosition(javax.swing.SwingConstants.CENTER);
@@ -1488,7 +1191,7 @@ public class MainWindow extends JFrame {
         });
         sidebarPanel.add(astButton, new org.netbeans.lib.awtextra.AbsoluteConstraints(130, 0, 30, 30));
 
-        symbolTableButton.setIcon(new javax.swing.ImageIcon(getClass().getResource("/icons/symbol-table.png"))); // NOI18N
+        symbolTableButton.setIcon(new javax.swing.ImageIcon(getClass().getResource("/icons/symbol-table.png")));
         symbolTableButton.setBorder(new javax.swing.border.MatteBorder(null));
         symbolTableButton.setBorderPainted(false);
         symbolTableButton.setHorizontalTextPosition(javax.swing.SwingConstants.CENTER);
@@ -1504,7 +1207,7 @@ public class MainWindow extends JFrame {
         });
         sidebarPanel.add(symbolTableButton, new org.netbeans.lib.awtextra.AbsoluteConstraints(100, 0, 30, 30));
 
-        stackButton.setIcon(new javax.swing.ImageIcon(getClass().getResource("/icons/stack.png"))); // NOI18N
+        stackButton.setIcon(new javax.swing.ImageIcon(getClass().getResource("/icons/stack.png")));
         stackButton.setBorder(new javax.swing.border.MatteBorder(null));
         stackButton.setBorderPainted(false);
         stackButton.setHorizontalTextPosition(javax.swing.SwingConstants.CENTER);
@@ -1520,7 +1223,7 @@ public class MainWindow extends JFrame {
         });
         sidebarPanel.add(stackButton, new org.netbeans.lib.awtextra.AbsoluteConstraints(160, 0, 30, 30));
 
-        newFileButton.setIcon(new javax.swing.ImageIcon(getClass().getResource("/icons/new-file.png"))); // NOI18N
+        newFileButton.setIcon(new javax.swing.ImageIcon(getClass().getResource("/icons/new-file.png")));
         newFileButton.setBorder(new javax.swing.border.MatteBorder(null));
         newFileButton.setBorderPainted(false);
         newFileButton.setHorizontalTextPosition(javax.swing.SwingConstants.CENTER);
@@ -1536,7 +1239,7 @@ public class MainWindow extends JFrame {
         });
         sidebarPanel.add(newFileButton, new org.netbeans.lib.awtextra.AbsoluteConstraints(10, 0, 30, 30));
 
-        lexerErrorButton.setIcon(new javax.swing.ImageIcon(getClass().getResource("/icons/error-table.png"))); // NOI18N
+        lexerErrorButton.setIcon(new javax.swing.ImageIcon(getClass().getResource("/icons/error-table.png")));
         lexerErrorButton.setBorder(new javax.swing.border.MatteBorder(null));
         lexerErrorButton.setBorderPainted(false);
         lexerErrorButton.setHorizontalTextPosition(javax.swing.SwingConstants.CENTER);
@@ -1579,91 +1282,82 @@ public class MainWindow extends JFrame {
         );
 
         pack();
-    }// </editor-fold>//GEN-END:initComponents
+    }
 
-    // ====================== Manejadores generados por NetBeans ======================
-
-    private void newFileButtonActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_newFileButtonActionPerformed
+    private void newFileButtonActionPerformed(java.awt.event.ActionEvent evt) {
         actionNewFile();
-    }//GEN-LAST:event_newFileButtonActionPerformed
+    }
 
-    private void openFileButtonActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_openFileButtonActionPerformed
+    private void openFileButtonActionPerformed(java.awt.event.ActionEvent evt) {
         actionOpenFile();
-    }//GEN-LAST:event_openFileButtonActionPerformed
+    }
 
-    private void astButtonActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_astButtonActionPerformed
+    private void astButtonActionPerformed(java.awt.event.ActionEvent evt) {
         showToolView(ToolWindowDock.View.AST);
         navText("Árbol AST");
-    }//GEN-LAST:event_astButtonActionPerformed
+    }
 
-    private void symbolTableButtonActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_symbolTableButtonActionPerformed
-        showToolView(ToolWindowDock.View.SIMBOLOS);
-        navText("Tabla de símbolos (" + cuentaDeSimbolos() + ")");
-    }//GEN-LAST:event_symbolTableButtonActionPerformed
+    private void symbolTableButtonActionPerformed(java.awt.event.ActionEvent evt) {
+        showToolView(ToolWindowDock.View.SYMBOLS);
+        navText("Tabla de símbolos (" + symbolCount() + ")");
+    }
 
-    /**
-     * Cuenta de simbolos que se enseña: con el filtro puesto se dice cuantas hay
-     * de cuantas son, para que quede claro que el filtro esta escondiendo.
-     */
-    private String cuentaDeSimbolos() {
+    private String symbolCount() {
         if (symbolPanel.getSymbolCount() == symbolPanel.getTotalSymbolCount()) {
             return String.valueOf(symbolPanel.getTotalSymbolCount());
         }
         return symbolPanel.getSymbolCount() + " de " + symbolPanel.getTotalSymbolCount();
     }
 
-    private void lexerErrorButtonActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_lexerErrorButtonActionPerformed
-        showToolView(ToolWindowDock.View.ERRORES);
-        navText("Tabla de errores (" + cuentaDeErrores() + ")");
-    }//GEN-LAST:event_lexerErrorButtonActionPerformed
+    private void lexerErrorButtonActionPerformed(java.awt.event.ActionEvent evt) {
+        showToolView(ToolWindowDock.View.ERRORS);
+        navText("Tabla de errores (" + errorCount() + ")");
+    }
 
-    /** Cuenta de errores que se enseña, con la misma regla que la de simbolos. */
-    private String cuentaDeErrores() {
+    private String errorCount() {
         if (errorPanel.getErrorCount() == errorPanel.getTotalErrorCount()) {
             return String.valueOf(errorPanel.getTotalErrorCount());
         }
         return errorPanel.getErrorCount() + " de " + errorPanel.getTotalErrorCount();
     }
 
-    private void stackButtonActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_stackButtonActionPerformed
-        showToolView(ToolWindowDock.View.PILA);
+    private void stackButtonActionPerformed(java.awt.event.ActionEvent evt) {
+        showToolView(ToolWindowDock.View.STACK);
         navText("Pila de procesos (" + stackPanel.getStateCount() + " pasos)");
-    }//GEN-LAST:event_stackButtonActionPerformed
+    }
 
-    private void saveFileButtonActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_saveFileButtonActionPerformed
+    private void saveFileButtonActionPerformed(java.awt.event.ActionEvent evt) {
         actionSave();
-    }//GEN-LAST:event_saveFileButtonActionPerformed
+    }
 
-    private void newFileButtonMouseEntered(java.awt.event.MouseEvent evt) {//GEN-FIRST:event_newFileButtonMouseEntered
+    private void newFileButtonMouseEntered(java.awt.event.MouseEvent evt) {
         this.optionSelectedLabel.setText("Nuevo archivo");
-    }//GEN-LAST:event_newFileButtonMouseEntered
+    }
 
-    private void openFileButtonMouseEntered(java.awt.event.MouseEvent evt) {//GEN-FIRST:event_openFileButtonMouseEntered
+    private void openFileButtonMouseEntered(java.awt.event.MouseEvent evt) {
         this.optionSelectedLabel.setText("Abrir archivo");
-    }//GEN-LAST:event_openFileButtonMouseEntered
+    }
 
-    private void saveFileButtonMouseEntered(java.awt.event.MouseEvent evt) {//GEN-FIRST:event_saveFileButtonMouseEntered
+    private void saveFileButtonMouseEntered(java.awt.event.MouseEvent evt) {
         this.optionSelectedLabel.setText("Guardar archivo");
-    }//GEN-LAST:event_saveFileButtonMouseEntered
+    }
 
-    private void symbolTableButtonMouseEntered(java.awt.event.MouseEvent evt) {//GEN-FIRST:event_symbolTableButtonMouseEntered
+    private void symbolTableButtonMouseEntered(java.awt.event.MouseEvent evt) {
         this.optionSelectedLabel.setText("Tabla de Símbolos");
-    }//GEN-LAST:event_symbolTableButtonMouseEntered
+    }
 
-    private void astButtonMouseEntered(java.awt.event.MouseEvent evt) {//GEN-FIRST:event_astButtonMouseEntered
+    private void astButtonMouseEntered(java.awt.event.MouseEvent evt) {
         this.optionSelectedLabel.setText("AST");
-    }//GEN-LAST:event_astButtonMouseEntered
+    }
 
-    private void stackButtonMouseEntered(java.awt.event.MouseEvent evt) {//GEN-FIRST:event_stackButtonMouseEntered
+    private void stackButtonMouseEntered(java.awt.event.MouseEvent evt) {
         this.optionSelectedLabel.setText("Pila de Procesos");
-    }//GEN-LAST:event_stackButtonMouseEntered
+    }
 
-    private void lexerErrorButtonMouseEntered(java.awt.event.MouseEvent evt) {//GEN-FIRST:event_lexerErrorButtonMouseEntered
+    private void lexerErrorButtonMouseEntered(java.awt.event.MouseEvent evt) {
         this.optionSelectedLabel.setText("Tabla de Errores");
-    }//GEN-LAST:event_lexerErrorButtonMouseEntered
+    }
 
-
-    // Variables declaration - do not modify//GEN-BEGIN:variables
     private javax.swing.JButton astButton;
     private javax.swing.JPanel contentPane;
     private javax.swing.JSeparator jSeparator1;
@@ -1675,107 +1369,60 @@ public class MainWindow extends JFrame {
     private javax.swing.JPanel sidebarPanel;
     private javax.swing.JButton stackButton;
     private javax.swing.JButton symbolTableButton;
-    // End of variables declaration//GEN-END:variables
 
-    // ====================== Utilidades ======================
-
-    /**
-     * Carga un archivo en una pestana nueva (usado por el arranque y por
-     * {@link FileTreePanel}).
-     */
-    private void loadFileFromTree(File file) {
-        try {
-            String contenido = Files.readString(file.toPath(), StandardCharsets.UTF_8);
-            currentFile = file;
-            EditorPanel editor = editorTabs.openFile(file);
-            if (editor == null) {
-                throw new IOException("No se pudo crear la pestaña");
-            }
-            showTabs();
-            onActiveEditorChanged(editor);
-            navText("Editor de código  ›  " + file.getName());
-        } catch (IOException e) {
-            JOptionPane.showMessageDialog(this,
-                    "Error al leer el archivo: " + e.getMessage(),
-                    "Error",
-                    JOptionPane.ERROR_MESSAGE);
-        }
-    }
-
-    /**
-     * Abre una carpeta como proyecto en el arbol de archivos.
-     */
     public void openProject(File directory) {
         fileTreePanelInstance.loadDirectory(directory);
         fileTreePanelInstance.revealFirstFile();
     }
 
-    /** Acceso al dock de herramientas, util para pruebas. */
     public ToolWindowDock getToolWindowDock() {
         return toolWindowDock;
     }
 
-    /** Acceso al gestor de pestanas, util para pruebas. */
     public EditorTabs getEditorTabs() {
         return editorTabs;
     }
 
-    /** Acceso al dock de salidas, util para pruebas. */
     public ConsoleDock getConsoleDock() {
         return consoleDock;
     }
 
-    /** Acceso a la ventana flotante de herramientas, util para pruebas. */
     public ToolWindow getToolWindow() {
         return toolWindow;
     }
 
-    /** Acceso a la barra superior, util para pruebas. */
     public TopToolbar getTopToolbar() {
         return topToolbar;
     }
 
-    /** Acceso a la tabla de errores, util para pruebas. */
     public ErrorTablePanel getErrorPanel() {
         return errorPanel;
     }
 
-    /** Acceso al arbol de archivos, util para pruebas. */
     public FileTreePanel getFileTree() {
         return fileTreePanelInstance;
     }
 
-    /** Acceso a la vista de arbol AST, util para pruebas. */
     public ParserTreePanel getAstPanel() {
         return astPanel;
     }
 
-    /** Acceso a la vista de tabla de simbolos, util para pruebas. */
     public SymbolTablePanel getSymbolPanel() {
         return symbolPanel;
     }
 
-    /** Acceso a la vista de pila de procesos, util para pruebas. */
     public StackVisualizerPanel getStackPanel() {
         return stackPanel;
     }
 
-    /** Acceso a la barra de estado, util para pruebas. */
     public StatusBar getStatusBar() {
         return statusBar;
     }
 
-    /** Compila la pestana activa. */
     public void compileActive() {
         actionCompile();
     }
 
-    /**
-     * Abre un archivo en una pestana, como si se hiciera doble clic en el arbol.
-     *
-     * <p>La extension debe estar admitida; si el archivo no esta dentro de la
-     * carpeta del proyecto se avisa en vez de dejarlo fuera del arbol.</p>
-     */
     public void openInEditor(File file) {
         EditorPanel editor = editorTabs.openFile(file);
         if (editor == null) {
@@ -1793,13 +1440,6 @@ public class MainWindow extends JFrame {
         onActiveEditorChanged(editor);
     }
 
-    /**
-     * Se asegura de que un archivo se vea en el arbol y lo selecciona.
-     *
-     * <p>Si no hay proyecto, o el archivo ha quedado fuera de la carpeta
-     * cargada, se carga su carpeta para que el editor y el arbol nunca
-     * discrepen: abrir un archivo siempre lo hace aparecer en el arbol.</p>
-     */
     private void revealInTree(File file) {
         if (!fileTreePanelInstance.contains(file)) {
             File parent = file.getAbsoluteFile().getParentFile();
@@ -1810,7 +1450,6 @@ public class MainWindow extends JFrame {
         fileTreePanelInstance.selectFile(file);
     }
 
-    /** Crea un archivo dentro de la carpeta del proyecto y lo abre. */
     public void newFileIn(String languageId) {
         File dir = currentContainer();
         if (dir == null) {

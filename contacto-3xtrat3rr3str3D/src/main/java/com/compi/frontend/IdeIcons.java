@@ -14,20 +14,12 @@ import java.awt.geom.Rectangle2D;
 import java.awt.geom.RoundRectangle2D;
 import javax.swing.Icon;
 
-/**
- * Iconos vectoriales dibujados en tiempo de ejecucion.
- *
- * Se generan con Graphics2D en lugar de PNG para que hereden el color de
- * primer plano del tema y se vean nitidos a cualquier escala.
- */
 public final class IdeIcons {
 
     public static final int SIZE = 18;
 
     private IdeIcons() {
     }
-
-    // ---------- Acciones de la barra superior ----------
 
     public static Icon newFile() {
         return glyph(SIZE, (g, s, c) -> {
@@ -193,8 +185,6 @@ public final class IdeIcons {
         });
     }
 
-    // ---------- Arbol de archivos ----------
-
     public static Icon folder() {
         return glyph(16, (g, s, c) -> {
             g.setColor(c);
@@ -297,14 +287,11 @@ public final class IdeIcons {
         });
     }
 
-    // ---------- Infraestructura ----------
-
     @FunctionalInterface
     private interface Painter {
         void paint(Graphics2D g, double s, Color c);
     }
 
-    /** Construye un icono que se pinta con el color de primer plano del tema. */
     public static Icon glyph(int size, Painter painter) {
         return new GlyphIcon(size, painter);
     }

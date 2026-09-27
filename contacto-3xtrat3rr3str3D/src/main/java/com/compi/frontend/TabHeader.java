@@ -14,10 +14,6 @@ import javax.swing.JPanel;
 import javax.swing.SwingConstants;
 import javax.swing.SwingUtilities;
 
-/**
- * Encabezado de una pestana de editor: icono, nombre del archivo, punto de
- * "sin guardar" y boton de cierre, tal y como lo muestra IntelliJ.
- */
 public class TabHeader extends JPanel {
 
     private final JLabel iconLabel = new JLabel();
@@ -65,7 +61,7 @@ public class TabHeader extends JPanel {
 
             @Override
             public void mousePressed(MouseEvent e) {
-                // Sin accion: la apertura se dispara en mouseReleased.
+
             }
 
             @Override
@@ -97,13 +93,12 @@ public class TabHeader extends JPanel {
     }
 
     private void fireClose(MouseEvent e) {
-        // consumeClick se resuelve en el cierre real de la pestana
+
         if (onClose != null) {
             onClose.run();
         }
     }
 
-    /** Cambia el nombre visible. */
     public void setName(String name) {
         nameLabel.setText(name);
     }
@@ -112,7 +107,6 @@ public class TabHeader extends JPanel {
         return nameLabel.getText();
     }
 
-    /** Muestra u oculta el punto de documento modificado. */
     public void setDirty(boolean dirty) {
         this.dirty = dirty;
         dirtyLabel.setVisible(dirty);
@@ -123,7 +117,6 @@ public class TabHeader extends JPanel {
         return dirty;
     }
 
-    /** Cambia el icono segun el lenguaje del archivo. */
     public void setLanguageIcon(String languageId) {
         iconLabel.setIcon(fileIcon(languageId));
     }
@@ -150,7 +143,6 @@ public class TabHeader extends JPanel {
         };
     }
 
-    /** Devuelve el icono de archivo segun el lenguaje detectado. */
     static Icon fileIcon(String languageId) {
         return switch (languageId == null ? "pig" : languageId) {
             case "y" -> IdeIcons.fileWithDot(new Color(0x56A8F5));
@@ -159,7 +151,6 @@ public class TabHeader extends JPanel {
         };
     }
 
-    /** Permite al contenedor obtener el boton de cierre. */
     public JComponent getCloseButton() {
         return closeButton;
     }

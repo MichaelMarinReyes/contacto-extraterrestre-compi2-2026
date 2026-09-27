@@ -25,13 +25,6 @@ import javax.swing.SwingConstants;
 import javax.swing.SwingUtilities;
 import javax.swing.ToolTipManager;
 
-/**
- * Lienzo que dibuja un grafo DOT como arbol.
- *
- * Permite zoom con la rueda del raton, arrastre con el boton central y Exportar
- * la vista a PNG. Las etiquetas se recortan si el nodo es mas estrecho que el
- * texto completo.
- */
 public class TreeCanvas extends JComponent implements Scrollable {
 
     private static final double ZOOM_MIN = 0.25;
@@ -52,11 +45,6 @@ public class TreeCanvas extends JComponent implements Scrollable {
         installMouse();
     }
 
-    // ====================== Datos ======================
-
-    /**
-     * Carga un grafo DOT y recalcula el layout.
-     */
     public void setDot(String dot) {
         this.model = DotModel.parse(dot);
         this.selected = null;
@@ -64,7 +52,6 @@ public class TreeCanvas extends JComponent implements Scrollable {
         relayout();
     }
 
-    /** Recalcula posiciones con el tamano de fuente actual. */
     public void relayout() {
         if (model != null) {
             layout.compute(model, getFont());
@@ -85,8 +72,6 @@ public class TreeCanvas extends JComponent implements Scrollable {
         return model == null ? 0 : model.depth();
     }
 
-    // ====================== Vista ======================
-
     @Override
     public Dimension getPreferredSize() {
         Dimension b = layout.bounds();
@@ -97,11 +82,6 @@ public class TreeCanvas extends JComponent implements Scrollable {
     public Dimension getMinimumSize() {
         return new Dimension(120, 120);
     }
-
-    // ====================== Scroll ======================
-    //
-    // El lienzo es mas grande que el panel a proposito: se deja que aparezca la
-    // barra horizontal y se navega por el arbol con la rueda o las barras.
 
     @Override
     public Dimension getPreferredScrollableViewportSize() {
@@ -119,7 +99,6 @@ public class TreeCanvas extends JComponent implements Scrollable {
                 : visibleRect.width - 48;
     }
 
-    /** La rueda se controla con Ctrl o Mayus, asi que la suelta nunca queda. */
     @Override
     public boolean getScrollableTracksViewportWidth() {
         return false;
@@ -134,7 +113,6 @@ public class TreeCanvas extends JComponent implements Scrollable {
         return zoom;
     }
 
-    /** Fija el zoom dentro de los limites permitidos. */
     public void setZoom(double value) {
         double clamped = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, value));
         if (Math.abs(clamped - zoom) > 1e-6) {
@@ -152,7 +130,6 @@ public class TreeCanvas extends JComponent implements Scrollable {
         setZoom(zoom / 1.2);
     }
 
-    /** Ajusta el zoom para que el arbol completo entre en el area visible. */
     public void zoomToFit() {
         if (!hasGraph()) {
             return;
@@ -161,16 +138,13 @@ public class TreeCanvas extends JComponent implements Scrollable {
         if (b.width <= 0 || b.height <= 0) {
             return;
         }
-        // Hay que medir contra lo que se ve, no contra el propio lienzo: su
-        // tamaño es justo el del grafo, asi que comparar con el daria 1 y el
-        // boton no haria nada.
+
         Dimension visible = visibleSize();
         double sx = visible.width / (double) b.width;
         double sy = visible.height / (double) b.height;
         setZoom(Math.min(sx, sy));
     }
 
-    /** Zona del lienzo que se ve ahora mismo a traves del scroll. */
     private Dimension visibleSize() {
         Container parent = getParent();
         if (parent instanceof JViewport viewport) {
@@ -185,8 +159,6 @@ public class TreeCanvas extends JComponent implements Scrollable {
     public void resetZoom() {
         setZoom(1.0);
     }
-
-    // ====================== Dibujo ======================
 
     @Override
     protected void paintComponent(Graphics g) {
@@ -211,7 +183,6 @@ public class TreeCanvas extends JComponent implements Scrollable {
         g2.scale(zoom, zoom);
         hitAreas.clear();
 
-        // 1. Aristas
         g2.setColor(UiTheme.separator().brighter());
         g2.setStroke(new BasicStroke(1.4f));
         for (String[] edge : model.edges()) {
@@ -232,7 +203,6 @@ public class TreeCanvas extends JComponent implements Scrollable {
             g2.draw(new Line2D.Double(x2, midY, x2, y2));
         }
 
-        // 2. Nodos
         Font font = getFont();
         g2.setFont(font);
         FontMetrics fm = g2.getFontMetrics(font);
@@ -285,8 +255,6 @@ public class TreeCanvas extends JComponent implements Scrollable {
         }
         return sb + ellipsis;
     }
-
-    // ====================== Interaccion ======================
 
     private void installMouse() {
         MouseAdapter adapter = new MouseAdapter() {

@@ -57,7 +57,7 @@ definir principal() -> entero:
     sino entonces
         imprimir("faltan datos")
 
-    elegir (total)
+    elegir (total) :
         caso 18:
             imprimir("total completo")
         caso 9:

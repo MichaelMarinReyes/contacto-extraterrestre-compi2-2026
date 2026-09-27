@@ -7,20 +7,12 @@ import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-/**
- * Modelo en memoria de un grafo DOT (subconjunto {@code digraph}).
- *
- * Solo se soporta lo que genera {@code ParseTreeDotGenerator}: nodos
- * {@code nN [label="texto"]} y aristas {@code nA -> nB;}. Mantener el parseo
- * aqui evita depender del binario externo {@code dot}.
- */
 public final class DotModel {
 
     private static final Pattern NODE = Pattern.compile("^\\s*(n\\d+)\\s*\\[\\s*label\\s*=\\s*\"(.*)\"\\s*\\]\\s*;?\\s*$");
     private static final Pattern EDGE = Pattern.compile("^\\s*(n\\d+)\\s*->\\s*(n\\d+)\\s*;?\\s*$");
     private static final Pattern UNESCAPED_QUOTE = Pattern.compile("\\\\\"");
 
-    /** Nodo del grafo. */
     public record DotNode(String id, String label) {
     }
 
@@ -31,11 +23,6 @@ public final class DotModel {
     private DotModel() {
     }
 
-    /**
-     * Interpreta un texto DOT.
-     *
-     * @return modelo con nodos y aristas; vacio si el texto no es valido
-     */
     public static DotModel parse(String dot) {
         DotModel model = new DotModel();
         if (dot == null || dot.isBlank()) {
@@ -86,7 +73,6 @@ public final class DotModel {
         return edges;
     }
 
-    /** Identificadores de los hijos directos de un nodo, en orden de aparicion. */
     public List<String> children(String id) {
         List<String> result = new ArrayList<>();
         for (String[] e : edges) {
@@ -97,7 +83,6 @@ public final class DotModel {
         return result;
     }
 
-    /** Identificador de la raiz: el unico nodo sin padre. */
     public String root() {
         for (String id : nodes.keySet()) {
             if (!parentOf.containsKey(id)) {
@@ -107,7 +92,6 @@ public final class DotModel {
         return nodes.keySet().stream().findFirst().orElse(null);
     }
 
-    /** Profundidad maxima del arbol. */
     public int depth() {
         String r = root();
         return r == null ? 0 : depth(r, 0);

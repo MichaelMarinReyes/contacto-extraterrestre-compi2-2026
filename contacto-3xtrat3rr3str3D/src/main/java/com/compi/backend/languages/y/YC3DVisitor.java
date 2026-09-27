@@ -2,9 +2,10 @@ package com.compi.backend.languages.y;
 
 import com.compi.YBaseVisitor;
 import com.compi.YParser;
-import com.compi.backend.c3d.Arreglos;
+import com.compi.backend.c3d.ArrayRuntime;
 import com.compi.backend.c3d.C3DGenerator;
 import com.compi.backend.c3d.QuadrupleOp;
+import com.compi.backend.symbols.DataType;
 import com.compi.backend.symbols.Symbol;
 import com.compi.backend.symbols.SymbolCategory;
 import com.compi.backend.symbols.SymbolTable;
@@ -12,15 +13,16 @@ import com.compi.backend.symbols.Type;
 import org.antlr.v4.runtime.tree.ParseTree;
 import org.antlr.v4.runtime.tree.TerminalNode;
 
+import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.Deque;
 import java.util.List;
-import java.util.Stack;
 
 public class YC3DVisitor extends YBaseVisitor<String> {
     private final SymbolTable symbolTable;
     private final C3DGenerator c3d;
-    private final Stack<String> breakLabels = new Stack<>();
-    private final Stack<String> continueLabels = new Stack<>();
+    private final Deque<String> breakLabels = new ArrayDeque<>();
+    private final Deque<String> continueLabels = new ArrayDeque<>();
 
     public YC3DVisitor(SymbolTable symbolTable, C3DGenerator c3d) {
         this.symbolTable = symbolTable;
@@ -34,19 +36,18 @@ public class YC3DVisitor extends YBaseVisitor<String> {
 
         symbolTable.enterScope("func_" + funcName, 0);
 
-        // Si la función tiene parámetros, se leen desde el stack relativo a P
         if (ctx.parametros() != null) {
-            int paramIndex = 0;
             for (YParser.ParametroContext paramCtx : ctx.parametros().parametro()) {
-                String paramName = paramCtx.ID().getText();
-                Symbol paramSymbol = symbolTable.resolve(paramName);
-                if (paramSymbol != null) {
-                    String paramTemp = c3d.newTemp();
-                    String stackPosTemp = c3d.newTemp();
-                    c3d.emit(QuadrupleOp.ADD, "P", String.valueOf(paramIndex), stackPosTemp);
-                    c3d.emit(QuadrupleOp.STACK_GET, stackPosTemp, null, paramTemp);
+                Type parameterType = nameType(paramCtx.tipo_dato().getText());
+                if (paramCtx.CORCHETE_IZQ() != null) {
+                    parameterType = Type.array(parameterType, 1);
                 }
-                paramIndex++;
+                if (paramCtx.LLAVE_IZQ() != null) {
+                    parameterType = Type.structType(paramCtx.tipo_dato().getText());
+                }
+                int offset = symbolTable.getCurrentScope().allocateOffset(1);
+                symbolTable.define(new Symbol(paramCtx.ID().getText(), parameterType,
+                        SymbolCategory.PARAMETER, offset, false).at(paramCtx).markWorking());
             }
         }
 
@@ -60,184 +61,134 @@ public class YC3DVisitor extends YBaseVisitor<String> {
     @Override
     public String visitDeclaracion_variable(YParser.Declaracion_variableContext ctx) {
         String varName = !ctx.ID().isEmpty() ? ctx.ID(ctx.ID().size() - 1).getText() : "bool";
-
-        // La generacion de codigo trabaja con su propio ambito, donde las locales
-        // se declaran otra vez con el hueco que les toca en el marco. Son copias
-        // de trabajo: no vuelven a salir en la tabla de simbolos.
-        //
-        // El tipo se deduce otra vez de la declaracion porque el del analizador
-        // semantico ya no esta a mano al cerrar aquel ambito. Para el codigo
-        // importa sobre todo si es un arreglo, de que forma tiene, y si es una
-        // estructura, porque de eso depende como se ejecutan sus accesos.
-        String nombreTipo = ctx.tipo_dato() != null ? ctx.tipo_dato().getText()
+        String typeName = ctx.tipo_dato() != null ? ctx.tipo_dato().getText()
                 : (ctx.ID().size() >= 2 ? ctx.ID(0).getText() : null);
         int[] sizes = new int[ctx.CORCHETE_IZQ().size()];
         List<TerminalNode> numeros = ctx.NUMERO_ENTERO();
         for (int i = 0; i < sizes.length && i < numeros.size(); i++) {
             sizes[i] = Integer.parseInt(numeros.get(i).getText());
         }
-        Type base = nombreTipo == null ? Type.UNKNOWN : tipoDeNombre(nombreTipo);
-        Type tipo = sizes.length == 0 ? base : Type.arrayOf(base, sizes);
+        Type base = typeName == null ? Type.UNKNOWN : nameType(typeName);
+        Type type = sizes.length == 0 ? base : Type.arrayOf(base, sizes);
 
         int offset = symbolTable.getCurrentScope().allocateOffset(1);
-        Symbol declarada = new Symbol(varName, tipo, SymbolCategory.VARIABLE,
+        Symbol declared = new Symbol(varName, type, SymbolCategory.VARIABLE,
                 offset, false).at(ctx).markWorking();
-        symbolTable.define(declarada);
+        symbolTable.define(declared);
         Symbol sym = symbolTable.resolve(varName);
         if (sym == null) {
-            sym = declarada;
+            sym = declared;
         }
 
-        // "Puntos p1 = {10, 20, 85.5}": la variable guarda la direccion de un
-        // bloque de celdas, una por campo, en el orden en que se declararon.
-        Symbol estructura = nombreTipo == null ? null : symbolTable.getStruct(nombreTipo);
-        if (estructura != null && sizes.length == 0) {
-            return declararEstructura(sym, estructura, ctx.expresion_inicializacion());
+        Symbol struct = typeName == null ? null : symbolTable.getStruct(typeName);
+        if (struct != null && sizes.length == 0) {
+            return declareStruct(sym, struct, ctx.expresion_inicializacion());
         }
 
-        if (tipo.isArray()) {
-            return declararArreglo(sym, tipo, ctx.expresion_inicializacion());
+        if (type.isArray()) {
+            return declareArray(sym, type, ctx.expresion_inicializacion());
         }
 
         if (ctx.expresion_inicializacion() != null && ctx.expresion_inicializacion().expresion() != null) {
-            String val = visit(ctx.expresion_inicializacion().expresion());
-            String targetPos = c3d.newTemp();
-            c3d.emit(QuadrupleOp.ADD, "P", String.valueOf(sym.getOffset()), targetPos);
-            c3d.emit(QuadrupleOp.STACK_SET, targetPos, val, null);
+            c3d.emitAssign(sym.getName(), visit(ctx.expresion_inicializacion().expresion()));
         }
         return null;
     }
 
-    /** Tipo que corresponde a un nombre escrito en la declaracion. */
-    private Type tipoDeNombre(String nombre) {
-        return switch (nombre.toLowerCase()) {
+    private Type nameType(String name) {
+        return switch (name.toLowerCase()) {
             case "entero" -> Type.INT;
             case "flotante" -> Type.DOUBLE;
             case "cadena" -> Type.STRING;
             case "caracter" -> Type.CHAR;
             case "bool" -> Type.BOOLEAN;
-            default -> Type.structType(nombre);
+            default -> Type.structType(name);
         };
     }
 
-    /**
-     * Declara una variable de tipo estructura: reserva sus celdas en el heap y
-     * guarda la direccion de la primera en la variable del marco.
-     *
-     * <p>El inicializador se escribe en el mismo orden en que se declararon los
-     * campos, y las celdas que se dejen sin valor quedan en cero.</p>
-     */
-    private String declararEstructura(Symbol sym, Symbol estructura,
+    private String declareStruct(Symbol sym, Symbol struct,
                                       YParser.Expresion_inicializacionContext inicializador) {
-        String base = Arreglos.reservar(c3d, celdasDe(estructura));
-        String posicion = c3d.newTemp();
-        c3d.emit(QuadrupleOp.ADD, "P", String.valueOf(sym.getOffset()), posicion);
-        c3d.emit(QuadrupleOp.STACK_SET, posicion, base, null);
+        String base = ArrayRuntime.allocate(c3d, celdasDe(struct));
+        c3d.emitAssign(sym.getName(), base);
 
         if (inicializador != null && !inicializador.elemento_lista().isEmpty()) {
-            llenarCampos(base, inicializador.elemento_lista(), estructura, 0);
+            fillFields(base, inicializador.elemento_lista(), struct, 0);
         } else if (inicializador != null && inicializador.expresion() != null) {
-            // "Puntos p2 = p1" copia la direccion, igual que haria Java.
-            c3d.emit(QuadrupleOp.STACK_SET, posicion, visit(inicializador.expresion()), null);
+            c3d.emitAssign(sym.getName(), visit(inicializador.expresion()));
         }
         return null;
     }
 
-    /** Cuantas celdas ocupa un tipo: un arreglo ocupa todas las suyas, todo lo demas una. */
-    private int celdasDe(Type tipo) {
-        if (tipo != null && tipo.isArray()) {
-            return Math.max(tipo.totalSize(), 1);
+    private int celdasDe(Type type) {
+        if (type != null && type.isArray()) {
+            return Math.max(type.totalSize(), 1);
         }
         return 1;
     }
 
-    /** Cuantas celdas ocupa la estructura: la suma de las de sus campos. */
-    private int celdasDe(Symbol estructura) {
+    private int celdasDe(Symbol struct) {
         int total = 0;
-        for (Symbol campo : estructura.getMembers()) {
-            total += celdasDe(campo.getType());
+        for (Symbol field : struct.getMembers()) {
+            total += celdasDe(field.getType());
         }
         return Math.max(total, 1);
     }
 
-    /**
-     * Escribe los valores de un inicializador de estructura, campo por campo.
-     *
-     * @param celda celda del bloque donde arranca este campo
-     */
-    private void llenarCampos(String base, List<YParser.Elemento_listaContext> elementos,
-                              Symbol estructura, int celda) {
+    private void fillFields(String base, List<YParser.Elemento_listaContext> elementos,
+                              Symbol struct, int cell) {
         int i = 0;
-        for (Symbol campo : estructura.getMembers()) {
+        for (Symbol field : struct.getMembers()) {
             if (i >= elementos.size()) {
                 return;
             }
-            YParser.Elemento_listaContext elemento = elementos.get(i);
-            Type tipoCampo = campo.getType();
-            String inicio = Arreglos.sumar(c3d, base, celda);
+            YParser.Elemento_listaContext element = elementos.get(i);
+            Type fieldType = field.getType();
+            String start = ArrayRuntime.add(c3d, base, cell);
 
-            if (elemento.LLAVE_IZQ() != null && tipoCampo != null && tipoCampo.isArray()) {
-                // Un campo de arreglo: "{1, 2}" rellena sus celdas.
-                int[] sizes = tipoCampo.getSizes();
-                llenar(inicio, elemento.elemento_lista(), sizes, new int[sizes.length], 0);
-            } else if (elemento.LLAVE_IZQ() != null && tipoCampo != null && tipoCampo.isStruct()) {
-                // Un campo de estructura: "{10, 20}" se reparte entre sus campos.
-                Symbol anidada = symbolTable.getStruct(tipoCampo.getCustomTypeName());
+            if (element.LLAVE_IZQ() != null && fieldType != null && fieldType.isArray()) {
+                int[] sizes = fieldType.getSizes();
+                fill(start, element.elemento_lista(), sizes, new int[sizes.length], 0);
+            } else if (element.LLAVE_IZQ() != null && fieldType != null && fieldType.isStruct()) {
+
+                Symbol anidada = symbolTable.getStruct(fieldType.getCustomTypeName());
                 if (anidada != null) {
-                    llenarCampos(inicio, elemento.elemento_lista(), anidada, 0);
+                    fillFields(start, element.elemento_lista(), anidada, 0);
                 }
             } else {
-                // Un campo simple: "85.5". Si es una estructura, lo que se copia
-                // es su direccion.
-                c3d.emit(QuadrupleOp.HEAP_SET, inicio, visit(elemento.expresion()), null);
+                c3d.emit(QuadrupleOp.HEAP_SET, start, visit(element.expresion()), null);
             }
 
-            celda += celdasDe(tipoCampo);
+            cell += celdasDe(fieldType);
             i++;
         }
     }
 
-    /**
-     * Declara un arreglo: reserva sus celdas en el heap y guarda la direccion de
-     * la primera en la variable del marco.
-     *
-     * <p>Los arreglos se guardan aplanados, como pide el enunciado, asi que una
-     * matriz de 3x2 son seis celdas contiguas.</p>
-     */
-    private String declararArreglo(Symbol sym, Type tipo,
+    private String declareArray(Symbol sym, Type type,
                                    YParser.Expresion_inicializacionContext inicializador) {
-        int celdas = tipo.totalSize();
+        int celdas = type.totalSize();
         if (celdas <= 0) {
             return null;
         }
-        String base = Arreglos.reservar(c3d, celdas);
-        String targetPos = c3d.newTemp();
-        c3d.emit(QuadrupleOp.ADD, "P", String.valueOf(sym.getOffset()), targetPos);
-        c3d.emit(QuadrupleOp.STACK_SET, targetPos, base, null);
+        String base = ArrayRuntime.allocate(c3d, celdas);
+        c3d.emitAssign(sym.getName(), base);
 
         if (inicializador != null && !inicializador.elemento_lista().isEmpty()) {
-            int[] sizes = tipo.getSizes();
-            llenar(base, inicializador.elemento_lista(), sizes, new int[sizes.length], 0);
+            int[] sizes = type.getSizes();
+            fill(base, inicializador.elemento_lista(), sizes, new int[sizes.length], 0);
         }
         return null;
     }
 
-    /**
-     * Escribe los valores de un inicializador celda a celda.
-     *
-     * <p>El recorrido sigue las llaves: cada nivel es una dimension y el numero
-     * de elemento dentro del nivel es el indice de esa dimension.</p>
-     */
-    private void llenar(String base, List<YParser.Elemento_listaContext> elementos, int[] sizes,
+    private void fill(String base, List<YParser.Elemento_listaContext> elementos, int[] sizes,
                         int[] indices, int dimension) {
         for (int i = 0; i < elementos.size() && dimension < indices.length; i++) {
-            YParser.Elemento_listaContext elemento = elementos.get(i);
+            YParser.Elemento_listaContext element = elementos.get(i);
             indices[dimension] = i;
-            if (elemento.LLAVE_IZQ() != null) {
-                llenar(base, elemento.elemento_lista(), sizes, indices, dimension + 1);
+            if (element.LLAVE_IZQ() != null) {
+                fill(base, element.elemento_lista(), sizes, indices, dimension + 1);
             } else {
-                String dato = visit(elemento.expresion());
-                Arreglos.escribirConstante(c3d, base, indices, sizes, dato);
+                String data = visit(element.expresion());
+                ArrayRuntime.writeConstant(c3d, base, indices, sizes, data);
             }
         }
     }
@@ -246,10 +197,8 @@ public class YC3DVisitor extends YBaseVisitor<String> {
     public String visitAsignacion(YParser.AsignacionContext ctx) {
         String val = ctx.expresion().isEmpty() ? "0" : visit(ctx.expresion(ctx.expresion().size() - 1));
 
-        // "matriz[1][0] = 7" entra por la alternativa del acceso a miembro, que es
-        // la primera que encaja con lo escrito.
         if (ctx.acceso_miembro() != null) {
-            if (escribirEnAcceso(ctx.acceso_miembro(), val)) {
+            if (writeOnAccess(ctx.acceso_miembro(), val)) {
                 return null;
             }
         }
@@ -259,87 +208,59 @@ public class YC3DVisitor extends YBaseVisitor<String> {
             if (sym == null) {
                 return null;
             }
-            String targetPos = c3d.newTemp();
-            c3d.emit(QuadrupleOp.ADD, "P", String.valueOf(sym.getOffset()), targetPos);
-            c3d.emit(QuadrupleOp.STACK_SET, targetPos, val, null);
+            c3d.emitAssign(sym.getName(), val);
         }
         return null;
     }
 
-    /**
-     * Escribe en la celda a la que apunta una cadena de acceso.
-     *
-     * @return true si la cadena era un acceso a arreglo o a un campo de
-     *         estructura y se ha escrito la celda
-     */
-    private boolean escribirEnAcceso(YParser.Acceso_miembroContext ctx, String valor) {
-        String direccion = direccionDeAcceso(ctx);
-        if (direccion == null) {
+    private boolean writeOnAccess(YParser.Acceso_miembroContext ctx, String valor) {
+        String address = accessAddress(ctx);
+        if (address == null) {
             return false;
         }
-        c3d.emit(QuadrupleOp.HEAP_SET, direccion, valor, null);
+        c3d.emit(QuadrupleOp.HEAP_SET, address, valor, null);
         return true;
     }
 
-    /**
-     * Direccion de la celda a la que lleva una cadena de acceso, sea un arreglo
-     * ({@code m[1][0]}) o una estructura ({@code p.promedio}, {@code p.tabla[2]}).
-     *
-     * <p>Se recorre en dos pasos: primero se separa la cadena en sus pasos (un
-     * indice o un nombre de campo, en el orden en que estan escritos) y despues
-     * se ejecutan sobre la direccion. Asi {@code m[1][0]} son dos pasos de indice
-     * y {@code p.tabla[2]} es un paso de campo seguido de uno de indice.</p>
-     *
-     * @return el temporal con la direccion, o null si la cadena no lleva a una
-     *         celda simple (por ejemplo, si se pide una fila entera)
-     */
-    private String direccionDeAcceso(YParser.Acceso_miembroContext ctx) {
+    private String accessAddress(YParser.Acceso_miembroContext ctx) {
         Symbol base = symbolTable.resolve(ctx.ID(0).getText());
         if (base == null) {
             return null;
         }
-        String direccion = leerVariable(base);
-        Type tipo = base.getType();
+        String address = leerVariable(base);
+        Type type = base.getType();
 
-        for (Object paso : pasosDeAcceso(ctx)) {
-            if (paso instanceof String nombreCampo) {
-                Symbol campo = campoDe(tipo, nombreCampo);
-                if (campo == null) {
+        for (Object step : accessSteps(ctx)) {
+            if (step instanceof String fieldName) {
+                Symbol field = fieldOf(type, fieldName);
+                if (field == null) {
                     return null;
                 }
-                direccion = Arreglos.sumar(c3d, direccion, posicionDeCampo(campo)[0]);
-                tipo = campo.getType();
+                address = ArrayRuntime.add(c3d, address, fieldPosition(field)[0]);
+                type = field.getType();
             } else {
-                if (tipo == null || !tipo.isArray() || !tipo.tieneTamanos()) {
+                if (type == null || !type.isArray() || !type.hasSizes()) {
                     return null;
                 }
-                direccion = Arreglos.direccion(c3d, direccion,
-                        List.of(visit((YParser.ExpresionContext) paso)), tipo.getSizes());
-                tipo = tipo.desindexar(1);
+                address = ArrayRuntime.address(c3d, address,
+                        List.of(visit((YParser.ExpresionContext) step)), type.getSizes());
+                type = type.desindexar(1);
             }
         }
-        if (tipo == null || tipo.isArray() || tipo.isStruct()) {
+        if (type == null || type.isArray() || type.isStruct()) {
             return null;
         }
-        return direccion;
+        return address;
     }
 
-    /**
-     * Separa una cadena de acceso en sus pasos, en el orden en que se escribieron.
-     *
-     * @return un elemento por paso: el nombre del campo como {@link String}, o la
-     *         expresion del indice como contexto del parser
-     */
-    private List<Object> pasosDeAcceso(YParser.Acceso_miembroContext ctx) {
+    private List<Object> accessSteps(YParser.Acceso_miembroContext ctx) {
         List<Object> pasos = new ArrayList<>();
         int i = 1;
         while (i < ctx.getChildCount()) {
             if (".".equals(ctx.getChild(i).getText())) {
-                // Punto: el siguiente hijo es el nombre del campo.
                 pasos.add(ctx.getChild(i + 1).getText());
                 i += 2;
             } else {
-                // Corchete: apertura, expresion del indice y cierre.
                 pasos.add(ctx.getChild(i + 1));
                 i += 3;
             }
@@ -347,109 +268,87 @@ public class YC3DVisitor extends YBaseVisitor<String> {
         return pasos;
     }
 
-    /** Campo de una estructura por su nombre, o null si no existe. */
-    private Symbol campoDe(Type tipo, String nombre) {
-        if (tipo == null || !tipo.isStruct()) {
+    private Symbol fieldOf(Type type, String name) {
+        if (type == null || !type.isStruct()) {
             return null;
         }
-        Symbol estructura = symbolTable.getStruct(tipo.getCustomTypeName());
-        return estructura == null ? null : estructura.getMember(nombre);
+        Symbol struct = symbolTable.getStruct(type.getCustomTypeName());
+        return struct == null ? null : struct.getMember(name);
     }
 
-    /**
-     * Celda del bloque donde arranca un campo.
-     *
-     * <p>Los campos se guardan aplanados y en el orden de la declaracion, asi que
-     * un campo de arreglo ocupa todas sus celdas y el siguiente campo no empieza
-     * hasta despues.</p>
-     */
-    private int[] posicionDeCampo(Symbol campo) {
-        Symbol estructura = symbolTable.getStruct(campo.getScope());
-        if (estructura == null) {
+    private int[] fieldPosition(Symbol field) {
+        Symbol struct = symbolTable.getStruct(field.getScope());
+        if (struct == null) {
             return new int[]{0};
         }
-        int celda = 0;
-        for (Symbol otro : estructura.getMembers()) {
-            if (otro == campo) {
-                return new int[]{celda};
+        int cell = 0;
+        for (Symbol other : struct.getMembers()) {
+            if (other == field) {
+                return new int[]{cell};
             }
-            celda += celdasDe(otro.getType());
+            cell += celdasDe(other.getType());
         }
         return new int[]{0};
     }
 
-    /** Lee una variable del marco actual. */
     private String leerVariable(Symbol sym) {
-        String posicion = c3d.newTemp();
-        c3d.emit(QuadrupleOp.ADD, "P", String.valueOf(sym.getOffset()), posicion);
-        String valor = c3d.newTemp();
-        c3d.emit(QuadrupleOp.STACK_GET, posicion, null, valor);
-        return valor;
+        return sym.getName();
     }
 
     @Override
     public String visitAcceso_miembro(YParser.Acceso_miembroContext ctx) {
-        String valor = leerCelda(ctx);
+        String valor = readCell(ctx);
         if (valor != null) {
             return valor;
         }
-        // Acceso a un miembro de una estructura: aqui se devuelve el valor de la
-        // variable base. El analizador semantico es quien avisa de estos casos.
+
         return ctx.ID(0).getText();
     }
 
-    /** Lee la celda a la que apunta una cadena de acceso. */
-    private String leerCelda(YParser.Acceso_miembroContext ctx) {
-        String direccion = direccionDeAcceso(ctx);
-        if (direccion == null) {
+    private String readCell(YParser.Acceso_miembroContext ctx) {
+        String address = accessAddress(ctx);
+        if (address == null) {
             return null;
         }
         String valor = c3d.newTemp();
-        c3d.emit(QuadrupleOp.HEAP_GET, direccion, null, valor);
+        c3d.emit(QuadrupleOp.HEAP_GET, address, null, valor);
         return valor;
     }
 
     @Override
     public String visitSi_sentencia(YParser.Si_sentenciaContext ctx) {
-        // La cadena "si / sino si / sino / contrario" se recorre de arriba abajo y
-        // cada rama recibe la etiqueta del falso de la prueba que la precede, de
-        // modo que solo se evalua la primera condicion que sale verdadera.
         List<YParser.CondicionContext> condiciones = new ArrayList<>();
         List<YParser.BloqueContext> bloques = new ArrayList<>();
 
         condiciones.add(ctx.condicion());
         bloques.add(ctx.bloque());
-        for (YParser.Sino_si_bloqueContext sinoSi : ctx.sino_si_bloque()) {
-            condiciones.add(sinoSi.condicion());
-            bloques.add(sinoSi.bloque());
+        for (YParser.Sino_si_bloqueContext elseIf : ctx.sino_si_bloque()) {
+            condiciones.add(elseIf.condicion());
+            bloques.add(elseIf.bloque());
         }
-        // Un "sino" puede llevar condicion propia; si no la lleva, es la ultima
-        // rama y entra donde cae el falso de la prueba anterior.
+
         YParser.Sino_bloqueContext sinSi = ctx.sino_bloque();
         if (sinSi != null && sinSi.condicion() != null) {
             condiciones.add(sinSi.condicion());
             bloques.add(sinSi.bloque());
             sinSi = null;
         }
-        YParser.BloqueContext contrario =
+        YParser.BloqueContext opposite =
                 ctx.contrario_bloque() == null ? null : ctx.contrario_bloque().bloque();
 
         String endLabel = c3d.newLabel();
         for (int i = 0; i < condiciones.size(); i++) {
-            boolean ultima = i == condiciones.size() - 1;
-            String verdaderaLabel = c3d.newLabel();
-            // El falso de la ultima prueba lleva al final de la cadena, salvo que
-            // detras quede un "sino" o un "contrario": esos se ejecutan siempre
-            // que ninguna condicion se cumple, asi que el falso cae en ellos.
-            boolean alFinal = ultima && sinSi == null && contrario == null;
-            String falsaLabel = alFinal ? endLabel : c3d.newLabel();
+            boolean last = i == condiciones.size() - 1;
+            String trueLabel = c3d.newLabel();
+            boolean alFinal = last && sinSi == null && opposite == null;
+            String falseLabel = alFinal ? endLabel : c3d.newLabel();
 
-            emitirSaltoDeCondicion(condiciones.get(i), verdaderaLabel, falsaLabel);
-            c3d.emitLabel(verdaderaLabel);
+            emitConditionalJump(condiciones.get(i), trueLabel, falseLabel);
+            c3d.emitLabel(trueLabel);
             visit(bloques.get(i));
             c3d.emitGoto(endLabel);
             if (!alFinal) {
-                c3d.emitLabel(falsaLabel);
+                c3d.emitLabel(falseLabel);
             }
         }
 
@@ -457,52 +356,59 @@ public class YC3DVisitor extends YBaseVisitor<String> {
             visit(sinSi.bloque());
             c3d.emitGoto(endLabel);
         }
-        if (contrario != null) {
-            visit(contrario);
+        if (opposite != null) {
+            visit(opposite);
         }
         c3d.emitLabel(endLabel);
 
         return null;
     }
 
-    /**
-     * Emite la prueba de una condicion con la forma que dio el docente: si es
-     * una comparacion, el salto relacional directo ({@code if (x &gt; z) goto et1})
-     * y, detras, el salto al camino contrario. Una condicion que no sea una
-     * comparacion se evalua antes en un temporal booleano.
-     *
-     * @param verdadera etiqueta a la que se salta cuando la condicion se cumple
-     * @param falsa      etiqueta del camino contrario, o null si no hace falta
-     *                  saltar (en el "hacer ... mientras" la caida ya es el final)
-     */
-    private void emitirSaltoDeCondicion(YParser.CondicionContext condicion,
-                                        String verdadera, String falsa) {
-        YParser.ExpresionContext expresion = condicion.expresion();
-        // Solo es una comparacion si trae su operador relacional y los dos
-        // operandos: "expresion operador_relacional expresion".
-        if (expresion.operador_relacional() != null && expresion.expresion().size() == 2) {
-            c3d.emit(relacionalDe(expresion.operador_relacional().getText()),
-                    visit(expresion.expresion(0)), visit(expresion.expresion(1)), verdadera);
-        } else {
-            c3d.emit(QuadrupleOp.IF_TRUE, visit(expresion), null, verdadera);
+    private void emitConditionalJump(YParser.CondicionContext condition,
+                                        String trueValue, String falseValue) {
+        emitExpressionJump(condition.expresion(), trueValue, falseValue);
+    }
+
+    private void emitExpressionJump(YParser.ExpresionContext expression,
+                                        String trueValue, String falseValue) {
+        if (expression.operador_negacion() != null) {
+            emitExpressionJump(expression.expresion(0), falseValue, trueValue);
+            return;
         }
-        if (falsa != null) {
-            c3d.emitGoto(falsa);
+        if (expression.operador_logico() != null && expression.expresion().size() == 2) {
+            boolean esY = "&&".equals(expression.operador_logico().getText());
+            String next = c3d.newLabel();
+            if (esY) {
+                emitExpressionJump(expression.expresion(0), next, falseValue);
+            } else {
+                emitExpressionJump(expression.expresion(0), trueValue, next);
+            }
+            c3d.emitLabel(next);
+            emitExpressionJump(expression.expresion(1), trueValue, falseValue);
+            return;
+        }
+        if (expression.operador_relacional() != null && expression.expresion().size() == 2) {
+            c3d.emit(relacionalDe(expression.operador_relacional().getText()),
+                    visit(expression.expresion(0)), visit(expression.expresion(1)), trueValue);
+        } else {
+            c3d.emit(QuadrupleOp.IF_TRUE, visit(expression), null, trueValue);
+        }
+        if (falseValue != null) {
+            c3d.emitGoto(falseValue);
         }
     }
 
-    /** Traduce el operador relacional de la gramatica a su cuarteta de salto. */
-    private QuadrupleOp relacionalDe(String operador) {
-        if ("==".equals(operador)) {
+    private QuadrupleOp relacionalDe(String operator) {
+        if ("==".equals(operator)) {
             return QuadrupleOp.IF_EQ;
         }
-        if ("!=".equals(operador)) {
+        if ("!=".equals(operator)) {
             return QuadrupleOp.IF_NE;
         }
-        if ("<".equals(operador)) {
+        if ("<".equals(operator)) {
             return QuadrupleOp.IF_LT;
         }
-        if (">".equals(operador)) {
+        if (">".equals(operator)) {
             return QuadrupleOp.IF_GT;
         }
         return QuadrupleOp.IF_EQ;
@@ -518,7 +424,7 @@ public class YC3DVisitor extends YBaseVisitor<String> {
         continueLabels.push(condLabel);
 
         c3d.emitLabel(condLabel);
-        emitirSaltoDeCondicion(ctx.condicion(), bodyLabel, endLabel);
+        emitConditionalJump(ctx.condicion(), bodyLabel, endLabel);
 
         c3d.emitLabel(bodyLabel);
         visit(ctx.bloque());
@@ -539,12 +445,10 @@ public class YC3DVisitor extends YBaseVisitor<String> {
         breakLabels.push(endLabel);
         continueLabels.push(condLabel);
 
-        // El cuerpo se ejecuta al menos una vez, asi que se entra a el sin probar
-        // nada: la prueba va despues, como en el "hacer ... mientras" de Pascal.
         visit(ctx.bloque());
 
         c3d.emitLabel(condLabel);
-        emitirSaltoDeCondicion(ctx.condicion(), condLabel, null);
+        emitConditionalJump(ctx.condicion(), condLabel, null);
 
         c3d.emitLabel(endLabel);
 
@@ -557,15 +461,12 @@ public class YC3DVisitor extends YBaseVisitor<String> {
     public String visitPara_sentencia(YParser.Para_sentenciaContext ctx) {
         String condLabel = c3d.newLabel();
         String bodyLabel = c3d.newLabel();
-        // "continuar" en un "para" tiene que ejecutar el incremento antes de
-        // volver a probar, asi que salta aqui y no a la prueba.
-        String incrementoLabel = c3d.newLabel();
+        String incrementLabel = c3d.newLabel();
         String endLabel = c3d.newLabel();
 
         breakLabels.push(endLabel);
-        continueLabels.push(incrementoLabel);
+        continueLabels.push(incrementLabel);
 
-        // La inicializacion va una sola vez, antes de la primera prueba.
         if (ctx.declaracion_variable() != null) {
             visit(ctx.declaracion_variable());
         } else if (ctx.asignacion() != null) {
@@ -573,12 +474,12 @@ public class YC3DVisitor extends YBaseVisitor<String> {
         }
 
         c3d.emitLabel(condLabel);
-        emitirSaltoDeCondicion(ctx.condicion(), bodyLabel, endLabel);
+        emitConditionalJump(ctx.condicion(), bodyLabel, endLabel);
 
         c3d.emitLabel(bodyLabel);
         visit(ctx.bloque());
 
-        c3d.emitLabel(incrementoLabel);
+        c3d.emitLabel(incrementLabel);
         visit(ctx.incremento_decremento());
         c3d.emitGoto(condLabel);
 
@@ -591,76 +492,62 @@ public class YC3DVisitor extends YBaseVisitor<String> {
 
     @Override
     public String visitIncremento_decremento(YParser.Incremento_decrementoContext ctx) {
-        // "i++" y "++i" se compilan igual: en Y el incremento es una sentencia,
-        // no un valor, asi que solo se actualiza la variable.
-        YParser.Acceso_miembroContext acceso = ctx.acceso_miembro();
-        String nombre = acceso != null ? acceso.ID(0).getText()
+        YParser.Acceso_miembroContext access = ctx.acceso_miembro();
+        String name = access != null ? access.ID(0).getText()
                 : (ctx.ID() == null ? null : ctx.ID().getText());
-        Symbol sym = nombre == null ? null : symbolTable.resolve(nombre);
+        Symbol sym = name == null ? null : symbolTable.resolve(name);
         if (sym == null) {
             return null;
         }
-        boolean esArreglo = sym.getType() != null && sym.getType().isArray();
-        // La celda de un arreglo se lee antes de sumarle uno; si la cadena de
-        // indices no llega a una celda (una fila, por ejemplo) no hay nada que
-        // incrementar y el analizador semantico ya lo avisa.
-        String antes = esArreglo ? leerCelda(acceso) : leerVariable(sym);
+        boolean isArray = sym.getType() != null && sym.getType().isArray();
+
+        String antes = isArray ? readCell(access) : leerVariable(sym);
         if (antes == null) {
             return null;
         }
-        String despues = c3d.newTemp();
+        String after = c3d.newTemp();
         c3d.emit(ctx.SUMA_ABREVIADA() != null ? QuadrupleOp.ADD : QuadrupleOp.SUB,
-                antes, "1", despues);
+                antes, "1", after);
 
-        if (esArreglo) {
-            escribirEnAcceso(acceso, despues);
+        if (isArray) {
+            writeOnAccess(access, after);
             return null;
         }
-        String posicion = c3d.newTemp();
-        c3d.emit(QuadrupleOp.ADD, "P", String.valueOf(sym.getOffset()), posicion);
-        c3d.emit(QuadrupleOp.STACK_SET, posicion, despues, null);
+        c3d.emitAssign(sym.getName(), after);
         return null;
     }
 
     @Override
     public String visitElegir_sentencia(YParser.Elegir_sentenciaContext ctx) {
-        // Se prueba el valor contra cada caso, uno detras de otro, y el que
-        // coincide salta a su bloque. Si no coincide con ninguno, se va al
-        // "siempre", o al final del elegir si no lo hay.
         String endLabel = c3d.newLabel();
-        YParser.Siempre_bloqueContext siempre = ctx.siempre_bloque();
-        String defectoLabel = siempre != null ? c3d.newLabel() : endLabel;
+        YParser.Siempre_bloqueContext always = ctx.siempre_bloque();
+        String defaultLabel = always != null ? c3d.newLabel() : endLabel;
 
-        // Dentro de un caso no hay ciclo al que volver, asi que "continuar"
-        // sale de la seleccion igual que "romper".
         breakLabels.push(endLabel);
         continueLabels.push(endLabel);
 
         String valor = visit(ctx.expresion());
         List<YParser.Caso_bloqueContext> casos = ctx.caso_bloque();
         List<String> etiquetas = new ArrayList<>();
-        for (YParser.Caso_bloqueContext caso : casos) {
-            String etiqueta = c3d.newLabel();
-            etiquetas.add(etiqueta);
-            c3d.emit(QuadrupleOp.IF_EQ, valor, visit(caso.expresion()), etiqueta);
+        for (YParser.Caso_bloqueContext caseOf : casos) {
+            String label = c3d.newLabel();
+            etiquetas.add(label);
+            c3d.emit(QuadrupleOp.IF_EQ, valor, visit(caseOf.expresion()), label);
         }
-        c3d.emitGoto(defectoLabel);
+        c3d.emitGoto(defaultLabel);
 
         for (int i = 0; i < casos.size(); i++) {
             c3d.emitLabel(etiquetas.get(i));
-            YParser.Caso_bloqueContext caso = casos.get(i);
-            visit(caso.bloque_interno_opcional());
-            // Al final de un caso se va al final del elegir, salvo que el caso
-            // termine en "romper", que ya salio y dejaria un salto de mas. El
-            // "romper" puede quedarse en el cuerpo o recogerse la propia regla
-            // del caso, segun como lo reparta el analizador.
-            if (caso.ROMPER() == null && !terminaConRomper(caso.bloque_interno_opcional())) {
+            YParser.Caso_bloqueContext caseOf = casos.get(i);
+            visit(caseOf.bloque_interno_opcional());
+
+            if (caseOf.ROMPER() == null && !terminaConRomper(caseOf.bloque_interno_opcional())) {
                 c3d.emitGoto(endLabel);
             }
         }
-        if (siempre != null) {
-            c3d.emitLabel(defectoLabel);
-            visit(siempre.bloque_interno_opcional());
+        if (always != null) {
+            c3d.emitLabel(defaultLabel);
+            visit(always.bloque_interno_opcional());
         }
         c3d.emitLabel(endLabel);
 
@@ -669,46 +556,35 @@ public class YC3DVisitor extends YBaseVisitor<String> {
         return null;
     }
 
-    /** Dice si la ultima sentencia con codigo de un bloque es un "romper". */
-    private boolean terminaConRomper(YParser.Bloque_interno_opcionalContext cuerpo) {
-        List<YParser.SentenciaContext> sentencias = cuerpo.sentencia();
-        // Los saltos de linea en blanco se cuelan como sentencias sin codigo, asi
-        // que se mira hacia atras saltandoslos.
+    private boolean terminaConRomper(YParser.Bloque_interno_opcionalContext body) {
+        List<YParser.SentenciaContext> sentencias = body.sentencia();
+
         for (int i = sentencias.size() - 1; i >= 0; i--) {
-            YParser.SentenciaContext sentencia = sentencias.get(i);
-            if (sentencia.getChildCount() == 1
-                    && sentencia.getChild(0) instanceof TerminalNode) {
+            YParser.SentenciaContext statement = sentencias.get(i);
+            if (statement.getChildCount() == 1
+                    && statement.getChild(0) instanceof TerminalNode) {
                 continue;
             }
-            return sentencia.romper_sentencia() != null;
+            return statement.romper_sentencia() != null;
         }
         return false;
     }
 
     @Override
     public String visitRetornar_sentencia(YParser.Retornar_sentenciaContext ctx) {
-        if (ctx.expresion() != null) {
-            String val = visit(ctx.expresion());
-            // El valor de retorno se coloca convencionalmente en stack[P]
-            c3d.emit(QuadrupleOp.STACK_SET, "P", val, null);
-        }
-        c3d.emit(QuadrupleOp.RETURN, null, null, null);
+        c3d.emitReturn(ctx.expresion() == null ? null : visit(ctx.expresion()));
         return null;
     }
 
     @Override
     public String visitRomper_sentencia(YParser.Romper_sentenciaContext ctx) {
-        if (!breakLabels.isEmpty()) {
-            c3d.emitGoto(breakLabels.peek());
-        }
+        c3d.emitGotoTop(breakLabels);
         return null;
     }
 
     @Override
     public String visitContinuar_sentencia(YParser.Continuar_sentenciaContext ctx) {
-        if (!continueLabels.isEmpty()) {
-            c3d.emitGoto(continueLabels.peek());
-        }
+        c3d.emitGotoTop(continueLabels);
         return null;
     }
 
@@ -717,9 +593,7 @@ public class YC3DVisitor extends YBaseVisitor<String> {
         if (ctx.argumentos() != null) {
             for (YParser.ExpresionContext exprCtx : ctx.argumentos().expresion()) {
                 String val = visit(exprCtx);
-                if (esCadena(exprCtx)) {
-                    // Una cadena se imprime desde el heap, asi que se pasa la
-                    // direccion donde se escribieron sus caracteres.
+                if (isString(exprCtx)) {
                     c3d.emit(QuadrupleOp.PRINT_STR, val, null, null);
                 } else {
                     c3d.emit(QuadrupleOp.PRINT_INT, val, null, null);
@@ -730,65 +604,49 @@ public class YC3DVisitor extends YBaseVisitor<String> {
         return null;
     }
 
-    /**
-     * true si la expresion es una cadena.
-     *
-     * <p>Se mira primero lo escrito: un literal entre comillas es una cadena
-     * aunque todavia no se haya escrito en el heap. Si no, se pregunta a la tabla
-     * de simbolos, que es lo que permite imprimir tanto "x" de tipo cadena como
-     * "leer()".</p>
-     */
-    private boolean esCadena(YParser.ExpresionContext ctx) {
+    private boolean isString(YParser.ExpresionContext ctx) {
         if (ctx.leer_funcion() != null) {
             return true;
         }
-        if (ctx.termino().isEmpty()) {
+        if (ctx.sumatoria() == null || ctx.sumatoria().productoria().size() != 1
+                || ctx.sumatoria().productoria(0).termino().size() != 1) {
             return false;
         }
-        YParser.TerminoContext termino = ctx.termino(0);
-        if (termino.CADENA_TEXTO() != null) {
+        YParser.TerminoContext term = ctx.sumatoria().productoria(0).termino(0);
+        if (term.CADENA_TEXTO() != null) {
             return true;
         }
-        if (termino.ID() != null) {
-            Symbol sym = symbolTable.resolve(termino.ID().getText());
+        if (term.ID() != null) {
+            Symbol sym = symbolTable.resolve(term.ID().getText());
             return sym != null && Type.STRING.equals(sym.getType());
         }
-        if (termino.acceso_miembro() != null) {
-            return Type.STRING.equals(tipoDeAcceso(termino.acceso_miembro()));
+        if (term.acceso_miembro() != null) {
+            return Type.STRING.equals(accessType(term.acceso_miembro()));
         }
         return false;
     }
 
-    /**
-     * Tipo que hay en la celda a la que lleva una cadena de acceso, sin generar
-     * codigo: los indices solo se cuentan, no se evaluan.
-     */
-    private Type tipoDeAcceso(YParser.Acceso_miembroContext ctx) {
+    private Type accessType(YParser.Acceso_miembroContext ctx) {
         Symbol base = symbolTable.resolve(ctx.ID(0).getText());
-        Type tipo = base == null ? null : base.getType();
-        for (Object paso : pasosDeAcceso(ctx)) {
-            if (tipo == null) {
+        Type type = base == null ? null : base.getType();
+        for (Object step : accessSteps(ctx)) {
+            if (type == null) {
                 return Type.UNKNOWN;
             }
-            if (paso instanceof String nombreCampo) {
-                Symbol campo = campoDe(tipo, nombreCampo);
-                tipo = campo == null ? Type.UNKNOWN : campo.getType();
-            } else if (tipo.isArray() && tipo.tieneTamanos()) {
-                tipo = tipo.desindexar(1);
+            if (step instanceof String fieldName) {
+                Symbol field = fieldOf(type, fieldName);
+                type = field == null ? Type.UNKNOWN : field.getType();
+            } else if (type.isArray() && type.hasSizes()) {
+                type = type.desindexar(1);
             } else {
-                tipo = Type.UNKNOWN;
+                type = Type.UNKNOWN;
             }
         }
-        return tipo;
+        return type;
     }
 
     @Override
     public String visitExpresion(YParser.ExpresionContext ctx) {
-        // La gramatica reescribe la recursion izquierda, asi que una expresion
-        // llega de dos formas: los operadores aritmeticos se quedan en el mismo
-        // nivel ("a + b * c" es una sola cadena) mientras que los relacionales y
-        // los logicos envuelven a sus operandos. Cada caso se recorre como toca.
-
         if (ctx.operador_negacion() != null) {
             String temp = c3d.newTemp();
             c3d.emit(QuadrupleOp.NOT, visit(ctx.expresion(0)), null, temp);
@@ -796,15 +654,15 @@ public class YC3DVisitor extends YBaseVisitor<String> {
         }
 
         if (ctx.operador_logico() != null) {
-            return logico(visit(ctx.expresion(0)), ctx.operador_logico().getText(),
+            return logical(visit(ctx.expresion(0)), ctx.operador_logico().getText(),
                     ctx.expresion(1));
         }
 
         if (ctx.operador_relacional() != null) {
-            String izquierda = visit(ctx.expresion(0));
-            String derecha = visit(ctx.expresion(1));
+            String left = visit(ctx.expresion(0));
+            String right = visit(ctx.expresion(1));
             String temp = c3d.newTemp();
-            String verdaderaLabel = c3d.newLabel();
+            String trueLabel = c3d.newLabel();
             String endLabel = c3d.newLabel();
 
             String op = ctx.operador_relacional().getText();
@@ -813,37 +671,21 @@ public class YC3DVisitor extends YBaseVisitor<String> {
                     "<".equals(op) ? QuadrupleOp.IF_LT :
                     ">".equals(op) ? QuadrupleOp.IF_GT : QuadrupleOp.IF_GE;
 
-            c3d.emit(qOp, izquierda, derecha, verdaderaLabel);
-            c3d.emitAssign(temp, "0");
-            c3d.emitGoto(endLabel);
-            c3d.emitLabel(verdaderaLabel);
+            String falseLabel = c3d.newLabel();
+            c3d.emit(qOp, left, right, trueLabel);
+            c3d.emitGoto(falseLabel);
+            c3d.emitLabel(trueLabel);
             c3d.emitAssign(temp, "1");
+            c3d.emitGoto(endLabel);
+            c3d.emitLabel(falseLabel);
+            c3d.emitAssign(temp, "0");
             c3d.emitLabel(endLabel);
 
             return temp;
         }
 
-        if (!ctx.termino().isEmpty() || !ctx.operador_aritmetico().isEmpty()) {
-            // Cadena aritmetica: los operadores van todos al mismo nivel, asi que
-            // se aplican de izquierda a derecha sobre lo ya acumulado.
-            String acumulado = null;
-            String pendiente = null;
-            for (int i = 0; i < ctx.getChildCount(); i++) {
-                ParseTree hijo = ctx.getChild(i);
-                if (hijo instanceof YParser.Operador_aritmeticoContext) {
-                    pendiente = hijo.getText();
-                    continue;
-                }
-                String valor = visit(hijo);
-                if (acumulado == null) {
-                    acumulado = valor;
-                } else {
-                    String temp = c3d.newTemp();
-                    c3d.emit(operadorAritmetico(pendiente), acumulado, valor, temp);
-                    acumulado = temp;
-                }
-            }
-            return acumulado == null ? "0" : acumulado;
+        if (ctx.sumatoria() != null) {
+            return visit(ctx.sumatoria());
         }
 
         if (ctx.llamada_funcion() != null) {
@@ -857,35 +699,65 @@ public class YC3DVisitor extends YBaseVisitor<String> {
         return "0";
     }
 
-    /** Traduce el signo del operador aritmetico a su quadruplo. */
-    private QuadrupleOp operadorAritmetico(String op) {
-        return switch (op == null ? "" : op) {
-            case "+" -> QuadrupleOp.ADD;
-            case "-" -> QuadrupleOp.SUB;
-            case "*" -> QuadrupleOp.MUL;
-            default -> QuadrupleOp.DIV;
-        };
+    @Override
+    public String visitSumatoria(YParser.SumatoriaContext ctx) {
+        String acumulado = visit(ctx.productoria(0));
+        boolean isText = isText(ctx.productoria(0));
+        for (int i = 1; i < ctx.productoria().size(); i++) {
+            YParser.ProductoriaContext next = ctx.productoria(i);
+            String op = ctx.operador_aditivo(i - 1).getText();
+            boolean concat = "+".equals(op) && (isText || isText(next));
+            String temp = c3d.newTemp();
+            c3d.emit(concat ? QuadrupleOp.CONCAT
+                    : "+".equals(op) ? QuadrupleOp.ADD : QuadrupleOp.SUB,
+                    acumulado, visit(next), temp);
+            acumulado = temp;
+            isText = concat;
+        }
+        return acumulado;
     }
 
-    /**
-     * Combina dos operandos con "&&" u "||" en corto circuito: el segundo solo
-     * se mira cuando el primero no deja nada que decidir.
-     *
-     * @param derechaCtx el operando derecho, que se visita despues del salto para
-     *                   que el salto lo pueda saltarse
-     */
-    private String logico(String izquierda, String operador,
-                          YParser.ExpresionContext derechaCtx) {
+    @Override
+    public String visitProductoria(YParser.ProductoriaContext ctx) {
+        String acumulado = visit(ctx.termino(0));
+        for (int i = 1; i < ctx.termino().size(); i++) {
+            String op = ctx.operador_multiplicativo(i - 1).getText();
+            String temp = c3d.newTemp();
+            c3d.emit("*".equals(op) ? QuadrupleOp.MUL : QuadrupleOp.DIV,
+                    acumulado, visit(ctx.termino(i)), temp);
+            acumulado = temp;
+        }
+        return acumulado;
+    }
+
+    private boolean isText(YParser.ProductoriaContext productoria) {
+        if (productoria.termino().size() != 1) {
+            return false;
+        }
+        YParser.TerminoContext term = productoria.termino(0);
+        if (term.CADENA_TEXTO() != null) {
+            return true;
+        }
+        if (term.ID() != null) {
+            Symbol s = symbolTable.resolve(term.ID().getText());
+            return s != null && s.getType() != null
+                    && s.getType().getDataType() == DataType.STRING;
+        }
+        return false;
+    }
+
+    private String logical(String left, String operator,
+                          YParser.ExpresionContext rightCtx) {
         String temp = c3d.newTemp();
         String endLabel = c3d.newLabel();
-        if ("&&".equals(operador)) {
+        if ("&&".equals(operator)) {
             c3d.emitAssign(temp, "0");
-            c3d.emit(QuadrupleOp.IF_FALSE, izquierda, null, endLabel);
+            c3d.emit(QuadrupleOp.IF_FALSE, left, null, endLabel);
         } else {
             c3d.emitAssign(temp, "1");
-            c3d.emit(QuadrupleOp.IF_TRUE, izquierda, null, endLabel);
+            c3d.emit(QuadrupleOp.IF_TRUE, left, null, endLabel);
         }
-        c3d.emitAssign(temp, visit(derechaCtx));
+        c3d.emitAssign(temp, visit(rightCtx));
         c3d.emitLabel(endLabel);
         return temp;
     }
@@ -904,28 +776,7 @@ public class YC3DVisitor extends YBaseVisitor<String> {
         return retTemp;
     }
 
-    /**
-     * Escribe una cadena literal en el heap, terminada en cero, y devuelve la
-     * direccion de su primer caracter.
-     *
-     * <p>Es la misma convencion que usa el runtime de impresion: {@code print_str}
-     * recibe la direccion y va leyendo hasta el cero.</p>
-     */
-    private String cadenaEnHeap(String literal) {
-        String contenido = literal.substring(1, literal.length() - 1);
-        String inicio = c3d.newTemp();
-        c3d.emitAssign(inicio, "H");
-        for (int i = 0; i < contenido.length(); i++) {
-            c3d.emit(QuadrupleOp.HEAP_SET, "H", String.valueOf((int) contenido.charAt(i)), null);
-            c3d.emit(QuadrupleOp.ADD, "H", "1", "H");
-        }
-        c3d.emit(QuadrupleOp.HEAP_SET, "H", "0", null);
-        c3d.emit(QuadrupleOp.ADD, "H", "1", "H");
-        return inicio;
-    }
-
-    /** Valor numerico de un caracter literal, que es lo que se guarda en una celda. */
-    private String caracterDe(String literal) {
+    private String charOf(String literal) {
         return String.valueOf((int) literal.charAt(1));
     }
 
@@ -935,20 +786,15 @@ public class YC3DVisitor extends YBaseVisitor<String> {
         if (ctx.NUMERO_DECIMAL() != null) return ctx.NUMERO_DECIMAL().getText();
         if (ctx.VERDADERO() != null) return "1";
         if (ctx.FALSO() != null) return "0";
-        if (ctx.CARACTER() != null) return caracterDe(ctx.CARACTER().getText());
-        if (ctx.CADENA_TEXTO() != null) return cadenaEnHeap(ctx.CADENA_TEXTO().getText());
+        if (ctx.CARACTER() != null) return charOf(ctx.CARACTER().getText());
+        if (ctx.CADENA_TEXTO() != null) {
+            String temp = c3d.newTemp();
+            c3d.emitAssign(temp, ctx.CADENA_TEXTO().getText());
+            return temp;
+        }
 
         if (ctx.ID() != null) {
-            String name = ctx.ID().getText();
-            Symbol sym = symbolTable.resolve(name);
-            if (sym != null) {
-                String temp = c3d.newTemp();
-                String posTemp = c3d.newTemp();
-                c3d.emit(QuadrupleOp.ADD, "P", String.valueOf(sym.getOffset()), posTemp);
-                c3d.emit(QuadrupleOp.STACK_GET, posTemp, null, temp);
-                return temp;
-            }
-            return name;
+            return ctx.ID().getText();
         }
 
         if (ctx.acceso_miembro() != null) {
@@ -959,7 +805,6 @@ public class YC3DVisitor extends YBaseVisitor<String> {
             return visit(ctx.expresion());
         }
 
-        // Menos unario: "-x" es una instruccion propia, no un 0 menos x.
         if (ctx.MENOS() != null) {
             String temp = c3d.newTemp();
             c3d.emit(QuadrupleOp.NEG, visit(ctx.termino()), null, temp);

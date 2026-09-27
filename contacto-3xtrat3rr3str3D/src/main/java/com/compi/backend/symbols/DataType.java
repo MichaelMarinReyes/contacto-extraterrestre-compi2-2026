@@ -17,7 +17,4 @@ public enum DataType {
         return this == INT || this == DOUBLE;
     }
 
-    public boolean isPrimitive() {
-        return this == INT || this == DOUBLE || this == CHAR || this == BOOLEAN || this == STRING;
-    }
 }

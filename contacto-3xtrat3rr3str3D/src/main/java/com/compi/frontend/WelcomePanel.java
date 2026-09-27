@@ -14,12 +14,6 @@ import javax.swing.JButton;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
 
-/**
- * Pantalla de bienvenida que se muestra cuando no hay ningun archivo abierto.
- *
- * Mantiene la zona del editor util en vez de dejar un hueco vacio, y ofrece
- * accesos directos a las acciones principales.
- */
 public class WelcomePanel extends JPanel {
 
     private final Runnable onNewFile;

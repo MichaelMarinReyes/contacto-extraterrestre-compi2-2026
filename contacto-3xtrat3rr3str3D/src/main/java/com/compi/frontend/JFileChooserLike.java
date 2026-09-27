@@ -7,19 +7,11 @@ import javax.swing.JOptionPane;
 import javax.swing.SwingUtilities;
 import javax.swing.filechooser.FileNameExtensionFilter;
 
-/**
- * Utilidades de dialogo para elegir archivos.
- *
- * Se extraen para que los paneles no repitan el mismo bloque de JFileChooser.
- */
 final class JFileChooserLike {
 
     private JFileChooserLike() {
     }
 
-    /**
-     * Pide un destino PNG y entrega la ruta elegida al consumidor.
-     */
     static void choosePng(java.awt.Component parent, String defaultName, Consumer<java.nio.file.Path> onChosen) {
         JFileChooser chooser = new JFileChooser();
         chooser.setDialogTitle("Exportar imagen");
@@ -34,7 +26,6 @@ final class JFileChooserLike {
         }
     }
 
-    /** Pide un destino de texto y entrega la ruta elegida. */
     static void chooseText(java.awt.Component parent, String defaultName, Consumer<java.nio.file.Path> onChosen) {
         JFileChooser chooser = new JFileChooser();
         chooser.setDialogTitle("Exportar texto");
@@ -49,7 +40,6 @@ final class JFileChooserLike {
         }
     }
 
-    /** Muestra un error de forma uniforme. */
     static void error(java.awt.Component parent, String message) {
         JOptionPane.showMessageDialog(SwingUtilities.getWindowAncestor(parent), message,
                 "Error", JOptionPane.ERROR_MESSAGE);

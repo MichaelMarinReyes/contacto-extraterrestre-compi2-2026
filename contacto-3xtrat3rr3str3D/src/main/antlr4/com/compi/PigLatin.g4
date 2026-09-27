@@ -1,7 +1,7 @@
 grammar PigLatin;
 
 // GRAMÁTICA
-init: pig_latin;
+init: pig_latin EOF;
 
 pig_latin: import_declaracion* variables? maior;
 
@@ -41,7 +41,13 @@ tipo_dato: NUMERUS
          | VERUM
          | FALSUS;
 
-expresion: termino (operacion_aritmetica termino)*;
+expresion: producto (suma_resta producto)*;
+
+producto: termino (multiplicacion termino)*;
+
+suma_resta: MAS | MENOS;
+
+multiplicacion: MULTIPLICACION | DIVISION;
 
 termino: VARIABLE
        | acceso_miembro
@@ -58,8 +64,6 @@ termino: VARIABLE
 acceso_miembro: VARIABLE (PUNTO VARIABLE | CORCHETE_IZQ expresion CORCHETE_DER)+;
 
 arreglo_acceso: VARIABLE CORCHETE_IZQ expresion CORCHETE_DER (PUNTO VARIABLE)*;
-
-operacion_aritmetica: MAS | MENOS | MULTIPLICACION | DIVISION;
 
 maior: MAIOR MAYOR_QUE sentencia* FINIS PUNTO_COMA;
 

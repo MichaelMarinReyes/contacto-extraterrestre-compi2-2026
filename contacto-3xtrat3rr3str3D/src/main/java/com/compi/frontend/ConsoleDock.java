@@ -10,22 +10,15 @@ import javax.swing.JScrollPane;
 import javax.swing.JTabbedPane;
 import javax.swing.JTextArea;
 
-/**
- * Dock inferior de salidas del compilador.
- *
- * Contiene las seis vistas que produce el backend: consola de compilacion,
- * tripletes, cuartetas, codigo de tres direcciones, codigo C y el resumen.
- * Cada vista es un area de texto de solo lectura con fuente monoespaciada.
- */
 public class ConsoleDock extends JPanel {
 
     public enum View {
-        CONSOLA("Consola", IdeIcons.compile()),
+        CONSOLE("Consola", IdeIcons.compile()),
         TRIPLETS("Tripletes", null),
-        CUARTETAS("Cuartetas", null),
+        QUADRUPLE("Cuartetas", null),
         C3D("Código 3D", null),
-        CODIGO_C("Código C", null),
-        RESUMEN("Resumen", null);
+        C_CODE("Código C", null),
+        SUMMARY("Resumen", null);
 
         private final String title;
         private final javax.swing.Icon icon;
@@ -61,12 +54,12 @@ public class ConsoleDock extends JPanel {
         tabs.setFont(UiTheme.sans(12));
         tabs.setTabLayoutPolicy(JTabbedPane.SCROLL_TAB_LAYOUT);
 
-        tabs.addTab(View.CONSOLA.title(), new Scroller(consoleArea));
+        tabs.addTab(View.CONSOLE.title(), new Scroller(consoleArea));
         tabs.addTab(View.TRIPLETS.title(), new Scroller(tripletsArea));
-        tabs.addTab(View.CUARTETAS.title(), new Scroller(quadruplesArea));
+        tabs.addTab(View.QUADRUPLE.title(), new Scroller(quadruplesArea));
         tabs.addTab(View.C3D.title(), new Scroller(c3dArea));
-        tabs.addTab(View.CODIGO_C.title(), new Scroller(cCodeArea));
-        tabs.addTab(View.RESUMEN.title(), new Scroller(summaryArea));
+        tabs.addTab(View.C_CODE.title(), new Scroller(cCodeArea));
+        tabs.addTab(View.SUMMARY.title(), new Scroller(summaryArea));
 
         add(tabs, BorderLayout.CENTER);
         add(buildStatusBar(), BorderLayout.SOUTH);
@@ -81,7 +74,6 @@ public class ConsoleDock extends JPanel {
         return bar;
     }
 
-    /** Area de texto de solo lectura con la tipografia del tema. */
     private static JTextArea area() {
         JTextArea a = new JTextArea();
         a.setEditable(false);
@@ -97,7 +89,6 @@ public class ConsoleDock extends JPanel {
         return a;
     }
 
-    /** Envoltura simple para no repetir el JScrollPane en cada pestana. */
     private static class Scroller extends JScrollPane {
         Scroller(JTextArea area) {
             super(area);
@@ -106,8 +97,6 @@ public class ConsoleDock extends JPanel {
             getVerticalScrollBar().setUnitIncrement(18);
         }
     }
-
-    // ====================== Contenido ======================
 
     public void setConsole(String text) {
         set(consoleArea, text);
@@ -146,7 +135,6 @@ public class ConsoleDock extends JPanel {
         return statusLabel.getText();
     }
 
-    /** Selecciona la vista indicada. */
     public void select(View view) {
         int idx = view.ordinal();
         if (idx >= 0 && idx < tabs.getTabCount()) {
@@ -156,10 +144,9 @@ public class ConsoleDock extends JPanel {
 
     public View getSelectedView() {
         int idx = tabs.getSelectedIndex();
-        return idx < 0 ? View.CONSOLA : View.values()[idx];
+        return idx < 0 ? View.CONSOLE : View.values()[idx];
     }
 
-    /** Limpia todas las vistas. */
     public void clearAll() {
         for (JTextArea a : all()) {
             a.setText("");
@@ -204,7 +191,6 @@ public class ConsoleDock extends JPanel {
         area.setCaretPosition(0);
     }
 
-    /** Aplica los colores del tema a todas las areas. */
     public void applyTheme() {
         for (JTextArea a : all()) {
             a.setBackground(UiTheme.editorBg());
@@ -212,17 +198,14 @@ public class ConsoleDock extends JPanel {
         }
     }
 
-    /** Permite añadir pestañas extra desde MainWindow sin tocar la vista. */
     public void addView(String title, Component component) {
         tabs.addTab(title, component);
     }
 
-    /** Cuantifica cuántas pestañas hay visibles. */
     public int getViewCount() {
         return tabs.getTabCount();
     }
 
-    /** Altura preferida del dock. */
     @Override
     public Dimension getPreferredSize() {
         Dimension d = super.getPreferredSize();

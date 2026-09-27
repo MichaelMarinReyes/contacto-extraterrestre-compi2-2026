@@ -1,13 +1,13 @@
 package com.compi.backend.c3d;
 
 import java.util.ArrayList;
+import java.util.Deque;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
 public class C3DGenerator {
     private int tempCounter = 0;
-    /** Las etiquetas se numeran desde 1, como en el ejemplo del docente. */
     private int labelCounter = 1;
     private final List<Quadruple> quadruples = new ArrayList<>();
     private final Set<String> declaredTemps = new HashSet<>();
@@ -40,8 +40,21 @@ public class C3DGenerator {
         quadruples.add(new Quadruple(QuadrupleOp.GOTO, null, null, label));
     }
 
+    public void emitGotoTop(Deque<String> labels) {
+        if (!labels.isEmpty()) {
+            emitGoto(labels.peek());
+        }
+    }
+
     public void emitAssign(String target, String source) {
         quadruples.add(new Quadruple(QuadrupleOp.ASSIGN, source, null, target));
+    }
+
+    public void emitReturn(String value) {
+        if (value != null) {
+            emit(QuadrupleOp.STACK_SET, "P", value, null);
+        }
+        emit(QuadrupleOp.RETURN, null, null, null);
     }
 
     public List<Quadruple> getQuadruples() {
@@ -62,7 +75,15 @@ public class C3DGenerator {
     public String toC3DString() {
         StringBuilder sb = new StringBuilder();
         for (Quadruple q : quadruples) {
-            sb.append(q.toString()).append("\n");
+            sb.append(q.toC3D()).append("\n");
+        }
+        return sb.toString();
+    }
+
+    public String toQuadruplesString() {
+        StringBuilder sb = new StringBuilder();
+        for (Quadruple q : quadruples) {
+            sb.append(q.toQuadruple()).append("\n");
         }
         return sb.toString();
     }

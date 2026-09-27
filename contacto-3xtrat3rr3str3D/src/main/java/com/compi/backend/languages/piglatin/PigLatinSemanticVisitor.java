@@ -3,7 +3,7 @@ package com.compi.backend.languages.piglatin;
 import com.compi.PigLatinBaseVisitor;
 import com.compi.PigLatinParser;
 import com.compi.backend.errors.CompilationError;
-import com.compi.backend.errors.Diagnostico;
+import com.compi.backend.errors.Diagnostic;
 import com.compi.backend.errors.ErrorType;
 import com.compi.backend.symbols.*;
 import org.antlr.v4.runtime.tree.ParseTree;
@@ -15,14 +15,7 @@ public class PigLatinSemanticVisitor extends PigLatinBaseVisitor<Type> {
     private final SymbolTable symbolTable;
     private final List<CompilationError> errors = new ArrayList<>();
 
-    /**
-     * Cuantos ciclos estan abiertos en este punto del recorrido.
-     *
-     * <p>Se lleva como contador y no como una bandera porque los ciclos se pueden
-     * anidar: un {@code per} dentro de un {@code dum} sigue siendo un ciclo, y al
-     * salir del interior tiene que quedar el exterior.</p>
-     */
-    private int enCiclo;
+    private int inLoop;
 
     public PigLatinSemanticVisitor(SymbolTable symbolTable) {
         this.symbolTable = symbolTable;
@@ -34,34 +27,32 @@ public class PigLatinSemanticVisitor extends PigLatinBaseVisitor<Type> {
 
     @Override
     public Type visitCiclo_dum(PigLatinParser.Ciclo_dumContext ctx) {
-        return visitarCuerpo(ctx.condicion(), ctx.sentencia());
+        return visitBody(ctx.condicion(), ctx.sentencia());
     }
 
     @Override
     public Type visitCiclo_facere(PigLatinParser.Ciclo_facereContext ctx) {
-        return visitarCuerpo(ctx.condicion(), ctx.sentencia());
+        return visitBody(ctx.condicion(), ctx.sentencia());
     }
 
-    /** Recorre el cuerpo de un ciclo contando que estamos dentro de el. */
-    private Type visitarCuerpo(PigLatinParser.CondicionContext condicion,
+    private Type visitBody(PigLatinParser.CondicionContext condition,
                               List<PigLatinParser.SentenciaContext> sentencias) {
-        if (condicion != null) {
-            visit(condicion);
+        if (condition != null) {
+            visit(condition);
         }
-        enCiclo++;
+        inLoop++;
         try {
             for (PigLatinParser.SentenciaContext s : sentencias) {
                 visit(s);
             }
         } finally {
-            enCiclo--;
+            inLoop--;
         }
         return Type.VOID;
     }
 
     @Override
     public Type visitVariables(PigLatinParser.VariablesContext ctx) {
-        // Declaraciones globales
         for (PigLatinParser.DeclaracionContext dCtx : ctx.declaracion()) {
             visit(dCtx);
         }
@@ -73,8 +64,6 @@ public class PigLatinSemanticVisitor extends PigLatinBaseVisitor<Type> {
 
     @Override
     public Type visitDeclaracion(PigLatinParser.DeclaracionContext ctx) {
-        // "declaracion" incluye los arreglos como una alternativa mas, asi que un
-        // "series ..." llega por aqui y no por la lista de arreglos del bloque.
         if (ctx.arreglo_declaracion() != null) {
             return visit(ctx.arreglo_declaracion());
         }
@@ -91,10 +80,6 @@ public class PigLatinSemanticVisitor extends PigLatinBaseVisitor<Type> {
             } else if (ctx.NOVUS() != null && ctx.VARIABLE().size() > 1) {
                 varType = Type.classType(ctx.VARIABLE(1).getText());
             } else if (ctx.VARIABLE().size() > 1) {
-                // "esto miObjeto: Persona {nombre: "ana"}": el nombre de la
-                // estructura va justo antes de sus llaves. Sin esto la variable
-                // queda de tipo desconocido y no se puede comprobar ni el valor
-                // ni las llamadas a sus miembros.
                 varType = resolveType(ctx.VARIABLE(1).getText());
             }
 
@@ -103,14 +88,14 @@ public class PigLatinSemanticVisitor extends PigLatinBaseVisitor<Type> {
                     .at(ctx);
 
             if (!symbolTable.defineGlobal(sym)) {
-                errors.add(Diagnostico.variableGlobalYaDeclarada(varName, ctx));
+                errors.add(Diagnostic.globalAlreadyDeclared(varName, ctx));
             }
 
             if (ctx.expresion() != null) {
                 Type exprType = visit(ctx.expresion());
-                if (esConocido(exprType) && esConocido(varType)
+                if (Type.isKnown(exprType) && Type.isKnown(varType)
                         && !exprType.isAssignableTo(varType)) {
-                    errors.add(Diagnostico.inicializacionIncompatible(
+                    errors.add(Diagnostic.inicializacionIncompatible(
                             varName, varType, exprType, ctx));
                 }
             }
@@ -128,8 +113,6 @@ public class PigLatinSemanticVisitor extends PigLatinBaseVisitor<Type> {
             elemType = Type.structType(ctx.VARIABLE(1).getText());
         }
 
-        // Un corchete por dimension, en el orden en que se escribieron: un
-        // "matriz[2][3]" son dos dimensiones, la primera de dos filas.
         int[] sizes = new int[ctx.NUMERO_ENTERO().size()];
         for (int i = 0; i < sizes.length; i++) {
             sizes[i] = Integer.parseInt(ctx.NUMERO_ENTERO(i).getText());
@@ -137,8 +120,8 @@ public class PigLatinSemanticVisitor extends PigLatinBaseVisitor<Type> {
         Type arrayType = Type.arrayOf(elemType, sizes);
 
         if (ctx.elemento_arreglo() != null) {
-            Type obtenido = tipoDeLiteralArreglo(arrayName, ctx.elemento_arreglo());
-            CompilationError error = LiteralDeArreglo.validar(arrayName, arrayType, obtenido, ctx);
+            Type obtenido = arrayLiteralType(arrayName, ctx.elemento_arreglo());
+            CompilationError error = ArrayLiteral.validate(arrayName, arrayType, obtenido, ctx);
             if (error != null) {
                 errors.add(error);
             }
@@ -151,63 +134,49 @@ public class PigLatinSemanticVisitor extends PigLatinBaseVisitor<Type> {
         return Type.VOID;
     }
 
-    /**
-     * Tipo de un literal de arreglo, deducido de las llaves que lo envuelven.
-     *
-     * <p>Es recursivo porque las matrices se inicializan anidando llaves: una
-     * lista de valores es una dimension, y cada nivel de llaves anidadas es una
-     * dimension mas. Todas las filas tienen que tener la misma forma, asi que se
-     * toma la primera y se compara el resto con ella.</p>
-     */
-    private Type tipoDeLiteralArreglo(String nombre,
+    private Type arrayLiteralType(String name,
                                    PigLatinParser.Elemento_arregloContext ctx) {
         List<PigLatinParser.Elemento_arreglo_valorContext> valores = ctx.elemento_arreglo_valor();
         int filas = valores.size();
-        Type tipoFila = Type.UNKNOWN;
-        int[] formaFila = new int[0];
+        Type rowType = Type.UNKNOWN;
+        int[] rowShape = new int[0];
         for (int f = 0; f < filas; f++) {
-            Type tipo = tipoDeValorArreglo(nombre, valores.get(f));
-            // Un valor que no es un arreglo no aporta ninguna dimension mas: la
-            // lista de {1, 2, 3} es de una sola dimension.
-            int[] forma = tipo.isArray() ? tipo.getSizes() : new int[0];
+            Type type = arrayValueType(name, valores.get(f));
+            int[] shape = type.isArray() ? type.getSizes() : new int[0];
             if (f == 0) {
-                tipoFila = tipo.isArray() ? tipo.getElementType() : tipo;
-                formaFila = forma;
-            } else if (!java.util.Arrays.equals(forma, formaFila)) {
-                errors.add(Diagnostico.filasDesiguales(nombre, f + 1,
-                        anchoDe(formaFila, valores.get(0)), anchoDe(forma, valores.get(f)),
+                rowType = type.isArray() ? type.getElementType() : type;
+                rowShape = shape;
+            } else if (!java.util.Arrays.equals(shape, rowShape)) {
+                errors.add(Diagnostic.filasDesiguales(name, f + 1,
+                        widthOf(rowShape, valores.get(0)), widthOf(shape, valores.get(f)),
                         valores.get(f)));
             }
         }
-        int[] sizes = new int[formaFila.length + 1];
+        int[] sizes = new int[rowShape.length + 1];
         sizes[0] = filas;
-        System.arraycopy(formaFila, 0, sizes, 1, formaFila.length);
-        return Type.arrayOf(tipoFila, sizes);
+        System.arraycopy(rowShape, 0, sizes, 1, rowShape.length);
+        return Type.arrayOf(rowType, sizes);
     }
 
-    /** Cuantos elementos se ven en la primera dimension de una fila. */
-    private static int anchoDe(int[] forma, PigLatinParser.Elemento_arreglo_valorContext fila) {
-        if (forma.length > 0) {
-            return forma[0];
+    private static int widthOf(int[] shape, PigLatinParser.Elemento_arreglo_valorContext row) {
+        if (shape.length > 0) {
+            return shape[0];
         }
-        // La fila es una lista de valores sueltos: su ancho es lo que haya.
-        if (fila.LLAVE_IZQ() == null) {
+        if (row.LLAVE_IZQ() == null) {
             return 1;
         }
-        return fila.elemento_arreglo() == null ? 0 : fila.elemento_arreglo().elemento_arreglo_valor().size();
+        return row.elemento_arreglo() == null ? 0 : row.elemento_arreglo().elemento_arreglo_valor().size();
     }
 
-    /** Tipo de un valor dentro de un literal: un termino, o otro arreglo. */
-    private Type tipoDeValorArreglo(String nombre,
+    private Type arrayValueType(String name,
                                     PigLatinParser.Elemento_arreglo_valorContext ctx) {
         if (ctx.LLAVE_IZQ() == null) {
             return visit(ctx.expresion());
         }
         if (ctx.elemento_arreglo() == null) {
-            // "{}": un arreglo sin ningun valor, de tamano cero.
             return Type.arrayOf(Type.UNKNOWN, new int[]{0});
         }
-        return tipoDeLiteralArreglo(nombre, ctx.elemento_arreglo());
+        return arrayLiteralType(name, ctx.elemento_arreglo());
     }
 
     @Override
@@ -229,7 +198,7 @@ public class PigLatinSemanticVisitor extends PigLatinBaseVisitor<Type> {
             String name = ctx.VARIABLE(0).getText();
             Symbol s = symbolTable.resolve(name);
             if (s == null) {
-                errors.add(Diagnostico.variableNoDeclarada(name, ctx));
+                errors.add(Diagnostic.undeclaredVariable(name, ctx));
             } else {
                 targetType = s.getType();
             }
@@ -239,9 +208,9 @@ public class PigLatinSemanticVisitor extends PigLatinBaseVisitor<Type> {
 
         if (ctx.expresion() != null) {
             Type exprType = visit(ctx.expresion());
-            if (esConocido(targetType) && esConocido(exprType)
+            if (Type.isKnown(targetType) && Type.isKnown(exprType)
                     && !exprType.isAssignableTo(targetType)) {
-                errors.add(Diagnostico.asignacionIncompatible(targetType, exprType, ctx));
+                errors.add(Diagnostic.incompatibleAssignment(targetType, exprType, ctx));
             }
         }
         return targetType;
@@ -249,20 +218,30 @@ public class PigLatinSemanticVisitor extends PigLatinBaseVisitor<Type> {
 
     @Override
     public Type visitExpresion(PigLatinParser.ExpresionContext ctx) {
-        if (ctx.termino() != null && ctx.termino().size() == 1) {
+        if (ctx.suma_resta().isEmpty()) {
+            return visit(ctx.producto(0));
+        }
+
+        Type t1 = visit(ctx.producto(0));
+        for (int i = 1; i < ctx.producto().size(); i++) {
+            Type t2 = visit(ctx.producto(i));
+            t1 = TypeCompatibility.checkArithmetic(t1, t2, ctx.suma_resta(i - 1).getText());
+        }
+        return t1;
+    }
+
+    @Override
+    public Type visitProducto(PigLatinParser.ProductoContext ctx) {
+        if (ctx.multiplicacion().isEmpty()) {
             return visit(ctx.termino(0));
         }
 
-        if (!ctx.operacion_aritmetica().isEmpty()) {
-            Type t1 = visit(ctx.termino(0));
-            for (int i = 1; i < ctx.termino().size(); i++) {
-                Type t2 = visit(ctx.termino(i));
-                t1 = TypeCompatibility.checkArithmetic(t1, t2, ctx.operacion_aritmetica(i - 1).getText());
-            }
-            return t1;
+        Type t1 = visit(ctx.termino(0));
+        for (int i = 1; i < ctx.termino().size(); i++) {
+            Type t2 = visit(ctx.termino(i));
+            t1 = TypeCompatibility.checkArithmetic(t1, t2, ctx.multiplicacion(i - 1).getText());
         }
-
-        return Type.UNKNOWN;
+        return t1;
     }
 
     @Override
@@ -277,7 +256,7 @@ public class PigLatinSemanticVisitor extends PigLatinBaseVisitor<Type> {
             String varName = ctx.VARIABLE().getText();
             Symbol s = symbolTable.resolve(varName);
             if (s == null) {
-                errors.add(Diagnostico.simboloNoResuelto(varName, ctx));
+                errors.add(Diagnostic.unresolvedSymbol(varName, ctx));
                 return Type.UNKNOWN;
             }
             return s.getType();
@@ -292,11 +271,10 @@ public class PigLatinSemanticVisitor extends PigLatinBaseVisitor<Type> {
             return Type.classType(className);
         }
 
-        // El menos unario no cambia el tipo de lo que se le aplica.
         if (ctx.MENOS() != null) {
             Type t = visit(ctx.termino());
             if (t != null && t != Type.UNKNOWN && !t.isNumeric()) {
-                errors.add(Diagnostico.operadorMenosNoNumerico(ctx));
+                errors.add(Diagnostic.nonNumericMinusOperator(ctx));
                 return Type.UNKNOWN;
             }
             return t == null ? Type.UNKNOWN : t;
@@ -305,24 +283,12 @@ public class PigLatinSemanticVisitor extends PigLatinBaseVisitor<Type> {
         return Type.UNKNOWN;
     }
 
-    /**
-     * Tipo de una cadena de acceso: {@code matriz[1][0]} o {@code obj.campo[2]}.
-     *
-     * <p>La gramatica permite cualquier mezcla de puntos y corchetes, asi que se
-     * recorre en orden: cada punto baja al miembro indicado y cada corchete
-     * quita una dimension del arreglo. Al final queda el tipo del elemento, que
-     * es el que se puede imprimir, comparar o asignar.</p>
-     *
-     * <p>Usar menos indices que dimensiones esta bien, porque {@code matriz[0]} de
-     * una matriz da una fila entera; lo que no tiene sentido es usar mas indices
-     * de los que hay.</p>
-     */
     @Override
     public Type visitAcceso_miembro(PigLatinParser.Acceso_miembroContext ctx) {
         String baseName = ctx.VARIABLE(0).getText();
         Symbol base = symbolTable.resolve(baseName);
         if (base == null) {
-            errors.add(Diagnostico.variableNoDeclarada(baseName, ctx));
+            errors.add(Diagnostic.undeclaredVariable(baseName, ctx));
             return Type.UNKNOWN;
         }
         Type actual = base.getType();
@@ -330,126 +296,85 @@ public class PigLatinSemanticVisitor extends PigLatinBaseVisitor<Type> {
             return Type.UNKNOWN;
         }
 
-        int indices = contarIndices(ctx);
+        int indices = ctx.CORCHETE_IZQ().size();
         if (indices > 0 && actual.isArray() && indices > actual.getDimensions()) {
-            errors.add(Diagnostico.dimensionesDeIndice(baseName, indices,
+            errors.add(Diagnostic.indexDimensions(baseName, indices,
                     actual.getDimensions(), ctx));
             return Type.UNKNOWN;
         }
 
         for (int i = 1; i < ctx.getChildCount() && actual != null; i++) {
-            ParseTree hijo = ctx.getChild(i);
+            ParseTree child = ctx.getChild(i);
 
-            if (hijo.getText().equals(".")) {
-                // El siguiente hijo es el nombre del miembro.
-                String nombreMiembro = ctx.getChild(++i).getText();
-                Symbol miembro = buscarMiembro(actual, nombreMiembro);
-                if (miembro == null) {
-                    if (tieneMiembrosConocidos(actual)) {
-                        errors.add(Diagnostico.miembroNoExiste(nombreMiembro, actual.label(), ctx));
+            if (child.getText().equals(".")) {
+                String memberName = ctx.getChild(++i).getText();
+                Symbol member = findMember(actual, memberName);
+                if (member == null) {
+                    if (hasKnownMembers(actual)) {
+                        errors.add(Diagnostic.memberDoesNotExist(memberName, actual.label(), ctx));
                     }
                     return Type.UNKNOWN;
                 }
-                // Un miembro empieza su propia cuenta de dimensiones.
-                actual = miembro.getType();
-            } else if (hijo instanceof PigLatinParser.ExpresionContext) {
-                visit(hijo);
+                actual = member.getType();
+            } else if (child instanceof PigLatinParser.ExpresionContext) {
+                visit(child);
                 if (!actual.isArray()) {
-                    errors.add(Diagnostico.noEsArreglo(baseName, actual, ctx));
+                    errors.add(Diagnostic.notAnArray(baseName, actual, ctx));
                     return Type.UNKNOWN;
                 }
-                comprobarIndice(hijo, actual, baseName);
+                checkIndex(child, actual, baseName);
                 actual = actual.desindexar(1);
             }
         }
         return actual == null ? Type.UNKNOWN : actual;
     }
 
-    /** Cuantos corchetes lleva la cadena de acceso. */
-    private static int contarIndices(PigLatinParser.Acceso_miembroContext ctx) {
-        int indices = 0;
-        for (int i = 1; i < ctx.getChildCount(); i++) {
-            if (ctx.getChild(i).getText().equals("[")) {
-                indices++;
-            }
-        }
-        return indices;
-    }
 
-    /**
-     * Avisa si el indice se sale del arreglo.
-     *
-     * <p>Solo se puede comprobar cuando el indice es un numero escrito en el
-     * fuente; con una variable el valor no se conoce al compilar.</p>
-     */
-    private void comprobarIndice(ParseTree indice, Type arreglo, String nombre) {
-        int[] sizes = arreglo.getSizes();
-        String texto = indice.getText();
-        if (sizes.length == 0 || sizes[0] <= 0 || !texto.matches("\\d+")) {
+    private void checkIndex(ParseTree index, Type array, String name) {
+        int[] sizes = array.getSizes();
+        String text = index.getText();
+        if (sizes.length == 0 || sizes[0] <= 0 || !text.matches("\\d+")) {
             return;
         }
-        int valor = Integer.parseInt(texto);
+        int valor = Integer.parseInt(text);
         if (valor >= sizes[0]) {
-            errors.add(Diagnostico.indiceFueraDeRango(nombre, valor, sizes[0],
-                    (PigLatinParser.ExpresionContext) indice));
+            errors.add(Diagnostic.indexOutOfRange(name, valor, sizes[0],
+                    (PigLatinParser.ExpresionContext) index));
         }
     }
 
-    /**
-     * Miembro de una estructura o clase, o null si no lo tiene.
-     *
-     * <p>Cuando el tipo no declara ningun miembro no se puede afirmar que el
-     * acceso este mal, asi que se devuelve null sin inventar un error.</p>
-     */
-    private Symbol buscarMiembro(Type contenedor, String nombreMiembro) {
-        Symbol tipo = tipoDeclarado(contenedor);
-        return tipo == null ? null : tipo.getMember(nombreMiembro);
+    private Symbol findMember(Type container, String memberName) {
+        Symbol type = declaredType(container);
+        return type == null ? null : type.getMember(memberName);
     }
 
-    /** true si el tipo tiene al menos un miembro registrado. */
-    private boolean tieneMiembrosConocidos(Type contenedor) {
-        Symbol tipo = tipoDeclarado(contenedor);
-        return tipo != null && !tipo.getMembers().isEmpty();
+    private boolean hasKnownMembers(Type container) {
+        Symbol symbol = declaredType(container);
+        return symbol != null && !symbol.getMembers().isEmpty();
     }
 
-    /** La entrada de la tabla que declara este tipo, sea clase o estructura. */
-    private Symbol tipoDeclarado(Type type) {
+    private Symbol declaredType(Type type) {
         if (type == null || type.getCustomTypeName() == null) {
             return null;
         }
-        Symbol tipo = symbolTable.getClass(type.getCustomTypeName());
-        return tipo != null ? tipo : symbolTable.getStruct(type.getCustomTypeName());
+        Symbol symbol = symbolTable.getClass(type.getCustomTypeName());
+        return symbol != null ? symbol : symbolTable.getStruct(type.getCustomTypeName());
     }
 
     @Override
     public Type visitLlamada_funcion(PigLatinParser.Llamada_funcionContext ctx) {
         if (ctx.acceso_miembro() != null) {
-            // Una llamada a metodo: "miObjeto.getNombre()". El tipo que retorna
-            // depende de la clase importada que lo declara, que no se conoce aqui,
-            // asi que se supone que es un entero, igual que con una funcion suelta.
             visit(ctx.acceso_miembro());
             return Type.INT;
         }
         String funcName = ctx.VARIABLE().getText();
         Symbol func = symbolTable.getFunction(funcName);
         if (func == null) {
-            // PigLatin no declara funciones, solo las llama. Y la que se llama
-            // puede venir de un archivo importado de otro lenguaje, asi que un
-            // nombre desconocido aqui no es un error: lo que no se sabe es el
-            // tipo que devuelve, y se supone que es un entero.
             return Type.INT;
         }
         return func.getReturnType() != null ? func.getReturnType() : Type.VOID;
     }
 
-    /**
-     * El ciclo "per" declara su variable de control en la inicializacion.
-     * Sin este paso la condicion y el incremento del bucle fallarian al
-     * resolver el identificador.
-     *
-     * <p>La variable se registra en el ambito global aunque el ciclo este dentro
-     * de un bloque, para que siga viva cuando ese bloque se cierre.</p>
-     */
     @Override
     public Type visitInicializacion_per(PigLatinParser.Inicializacion_perContext ctx) {
         if (ctx.ESTO() != null && ctx.VARIABLE() != null) {
@@ -466,7 +391,6 @@ public class PigLatinSemanticVisitor extends PigLatinBaseVisitor<Type> {
             }
             return type;
         }
-        // Caso: variable ya declarada a la que se le asigna el valor inicial
         return visit(ctx.expresion());
     }
 
@@ -491,31 +415,23 @@ public class PigLatinSemanticVisitor extends PigLatinBaseVisitor<Type> {
         visit(ctx.inicializacion_per());
         visit(ctx.condiciones_per());
         visit(ctx.incremento_per());
-        enCiclo++;
+        inLoop++;
         try {
             for (PigLatinParser.SentenciaContext s : ctx.sentencia()) {
                 visit(s);
             }
         } finally {
-            enCiclo--;
+            inLoop--;
         }
         return Type.VOID;
     }
 
-    /**
-     * {@code perge} e {@code interrumpe} solo tienen sentido dentro de un ciclo:
-     * fuera de ellos no hay iteracion a la que saltar ni que interrumpir.
-     *
-     * <p>El enunciado lo dice asi ("unicamente dentro de los ciclos") y la gramatica
-     * no lo puede exigir, porque {@code salto_sentencia} es una sentencia mas y
-     * aparece igual dentro que fuera de un bloque.</p>
-     */
     @Override
     public Type visitSalto_sentencia(PigLatinParser.Salto_sentenciaContext ctx) {
-        if (enCiclo == 0) {
-            String palabra = ctx.PERGE() != null ? "perge" : "interrumpe";
-            errors.add(new CompilationError(ErrorType.SEMANTICO,
-                    "«" + palabra + "» solo se puede usar dentro de un ciclo"
+        if (inLoop == 0) {
+            String word = ctx.PERGE() != null ? "perge" : "interrumpe";
+            errors.add(new CompilationError(ErrorType.SEMANTIC,
+                    "«" + word + "» solo se puede usar dentro de un ciclo"
                             + " (dum, facere o per)",
                     ctx.getStart().getLine(), ctx.getStart().getCharPositionInLine()));
         }
@@ -538,15 +454,4 @@ public class PigLatinSemanticVisitor extends PigLatinBaseVisitor<Type> {
         }
     }
 
-    /**
-     * true si el tipo se conoce de verdad.
-     *
-     * <p>Un tipo desconocido o nulo significa que la expresion que lo produce ya
-     * fallo: el aviso de verdad se dio ahi. Comprobar los tipos con un
-     * desconocido daria un segundo error, mas corto y mas generico, que solo
-     * tapa el primero.</p>
-     */
-    private static boolean esConocido(Type t) {
-        return t != null && t != Type.UNKNOWN;
-    }
 }

@@ -12,12 +12,6 @@ import javax.swing.event.DocumentEvent;
 import javax.swing.event.DocumentListener;
 import javax.swing.text.JTextComponent;
 
-/**
- * Componente de encabezado que dibuja los numeros de linea de un editor.
- *
- * Se recalcula el ancho cada vez que el documento cambia para que las cifras
- * largas no se corten nunca.
- */
 public class LineNumberComponent extends JComponent {
 
     private static final int MARGIN = 10;
@@ -50,7 +44,6 @@ public class LineNumberComponent extends JComponent {
         });
     }
 
-    /** Aplica los colores y la fuente del tema actual. */
     public void applyTheme() {
         setFont(UiTheme.mono(13));
         setForeground(UiTheme.dim());

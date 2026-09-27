@@ -1,0 +1,4651 @@
+@startuml
+top to bottom direction
+skinparam packageStyle rectangle
+skinparam classAttributeIconSize 0
+skinparam linetype ortho
+hide empty members
+
+package "Código fuente Java" {
+  package "com.compi" {
+    class "com.compi.Main" as T0 {
+      +main()
+    }
+    class "com.compi.ProbeC3D" as T1 {
+      +main()
+    }
+  }
+  package "com.compi.frontend" {
+    class "com.compi.frontend.JFileChooserLike" as T2 {
+      -JFileChooserLike()
+    }
+    class "com.compi.frontend.TabHeader" as T3 {
+      -iconLabel : JLabel
+      -nameLabel : JLabel
+      -dirtyLabel : JLabel
+      -closeButton : JButton
+      -onClose : Runnable
+      -dirty : boolean
+      +TabHeader()
+      -fireClose()
+      +setName()
+      +getName()
+      +setDirty()
+      +isDirty()
+      +setLanguageIcon()
+      -tintedDot()
+      +getCloseButton()
+    }
+    class "com.compi.frontend.EditorTabs" as T4 {
+      -open : Map<File, EditorPanel>
+      -headers : Map<EditorPanel, TabHeader>
+      -keys : Map<EditorPanel, File>
+      -untitled : List<File>
+      -untitledCounter : int
+      -onActiveChanged : Consumer<EditorPanel>
+      -onFileClosed : Consumer<File>
+      +EditorTabs()
+      +openFile()
+      +newFile()
+      +newFile()
+      +newFile()
+      -sanitizeName()
+      -numbered()
+      -uniqueName()
+      -addTab()
+      +close()
+      +doClose()
+      +closeActive()
+      +save()
+      +getActiveEditor()
+      +getEditorFor()
+      +getAllEditors()
+      +getOpenFiles()
+      +getOpenCount()
+      +isEmpty()
+      +selectEditor()
+      +saveAll()
+      +closeAll()
+      -onCaretMoved()
+      -onEditorModified()
+      -extensionFor()
+      +refreshHeaders()
+    }
+    class "com.compi.frontend.ToolWindow" as T5 {
+      -DEFAULT_WIDTH : int
+      -DEFAULT_HEIGHT : int
+      -MIN_SIZE : Dimension
+      -dock : ToolWindowDock
+      -open : AtomicBoolean
+      -pending : Runnable
+      -lastBounds : Rectangle
+      -onClosed : Runnable
+      +ToolWindow()
+      -buildFooter()
+      +showView()
+      +showWindow()
+      +close()
+      +isOpen()
+      +setOnClosed()
+      +postResults()
+      +clearPending()
+      -applyPending()
+      -ownerFocus()
+      -centerOnOwner()
+      +getDock()
+    }
+    class "com.compi.frontend.LineNumberComponent" as T6 {
+      -MARGIN : int
+      -MIN_DIGITS : int
+      -textArea : JTextComponent
+      +LineNumberComponent()
+      +applyTheme()
+      -lineCount()
+      -digitCount()
+      -preferredWidth()
+      +getPreferredSize()
+      +getMinimumSize()
+      #paintComponent()
+    }
+    class "com.compi.frontend.ErrorTablePanel" as T7 {
+      -errorTable : JTable
+      -tableModel : DefaultTableModel
+      -scrollPane : JScrollPane
+      -emptyMessageLabel : JLabel
+      -cards : CardLayout
+      -content : JPanel
+      -doubleClick : MouseAdapter
+      -filterBar : TableFilterBar
+      -allErrors : List<CompilationError>
+      -shown : List<CompilationError>
+      -CARD_TABLE : String
+      -CARD_EMPTY : String
+      -SIN_POSICION : String
+      +ErrorTablePanel()
+      -initComponents()
+      -initCustomComponents()
+      -colorForType()
+      -rightAlign()
+      +loadErrors()
+      -applyFilter()
+      -fila()
+      -acepta()
+      +limpiarFiltro()
+      +getErrorTable()
+      +getErrorCount()
+      +getTotalErrorCount()
+      +errorAt()
+      +getSelectedError()
+      +setOnErrorActivated()
+      +clear()
+    }
+    class "com.compi.frontend.UiTheme" as T8 {
+      -APPLIED : Set<String>
+      +MONO : String
+      +SANS : String
+      -UiTheme()
+      +mono()
+      +monoBold()
+      +sans()
+      +sansBold()
+      +isFontAvailable()
+      +color()
+      +panelBg()
+      +toolWindowBg()
+      +headerBg()
+      +editorBg()
+      +fg()
+      +dim()
+      +accent()
+      +error()
+      +warning()
+      +success()
+      +separator()
+      +hairline()
+      +hairlineRight()
+      +hairlineLeft()
+      +hairlineTop()
+      +pad()
+      +asButton()
+      +applyFlatLafTweaks()
+      +prettifyLanguage()
+    }
+    class "com.compi.frontend.FileTreePanel" as T9 {
+      -tree : JTree
+      -rootNode : DefaultMutableTreeNode
+      -model : DefaultTreeModel
+      -titleLabel : JLabel
+      -filterField : JTextField
+      -emptyHint : JPanel
+      -emptyLabel : JLabel
+      -centerCards : CardLayout
+      -centerHolder : JPanel
+      -root : File
+      -onFileSelected : Consumer<File>
+      -onDirectorySelected : Consumer<File>
+      -onDirectoryChanged : Runnable
+      -onFilesIgnored : Consumer<List<File>>
+      -onOpenProjectRequest : Runnable
+      -lastIgnored : Set<File>
+      -CARD_TREE : String
+      -CARD_EMPTY : String
+      +FileTreePanel()
+      -buildTopPanel()
+      -buildFilter()
+      -buildCenter()
+      -buildFooter()
+      -styleSmallButton()
+      +setOnFileSelected()
+      +setOnDirectorySelected()
+      +setOnDirectoryChanged()
+      +setOnFilesIgnored()
+      +setOnOpenProjectRequest()
+      +getIgnoredFiles()
+      +getRoot()
+      +getTree()
+      +loadDirectory()
+      +reload()
+      +revealFirstFile()
+      +selectFile()
+      +contains()
+      +allSourceFiles()
+      -collectSources()
+      +countSourceFiles()
+      +codeFolders()
+      -isWithinRoot()
+      +projectRoot()
+      -countSources()
+      +askForDirectory()
+      -rebuild()
+      -refreshEmptyCard()
+      -emptyMessage()
+      -escape()
+      -publishIgnored()
+      -addNode()
+      -isVisible()
+      -containsVisible()
+      -matchesText()
+      -sortedChildren()
+      -findPath()
+      -currentFilter()
+      -applyFilter()
+      -isSourceFile()
+      +initSelectionBehavior()
+    }
+    class "com.compi.frontend.FileTreePanel.FileCellRenderer" as T10 {
+      +getTreeCellRendererComponent()
+    }
+    class "com.compi.frontend.SymbolTablePanel" as T11 {
+      -SIN_POSICION : String
+      -CARD_TABLE : String
+      -CARD_EMPTY : String
+      -table : JTable
+      -tableModel : DefaultTableModel
+      -detailsArea : JTextArea
+      -emptyMessageLabel : JLabel
+      -cards : CardLayout
+      -content : JPanel
+      -onSymbolActivated : IntConsumer
+      -filterBar : TableFilterBar
+      -allSymbols : List<Symbol>
+      -shown : List<Symbol>
+      +SymbolTablePanel()
+      -initComponents()
+      -initTableComponents()
+      -rightAlign()
+      +loadSymbols()
+      -applyFilter()
+      -fila()
+      -acepta()
+      +limpiarFiltro()
+      -typeOf()
+      -scopeOf()
+      +symbolAt()
+      -showDetails()
+      -describe()
+      +setOnSymbolActivated()
+      +getTable()
+      +getSymbolCount()
+      +getTotalSymbolCount()
+      +getColumnNames()
+      +clear()
+    }
+    class "com.compi.frontend.SyntaxHighlighter" as T12 {
+      -MAX_DOC_LENGTH : int
+      -pane : JTextPane
+      -styles : Map<String, Style>
+      -languages : Map<String, Language>
+      -languageId : String
+      -running : boolean
+      -pending : boolean
+      -lastText : String
+      +SyntaxHighlighter()
+      -registerLanguages()
+      -buildStyles()
+      -style()
+      +setLanguage()
+      +getLanguage()
+      +rehighlight()
+      +apply()
+      -paint()
+      -paintWords()
+      -Language()
+    }
+    class "com.compi.frontend.SyntaxHighlighter.Language" as T13 {
+    }
+    class "com.compi.frontend.WelcomePanel" as T14 {
+      -onNewFile : Runnable
+      -onOpenFile : Runnable
+      -onOpenProject : Runnable
+      -onCompile : Runnable
+      +WelcomePanel()
+      -actionButton()
+      +getPreferredSize()
+    }
+    class "com.compi.frontend.ToolWindowDock" as T15 {
+      -tabs : JTabbedPane
+      -astPanel : ParserTreePanel
+      -symbolPanel : SymbolTablePanel
+      -stackPanel : StackVisualizerPanel
+      -errorPanel : ErrorTablePanel
+      -errorCount : int
+      +ToolWindowDock()
+      +select()
+      +getSelected()
+      +getAstPanel()
+      +getSymbolPanel()
+      +getStackPanel()
+      +getErrorPanel()
+      +setErrorCount()
+      +getErrorCount()
+      -refreshErrorTabTitle()
+      +applyTheme()
+    }
+    enum "com.compi.frontend.ToolWindowDock.View" as T16 {
+      -title : String
+      -index : int
+      +title()
+      +index()
+    }
+    class "com.compi.frontend.IdeIcons" as T17 {
+      +SIZE : int
+      -IdeIcons()
+      +newFile()
+      +openFile()
+      +saveFile()
+      +compile()
+      +ast()
+      +symbols()
+      +stack()
+      +errors()
+      +refresh()
+      +zoomIn()
+      +zoomOut()
+      +fit()
+      +export()
+      +folder()
+      +folderOpen()
+      +file()
+      +fileWithDot()
+      +close()
+      +chevronDown()
+      +dirtyDot()
+      +appMark()
+      +glyph()
+      -sf()
+    }
+    interface "com.compi.frontend.IdeIcons.Painter" as T18 {
+      +paint()
+    }
+    class "com.compi.frontend.IdeIcons.GlyphIcon" as T19 {
+      -size : int
+      -painter : Painter
+      +paintIcon()
+      +getIconWidth()
+      +getIconHeight()
+    }
+    class "com.compi.frontend.ParserTreePanel" as T20 {
+      -canvas : TreeCanvas
+      -scrollPane : JScrollPane
+      -infoLabel : JLabel
+      +ParserTreePanel()
+      -initComponents()
+      -initCustomComponents()
+      -buildToolbar()
+      -buildInfoBar()
+      -toolButton()
+      +renderGraph()
+      +setDotText()
+      -fitGraph()
+      +getCanvas()
+      +hasGraph()
+      +exportPng()
+      +clear()
+    }
+    class "com.compi.frontend.TopToolbar" as T21 {
+      +BAR_HEIGHT : int
+      -actionCluster : JPanel
+      -viewCluster : JPanel
+      -navLabel : JLabel
+      -cModeBox : JComboBox<String>
+      -compileButton : JButton
+      -sideToggle : JToggleButton
+      -projectLabel : JLabel
+      +TopToolbar()
+      -buildBrand()
+      -buildCenter()
+      -buildRight()
+      -labelled()
+      -verticalSeparator()
+      -styleCombo()
+      +addFileAction()
+      +addViewAction()
+      +styleActionButton()
+      +applyIcons()
+      +setProjectName()
+      +supportedLanguages()
+      +modeLabel()
+      +bindShortcut()
+      +action()
+      +group()
+      +onCModeSelected()
+      +modeOf()
+      +getCModeBox()
+    }
+    class "com.compi.frontend.StatusBar" as T22 {
+      -positionLabel : JLabel
+      -fileLabel : JLabel
+      -languageLabel : JLabel
+      -resultLabel : JLabel
+      -countersLabel : JLabel
+      -errorsLabel : JLabel
+      +StatusBar()
+      -label()
+      +setPosition()
+      +setFileName()
+      +setLanguage()
+      +setResult()
+      +setCounts()
+      +setIdle()
+      +getMaximumSize()
+    }
+    class "com.compi.frontend.EditorPanel" as T23 {
+      -codeTextArea : JTextPane
+      -lineNumberComponent : LineNumberComponent
+      -highlighter : SyntaxHighlighter
+      -file : File
+      -languageId : String
+      -modified : boolean
+      -suppressChangeEvents : boolean
+      -onCaretMove : Consumer<EditorPanel>
+      -onModified : Runnable
+      +EditorPanel()
+      -initComponents()
+      -initCustomEditor()
+      -attachListeners()
+      -documentChanged()
+      +getCodeText()
+      +setCodeText()
+      +insertAtCaret()
+      +getTextPane()
+      +getLineNumberComponent()
+      +getFile()
+      +setFile()
+      +getDisplayName()
+      +getLanguageId()
+      +setLanguageId()
+      +isModified()
+      +setModified()
+      +getCaretLine()
+      +getCaretColumn()
+      +getLineCount()
+      +gotoLine()
+      -rootElement()
+      +refreshHighlight()
+      +applyTheme()
+    }
+    class "com.compi.frontend.ConsoleDock" as T24 {
+      -tabs : JTabbedPane
+      -consoleArea : JTextArea
+      -tripletsArea : JTextArea
+      -quadruplesArea : JTextArea
+      -c3dArea : JTextArea
+      -cCodeArea : JTextArea
+      -summaryArea : JTextArea
+      -statusLabel : JLabel
+      +ConsoleDock()
+      -buildStatusBar()
+      -area()
+      +setConsole()
+      +appendConsole()
+      +setTriplets()
+      +setQuadruples()
+      +setC3D()
+      +setCCode()
+      +setSummary()
+      +setStatus()
+      +getStatus()
+      +select()
+      +getSelectedView()
+      +clearAll()
+      +getConsoleArea()
+      +getTripletsArea()
+      +getQuadruplesArea()
+      +getC3dArea()
+      +getCCodeArea()
+      +getSummaryArea()
+      +getTabs()
+      -all()
+      -set()
+      +applyTheme()
+      +addView()
+      +getViewCount()
+      +getPreferredSize()
+    }
+    enum "com.compi.frontend.ConsoleDock.View" as T25 {
+      -title : String
+      -icon : javax.swing.Icon
+      +title()
+      +icon()
+    }
+    class "com.compi.frontend.ConsoleDock.Scroller" as T26 {
+    }
+    class "com.compi.frontend.TableFilterBar" as T27 {
+      -field : JTextField
+      -countLabel : JLabel
+      -clearButton : JButton
+      -onFilterChanged : Runnable
+      +TableFilterBar()
+      -avisa()
+      +texto()
+      +setCounts()
+      +setOnFilterChanged()
+      +limpiar()
+      +acepta()
+    }
+    class "com.compi.frontend.NewFileDialog" as T28 {
+      -OTHER_FOLDER : String
+      -nameField : JTextField
+      -extensionBox : JComboBox<String>
+      -folderBox : JComboBox<String>
+      -folders : List<File>
+      -extensions : List<String>
+      -preview : JLabel
+      -owner : Component
+      -projectRoot : File
+      -choice : Choice
+      +Choice()
+      +NewFileDialog()
+      -padreDe()
+      -folderLabels()
+      -buildContent()
+      -onFolderPicked()
+      -accept()
+      +ask()
+      -caption()
+      -findButton()
+      -relativeLabel()
+      -indexOfLanguage()
+      -selectedExtension()
+      -selectedFolder()
+      -updatePreview()
+      -pickFolder()
+    }
+    class "com.compi.frontend.NewFileDialog.Choice" as T29 {
+    }
+    class "com.compi.frontend.StackVisualizerPanel" as T30 {
+      -START_X : int
+      -COL_WIDTH : int
+      -CARD_WIDTH : int
+      -STEP_NUM_Y : int
+      -STEP_ACTION_Y : int
+      -CARD_TOP : int
+      -CARD_PADDING : int
+      -BOX_HEIGHT : int
+      -BOX_GAP : int
+      -BOX_INSET : int
+      -BADGE_HEIGHT : int
+      -BADGE_GAP : int
+      -BOTTOM_MARGIN : int
+      -MIN_CARD_HEIGHT : int
+      -CLIP_THRESHOLD : int
+      -CARD_BG : Color
+      -CARD_BORDER : Color
+      -TOP_BOX_BG : Color
+      -BOX_BG : Color
+      -BOX_BORDER : Color
+      -BOX_FG : Color
+      -BADGE_BG : Color
+      -BADGE_BORDER : Color
+      -BADGE_FG : Color
+      -EMPTY_FG : Color
+      -SHIFT_FG : Color
+      -REDUCE_FG : Color
+      -steps : List<ParseStep>
+      -stackDrawPanel : JPanel
+      -logTextArea : JTextArea
+      -countLabel : JLabel
+      -splitPane : JSplitPane
+      +StackVisualizerPanel()
+      -initComponents()
+      -initCustomComponents()
+      -titulo()
+      +loadSteps()
+      +getStateCount()
+      +getStepCount()
+      +clear()
+      -altoTarjeta()
+      -updateLogs()
+      -drawAllSteps()
+      -drawStep()
+      -distintivo()
+      -colorDe()
+      -recortar()
+      -firstVisibleColumn()
+      -lastVisibleColumn()
+      -rangoVisible()
+    }
+    class "com.compi.frontend.StackVisualizerPanel.StackCanvas" as T31 {
+      #paintComponent()
+    }
+    class "com.compi.frontend.MainWindow" as T32 {
+      -navText : String
+      -CARD_TABS : String
+      -CARD_WELCOME : String
+      -DEFAULT_CONTAINER_NAME : String
+      -TREE_DEFAULT_WIDTH : int
+      -IGNORED_LIST_LIMIT : int
+      -topToolbar : TopToolbar
+      -editorTabs : EditorTabs
+      -consoleDock : ConsoleDock
+      -toolWindowDock : ToolWindowDock
+      -toolWindow : ToolWindow
+      -statusBar : StatusBar
+      -welcomePanel : WelcomePanel
+      -editorCardHost : JPanel
+      -editorCards : CardLayout
+      -rootSplit : JSplitPane
+      -editorSplit : JSplitPane
+      -treeDividerFixed : boolean
+      -astPanel : ParserTreePanel
+      -symbolPanel : SymbolTablePanel
+      -stackPanel : StackVisualizerPanel
+      -errorPanel : ErrorTablePanel
+      -fileTreePanelInstance : FileTreePanel
+      -cModeCombo : JComboBox<String>
+      -toolsToggle : JToggleButton
+      -compileButton : JButton
+      -compiler : Compiler
+      -currentCMode : Mode
+      -lastErrors : List<CompilationError>
+      -lastTargets : List<File>
+      -lastFocusFile : File
+      -MAIN_FILE : String
+      -contentArea : JPanel
+      -currentFile : File
+      -lastContainerDir : File
+      -astButton : javax.swing.JButton
+      -contentPane : javax.swing.JPanel
+      -jSeparator1 : javax.swing.JSeparator
+      -lexerErrorButton : javax.swing.JButton
+      -newFileButton : javax.swing.JButton
+      -openFileButton : javax.swing.JButton
+      -optionSelectedLabel : javax.swing.JLabel
+      -saveFileButton : javax.swing.JButton
+      -sidebarPanel : javax.swing.JPanel
+      -stackButton : javax.swing.JButton
+      -symbolTableButton : javax.swing.JButton
+      +MainWindow()
+      -initContentLayout()
+      -createSplit()
+      -wireFileTree()
+      -initToolbar()
+      -openToolWindow()
+      -onCModeComboChanged()
+      -initShortcuts()
+      -bind()
+      -actionNewFile()
+      -suggestFileName()
+      -actionOpenFile()
+      -approve()
+      -ensureContainer()
+      -announceProject()
+      -lastContainer()
+      -placeInContainer()
+      -moveToContainer()
+      -isInside()
+      -currentContainer()
+      -warnWrongExtension()
+      -showIgnoredFiles()
+      -describeExtension()
+      -actionSave()
+      -showToolView()
+      -FileResult()
+      -actionCompile()
+      -compileTargets()
+      -startingAtMain()
+      -isMainFile()
+      -compileOne()
+      -editorOf()
+      -publishResults()
+      -limpiarResultados()
+      -fileNamed()
+      -jumpToError()
+      -jumpToSymbol()
+      -archivoDelSimbolo()
+      -focusedResult()
+      -focusReason()
+      -buildReport()
+      -onActiveEditorChanged()
+      -updateCaret()
+      -showTabs()
+      -showWelcome()
+      -initStyles()
+      -navText()
+      -initComponents()
+      -newFileButtonActionPerformed()
+      -openFileButtonActionPerformed()
+      -astButtonActionPerformed()
+      -symbolTableButtonActionPerformed()
+      -cuentaDeSimbolos()
+      -lexerErrorButtonActionPerformed()
+      -cuentaDeErrores()
+      -stackButtonActionPerformed()
+      -saveFileButtonActionPerformed()
+      -newFileButtonMouseEntered()
+      -openFileButtonMouseEntered()
+      -saveFileButtonMouseEntered()
+      -symbolTableButtonMouseEntered()
+      -astButtonMouseEntered()
+      -stackButtonMouseEntered()
+      -lexerErrorButtonMouseEntered()
+      -loadFileFromTree()
+      +openProject()
+      +getToolWindowDock()
+      +getEditorTabs()
+      +getConsoleDock()
+      +getToolWindow()
+      +getTopToolbar()
+      +getErrorPanel()
+      +getFileTree()
+      +getAstPanel()
+      +getSymbolPanel()
+      +getStackPanel()
+      +getStatusBar()
+      +compileActive()
+      +openInEditor()
+      -revealInTree()
+      +newFileIn()
+    }
+    class "com.compi.frontend.MainWindow.FileResult" as T33 {
+    }
+  }
+  package "com.compi.frontend.dot" {
+    class "com.compi.frontend.dot.DotModel" as T34 {
+      -NODE : Pattern
+      -EDGE : Pattern
+      -UNESCAPED_QUOTE : Pattern
+      -nodes : Map<String, DotNode>
+      -edges : List<String[]>
+      -parentOf : Map<String, String>
+      +DotNode()
+      -DotModel()
+      +parse()
+      -unescape()
+      +isEmpty()
+      +node()
+      +nodes()
+      +nodeCount()
+      +edges()
+      +children()
+      +root()
+      +depth()
+      -depth()
+    }
+    class "com.compi.frontend.dot.DotModel.DotNode" as T35 {
+    }
+    class "com.compi.frontend.dot.TreeLayout" as T36 {
+      -H_GAP : int
+      -V_GAP : int
+      -PADDING : int
+      -MAX_LABEL_WIDTH : int
+      -positions : Map<String, int[]>
+      -sizes : Map<String, Dimension>
+      -maxWidth : int
+      -maxHeight : int
+      -leafCursor : int
+      +compute()
+      -flipAndNormalize()
+      -place()
+      -placeLeaf()
+      -sizeOf()
+      -nodeHeight()
+      -dedupe()
+      +positionOf()
+      +sizeOf()
+      +bounds()
+      +nodeIds()
+      +findParent()
+    }
+    class "com.compi.frontend.dot.TreeCanvas" as T37 {
+      -ZOOM_MIN : double
+      -ZOOM_MAX : double
+      -model : DotModel
+      -layout : TreeLayout
+      -zoom : double
+      -hovered : String
+      -selected : String
+      -hitAreas : Map<String, Rectangle2D>
+      +TreeCanvas()
+      +setDot()
+      +relayout()
+      +hasGraph()
+      +getNodeCount()
+      +getTreeDepth()
+      +getPreferredSize()
+      +getMinimumSize()
+      +getPreferredScrollableViewportSize()
+      +getScrollableUnitIncrement()
+      +getScrollableBlockIncrement()
+      +getScrollableTracksViewportWidth()
+      +getScrollableTracksViewportHeight()
+      +getZoom()
+      +setZoom()
+      +zoomIn()
+      +zoomOut()
+      +zoomToFit()
+      -visibleSize()
+      +resetZoom()
+      #paintComponent()
+      -fit()
+      -installMouse()
+      -idAt()
+      +getSelectedNode()
+    }
+  }
+  package "com.compi.backend" {
+    class "com.compi.backend.TestRunner" as T38 {
+      +main()
+      -getExtension()
+    }
+    class "com.compi.backend.CompilerFacade" as T39 {
+      -symbolTable : SymbolTable
+      -c3dGenerator : C3DGenerator
+      -allErrors : List<CompilationError>
+      -workingDirectory : File
+      +CompilerFacade()
+      +CompilerFacade()
+      +setWorkingDirectory()
+      +getSymbolTable()
+      +getErrors()
+      +hasErrors()
+      +getC3DGenerator()
+      +compileY()
+      +compileZetariano()
+      +compilePigLatin()
+      -resolveImport()
+      +emitCCode()
+      +getC3DCode()
+    }
+    class "com.compi.backend.BackendTest" as T40 {
+      -assertTrue()
+      -assertTrue()
+      -assertNotNull()
+      +testYCompilation()
+      +testZetarianoCompilation()
+      +testPigLatinCompilation()
+      +main()
+    }
+    class "com.compi.backend.Compiler" as T41 {
+      -source : String
+      -language : String
+      -cMode : Mode
+      -sourceFileName : String
+      -symbolTable : SymbolTable
+      -processStack : Stack
+      -errors : List<CompilationError>
+      -stackStates : List<StackState>
+      -parseSteps : List<ParseStep>
+      -icm : IntermediateCodeManager
+      -c3dGenerator : C3DGenerator
+      -astDot : String
+      -translatedCode : String
+      -c3dCode : String
+      -tripletsCode : String
+      -quadruplesCode : String
+      -cCode : String
+      -workingDirectory : File
+      -importedFiles : List<String>
+      +setWorkingDirectory()
+      +getWorkingDirectory()
+      +getImportedFiles()
+      +compile()
+      +compile()
+      -reset()
+      -generateCCode()
+      -quadruplesToC()
+      -tripletsToC()
+      -tripletToCStatement()
+      -buildTranslatedCode()
+      +getAstDot()
+      +getProcessStack()
+      +getStackStates()
+      +getParseSteps()
+      +getTranslatedCode()
+      +getC3DCode()
+      +getTriplets()
+      +getQuadruples()
+      +getSymbolTable()
+      +getSymbols()
+      +getErrors()
+      +getCCode()
+      +getQuadrupleList()
+      +getIcm()
+      +getSource()
+      +getLanguage()
+      +getCMode()
+      +setCMode()
+      +getInstructionCount()
+      +firstOp()
+    }
+    class "com.compi.backend.PruebaEntradaTexto" as T42 {
+      +main()
+      -testLang()
+    }
+  }
+  package "com.compi.backend.utils" {
+    class "com.compi.backend.utils.GraphvizASTGenerator" as T43 {
+      -sb : StringBuilder
+      -idCounter : int
+      -nodeIds : Map<Object,Integer>
+      +GraphvizASTGenerator()
+      +getId()
+      +addNode()
+      +addEdge()
+      +getDot()
+      +writeToFile()
+    }
+    class "com.compi.backend.utils.ParseTreeDotGenerator" as T44 {
+      -ids : Map<ParseTree, Integer>
+      -sb : StringBuilder
+      -counter : int
+      +build()
+      -visit()
+      -label()
+      -ruleName()
+      -escape()
+      -sanitize()
+    }
+  }
+  package "com.compi.backend.c3d" {
+    enum "com.compi.backend.c3d.Mode" as T45 {
+    }
+    class "com.compi.backend.c3d.Arreglos" as T46 {
+      -Arreglos()
+      +reservar()
+      +direccion()
+      +leer()
+      +escribir()
+      +escribirConstante()
+      +direccionConstante()
+      +sumar()
+      +productoDe()
+    }
+    enum "com.compi.backend.c3d.QuadrupleOp" as T47 {
+      -symbol : String
+      +getSymbol()
+    }
+    class "com.compi.backend.c3d.Triplet" as T48 {
+      -op : QuadrupleOp
+      -arg1 : String
+      -arg2 : String
+      -result : String
+      +Triplet()
+      +Triplet()
+      +getOp()
+      +getArg1()
+      +getArg2()
+      +getResult()
+    }
+    class "com.compi.backend.c3d.CCodeEmitter" as T49 {
+      +generateCCode()
+    }
+    class "com.compi.backend.c3d.C3DGenerator" as T50 {
+      -tempCounter : int
+      -labelCounter : int
+      -quadruples : List<Quadruple>
+      -declaredTemps : Set<String>
+      +C3DGenerator()
+      +newTemp()
+      +newLabel()
+      +emit()
+      +emit()
+      +emitLabel()
+      +emitGoto()
+      +emitAssign()
+      +getQuadruples()
+      +getDeclaredTemps()
+      +clear()
+      +toC3DString()
+    }
+    class "com.compi.backend.c3d.Quadruple" as T51 {
+      -op : QuadrupleOp
+      -arg1 : String
+      -arg2 : String
+      -result : String
+      +Quadruple()
+      +getOp()
+      +setOp()
+      +getArg1()
+      +setArg1()
+      +getArg2()
+      +setArg2()
+      +getResult()
+      +setResult()
+      +toC3D()
+      +toCuarteta()
+      +toString()
+      +toString()
+    }
+    class "com.compi.backend.c3d.TripletGenerator" as T52 {
+      -tempCounter : int
+      -labelCounter : int
+      -triplets : List<Triplet>
+      +newTemp()
+      +newLabel()
+      +emit()
+      +emit()
+      +emitLabel()
+      +emitGoto()
+      +emitAssign()
+      +getTriplets()
+      +clear()
+      +toString()
+    }
+    class "com.compi.backend.c3d.CCodeGenerator" as T53 {
+      -mode : Mode
+      -manager : IntermediateCodeManager
+      +CCodeGenerator()
+      +generateC()
+    }
+    class "com.compi.backend.c3d.IntermediateCodeManager" as T54 {
+      -tripletGen : TripletGenerator
+      -quadruples : List<Quadruple>
+      -tempCounter : int
+      -labelCounter : int
+      +newTemp()
+      +newLabel()
+      +emitTriplet()
+      +emitQuadruple()
+      +loadFromQuadruples()
+      -toTriplets()
+      +getTriplets()
+      +getQuadruples()
+      +clear()
+      +getTripletsString()
+      +getQuadruplesString()
+    }
+  }
+  package "com.compi.backend.parser" {
+    class "com.compi.backend.parser.ParseTrace" as T55 {
+      -MAX_TEXTO : int
+      -ParseTrace()
+      +build()
+      -nombreDeRegla()
+      -recortar()
+    }
+    class "com.compi.backend.parser.ParseTrace.Trazador" as T56 {
+      -pasos : List<ParseStep>
+      -vocabulario : Vocabulary
+      -ruleNames : String[]
+      -pila : List<String>
+      -marcas : Deque<Integer>
+      -numero : int
+      +enterEveryRule()
+      +visitTerminal()
+      +visitErrorNode()
+      +exitEveryRule()
+      -desplazar()
+      -seApila()
+      -nombreDeToken()
+    }
+    enum "com.compi.backend.parser.AccionPila" as T57 {
+      -tag : String
+      -label : String
+      +tag()
+      +label()
+    }
+    class "com.compi.backend.parser.ParseStep" as T58 {
+      +MARCA_INICIO : String
+      -numero : int
+      -tipo : AccionPila
+      -simbolo : String
+      -terminal : String
+      -linea : int
+      -columna : int
+      -invalido : boolean
+      -pila : List<String>
+      -consumidos : List<String>
+      +ParseStep()
+      +getNumero()
+      +getTipo()
+      +getSimbolo()
+      +getTerminal()
+      +getLinea()
+      +getColumna()
+      +esInvalido()
+      +getPila()
+      +getConsumidos()
+      +getProfundidad()
+      +toString()
+    }
+  }
+  package "com.compi.backend.runtime" {
+    class "com.compi.backend.runtime.StackState" as T59 {
+      -index : int
+      -operation : String
+      -elements : List<String>
+      -c3dInstruction : String
+      -action : StackAction
+      -popped : List<String>
+      -pushed : String
+      +StackState()
+      +StackState()
+      +getIndex()
+      +getOperation()
+      +getStackElements()
+      +getElements()
+      +getC3dInstruction()
+      +getAction()
+      +getPopped()
+      +getPushed()
+      +depth()
+      +getTop()
+      +toString()
+    }
+    class "com.compi.backend.runtime.Stack" as T60 {
+      -data : List<Object>
+      +push()
+      +pop()
+      +peek()
+      +size()
+      +clear()
+    }
+    enum "com.compi.backend.runtime.StackAction" as T61 {
+      -tag : String
+      -label : String
+      +tag()
+      +label()
+    }
+    class "com.compi.backend.runtime.StackSimulator" as T62 {
+      -states : List<StackState>
+      -stack : List<String>
+      -poppedThisStep : List<String>
+      -step : int
+      -popsIntentados : int
+      -pushedThisStep : String
+      +simulate()
+      -accionDelPaso()
+      -apply()
+      -push()
+      -pop()
+    }
+    class "com.compi.backend.runtime.Heap" as T63 {
+      -memory : List<Object>
+      -pointer : int
+      +allocate()
+      +set()
+      +get()
+      -ensure()
+    }
+  }
+  package "com.compi.backend.languages.y" {
+    class "com.compi.backend.languages.y.YIndentLexer" as T64 {
+      -indentStack : Stack<Integer>
+      -pendingTokens : Queue<Token>
+      -atStartOfLine : boolean
+      -lastToken : Token
+      -nivelCorchetes : int
+      +YIndentLexer()
+      +nextToken()
+      -lineaVaciaNiSoloComentario()
+      -calculateIndent()
+      -createToken()
+    }
+    class "com.compi.backend.languages.y.YSemanticVisitor" as T65 {
+      -symbolTable : SymbolTable
+      -errors : List<CompilationError>
+      -currentFunctionReturnType : Type
+      +YSemanticVisitor()
+      +getErrors()
+      +visitEstructuras_seccion()
+      +visitDeclaracion_estructura_local()
+      -registrarEstructura()
+      +visitFuncion_def()
+      +visitDeclaracion_variable()
+      -tamanosDe()
+      -tipoDeLista()
+      -anchoDe()
+      +visitAsignacion()
+      +visitRetornar_sentencia()
+      +visitExpresion()
+      +visitTermino()
+      +visitLlamada_funcion()
+      +visitAcceso_miembro()
+      -contarIndices()
+      -tienePuntos()
+      -comprobarIndice()
+      -resolveType()
+      -esConocido()
+    }
+    class "com.compi.backend.languages.y.YC3DVisitor" as T66 {
+      -symbolTable : SymbolTable
+      -c3d : C3DGenerator
+      -breakLabels : Stack<String>
+      -continueLabels : Stack<String>
+      +YC3DVisitor()
+      +visitFuncion_def()
+      +visitDeclaracion_variable()
+      -tipoDeNombre()
+      -declararEstructura()
+      -celdasDe()
+      -celdasDe()
+      -llenarCampos()
+      -declararArreglo()
+      -llenar()
+      +visitAsignacion()
+      -escribirEnAcceso()
+      -direccionDeAcceso()
+      -pasosDeAcceso()
+      -campoDe()
+      -posicionDeCampo()
+      -leerVariable()
+      +visitAcceso_miembro()
+      -leerCelda()
+      +visitSi_sentencia()
+      -emitirSaltoDeCondicion()
+      -relacionalDe()
+      +visitMientras_sentencia()
+      +visitHacer_mientras_sentencia()
+      +visitPara_sentencia()
+      +visitIncremento_decremento()
+      +visitElegir_sentencia()
+      -terminaConRomper()
+      +visitRetornar_sentencia()
+      +visitRomper_sentencia()
+      +visitContinuar_sentencia()
+      +visitImprimir_sentencia()
+      -esCadena()
+      -tipoDeAcceso()
+      +visitExpresion()
+      -operadorAritmetico()
+      -logico()
+      +visitLlamada_funcion()
+      -cadenaEnHeap()
+      -caracterDe()
+      +visitTermino()
+    }
+  }
+  package "com.compi.backend.languages.y.ast" {
+    interface "com.compi.backend.languages.y.ast.YVisitorCustom" as T67 {
+      +visit()
+      +visit()
+      +visit()
+      +visit()
+      +visit()
+      +visit()
+      +visit()
+      +visit()
+      +visit()
+      +visit()
+      +visit()
+      +visit()
+      +visit()
+      +visit()
+      +visit()
+      +visit()
+      +visit()
+      +visit()
+      +visit()
+      +visit()
+      +visit()
+      +visit()
+    }
+    class "com.compi.backend.languages.y.ast.Program" as T68 {
+    }
+    class "com.compi.backend.languages.y.ast.NodeASTY" as T69 {
+      #line : int
+      #column : int
+      +NodeASTY()
+      +accept()
+    }
+  }
+  package "com.compi.backend.languages.y.ast.expressions" {
+    class "com.compi.backend.languages.y.ast.expressions.IdentifierY" as T70 {
+      -name : String
+      +IdentifierY()
+      +accept()
+    }
+    class "com.compi.backend.languages.y.ast.expressions.LiteralY" as T71 {
+      +LiteralY()
+      +accept()
+    }
+    class "com.compi.backend.languages.y.ast.expressions.RelationalOperationY" as T72 {
+      -left : NodeASTY
+      -operator : String
+      -right : NodeASTY
+      +RelationalOperationY()
+      +accept()
+    }
+    class "com.compi.backend.languages.y.ast.expressions.ArithmeticOperationY" as T73 {
+      +ArithmeticOperationY()
+      +accept()
+    }
+    class "com.compi.backend.languages.y.ast.expressions.LogicalOperationY" as T74 {
+      -left : NodeASTY
+      -operator : String
+      -right : NodeASTY
+      +LogicalOperationY()
+      +accept()
+    }
+    class "com.compi.backend.languages.y.ast.expressions.FunctionCallY" as T75 {
+      -name : String
+      -arguments : List<NodeASTY>
+      +FunctionCallY()
+      +accept()
+    }
+  }
+  package "com.compi.backend.languages.y.ast.statements" {
+    class "com.compi.backend.languages.y.ast.statements.ContinueStatementY" as T76 {
+      +ContinueStatementY()
+      +accept()
+    }
+    class "com.compi.backend.languages.y.ast.statements.WhileStatementY" as T77 {
+      -condition : NodeASTY
+      -body : List<NodeASTY>
+      +WhileStatementY()
+      +accept()
+    }
+    class "com.compi.backend.languages.y.ast.statements.DoWhileStatementY" as T78 {
+      -body : List<NodeASTY>
+      -condition : NodeASTY
+      +DoWhileStatementY()
+      +accept()
+    }
+    class "com.compi.backend.languages.y.ast.statements.SwitchCaseY" as T79 {
+      -value : NodeASTY
+      -body : List<NodeASTY>
+      +SwitchCaseY()
+      +accept()
+    }
+    class "com.compi.backend.languages.y.ast.statements.VariableDeclarationY" as T80 {
+      -dataType : String
+      -name : String
+      -dimensions : List<NodeASTY>
+      -initializer : NodeASTY
+      +VariableDeclarationY()
+      +accept()
+    }
+    class "com.compi.backend.languages.y.ast.statements.ForStatementY" as T81 {
+      -initialization : NodeASTY
+      -condition : NodeASTY
+      -update : NodeASTY
+      -body : List<NodeASTY>
+      +ForStatementY()
+      +accept()
+    }
+    class "com.compi.backend.languages.y.ast.statements.IfStatementY" as T82 {
+      -condition : NodeASTY
+      -thenBody : List<NodeASTY>
+      -elseIfBranches : List<ElseIfY>
+      -elseBody : List<NodeASTY>
+      +IfStatementY()
+      +accept()
+    }
+    class "com.compi.backend.languages.y.ast.statements.SwitchStatementY" as T83 {
+      -expression : NodeASTY
+      -cases : List<SwitchCaseY>
+      -defaultBody : List<NodeASTY>
+      +SwitchStatementY()
+      +accept()
+    }
+    class "com.compi.backend.languages.y.ast.statements.ReadStatementY" as T84 {
+      +ReadStatementY()
+      +accept()
+    }
+    class "com.compi.backend.languages.y.ast.statements.ReturnStatementY" as T85 {
+      -expression : NodeASTY
+      +ReturnStatementY()
+      +accept()
+    }
+    class "com.compi.backend.languages.y.ast.statements.AssignmentY" as T86 {
+      -name : String
+      -expression : NodeASTY
+      +AssignmentY()
+      +accept()
+    }
+    class "com.compi.backend.languages.y.ast.statements.BreakStatementY" as T87 {
+      +BreakStatementY()
+      +accept()
+    }
+    class "com.compi.backend.languages.y.ast.statements.ElseIfY" as T88 {
+      -condition : NodeASTY
+      -body : List<NodeASTY>
+      +ElseIfY()
+      +accept()
+    }
+    class "com.compi.backend.languages.y.ast.statements.PrintStatementY" as T89 {
+      -expression : NodeASTY
+      +PrintStatementY()
+      +accept()
+    }
+  }
+  package "com.compi.backend.languages.y.ast.definitions" {
+    class "com.compi.backend.languages.y.ast.definitions.StructDef" as T90 {
+      -name : String
+      -fields : List<NodeASTY>
+      +StructDef()
+      +accept()
+    }
+    class "com.compi.backend.languages.y.ast.definitions.FunctionDef" as T91 {
+      -returnType : String
+      -name : String
+      -parameters : List<NodeASTY>
+      -body : List<NodeASTY>
+      +FunctionDef()
+      +accept()
+    }
+  }
+  package "com.compi.backend.languages.base.ast" {
+    class "com.compi.backend.languages.base.ast.ArithmeticOperation" as T92 {
+      -left : NodeAST
+      -operator : String
+      -right : NodeAST
+      +ArithmeticOperation()
+    }
+    class "com.compi.backend.languages.base.ast.Literal" as T93 {
+      -value : Object
+      +Literal()
+    }
+    class "com.compi.backend.languages.base.ast.NodeAST" as T94 {
+      #line : int
+      #column : int
+      +NodeAST()
+      +NodeAST()
+    }
+  }
+  package "com.compi.backend.languages.zetariano" {
+    class "com.compi.backend.languages.zetariano.ZetarianoC3DVisitor" as T95 {
+      -symbolTable : SymbolTable
+      -c3d : C3DGenerator
+      -currentClassName : String
+      -breakLabels : Stack<String>
+      -continueLabels : Stack<String>
+      +ZetarianoC3DVisitor()
+      +visitClaseDef()
+      -addressOf()
+      -store()
+      -load()
+      -defineParameter()
+      -typeOfField()
+      -defineThis()
+      +visitConstructorDef()
+      +visitMetodoDef()
+      +visitAtributoDef()
+      +visitDeclaracionVariable()
+      +visitLiteralArregloExpr()
+      -formasDe()
+      -valoresDe()
+      -filaDe()
+      -llenar()
+      -leerCelda()
+      -indicesDe()
+      -escribirCelda()
+      +visitAsignacion()
+      -resolveMember()
+      -applyCompound()
+      +visitMemberAccessExpr()
+      +visitSentenciaIf()
+      -emitirSaltoDeCondicion()
+      -relacionalDe()
+      -igualdadDe()
+      +visitIncrementoDecremento()
+      +visitSentenciaFor()
+      +visitSentenciaDoWhile()
+      +visitSentenciaWhile()
+      +visitRetorno()
+      +visitRomper()
+      +visitContinuar()
+      +visitLlamadaFuncionSemilla()
+      +visitNewObjectExpr()
+      +visitAddSubExpr()
+      +visitMulDivModExpr()
+      +visitIntLiteralExpr()
+      +visitDoubleLiteralExpr()
+      +visitStringLiteralExpr()
+      +visitIdExpr()
+      +visitParenExpr()
+      +visitRelationalExpr()
+      +visitEqualityExpr()
+      -compare()
+      +visitAndExpr()
+      +visitOrExpr()
+      +visitNotExpr()
+      +visitNegExpr()
+      +visitTrueExpr()
+      +visitFalseExpr()
+      +visitNullExpr()
+    }
+    class "com.compi.backend.languages.zetariano.ZetarianoSemanticVisitor" as T96 {
+      -symbolTable : SymbolTable
+      -errors : List<CompilationError>
+      -currentClass : Symbol
+      -currentMethodReturnType : Type
+      +ZetarianoSemanticVisitor()
+      +getErrors()
+      +visitClaseDef()
+      +visitConstructorDef()
+      +visitMetodoDef()
+      +visitDeclaracionVariable()
+      -tipoDeLiteralArreglo()
+      -tipoDeValor()
+      -anchoDe()
+      +visitAsignacion()
+      +visitRetorno()
+      +visitIntLiteralExpr()
+      +visitDoubleLiteralExpr()
+      +visitStringLiteralExpr()
+      +visitCharLiteralExpr()
+      +visitTrueExpr()
+      +visitFalseExpr()
+      +visitNullExpr()
+      +visitIdExpr()
+      +visitAddSubExpr()
+      +visitNegExpr()
+      +visitMulDivModExpr()
+      +visitRelationalExpr()
+      +visitEqualityExpr()
+      +visitTernaryExpr()
+      +visitNewObjectExpr()
+      +visitAccesoMiembro()
+      -contarIndices()
+      -tienePuntos()
+      -comprobarIndice()
+      -defineThis()
+      -resolveType()
+      -esConocido()
+    }
+  }
+  package "com.compi.backend.languages.zetariano.ast" {
+    interface "com.compi.backend.languages.zetariano.ast.ZetarianVisitorCustom" as T97 {
+      +visit()
+      +visit()
+      +visit()
+      +visit()
+      +visit()
+      +visit()
+      +visit()
+      +visit()
+      +visit()
+      +visit()
+      +visit()
+      +visit()
+      +visit()
+    }
+    class "com.compi.backend.languages.zetariano.ast.NodeASTZet" as T98 {
+      #line : int
+      #column : int
+      +NodeASTZet()
+      +accept()
+    }
+  }
+  package "com.compi.backend.languages.zetariano.ast.expressions" {
+    class "com.compi.backend.languages.zetariano.ast.expressions.LiteralZet" as T99 {
+      +LiteralZet()
+      +accept()
+    }
+    class "com.compi.backend.languages.zetariano.ast.expressions.ArithmeticOperationZet" as T100 {
+      +ArithmeticOperationZet()
+      +accept()
+    }
+    class "com.compi.backend.languages.zetariano.ast.expressions.MemberAccessZet" as T101 {
+      -object : NodeASTZet
+      -memberName : String
+      +MemberAccessZet()
+      +accept()
+    }
+    class "com.compi.backend.languages.zetariano.ast.expressions.NewObjectExprZet" as T102 {
+      -className : String
+      -arguments : List<NodeASTZet>
+      +NewObjectExprZet()
+      +accept()
+    }
+  }
+  package "com.compi.backend.languages.zetariano.ast.statements" {
+    class "com.compi.backend.languages.zetariano.ast.statements.ReturnStatementZet" as T103 {
+      -expression : NodeASTZet
+      +ReturnStatementZet()
+      +accept()
+    }
+    class "com.compi.backend.languages.zetariano.ast.statements.VariableDeclarationZet" as T104 {
+      -dataType : String
+      -name : String
+      -initializer : NodeASTZet
+      +VariableDeclarationZet()
+      +accept()
+    }
+    class "com.compi.backend.languages.zetariano.ast.statements.IfStatementZet" as T105 {
+      -condition : NodeASTZet
+      -thenBody : List<NodeASTZet>
+      -elseBody : List<NodeASTZet>
+      +IfStatementZet()
+      +accept()
+    }
+    class "com.compi.backend.languages.zetariano.ast.statements.WhileStatementZet" as T106 {
+      -condition : NodeASTZet
+      -body : List<NodeASTZet>
+      +WhileStatementZet()
+      +accept()
+    }
+    class "com.compi.backend.languages.zetariano.ast.statements.AssignmentZet" as T107 {
+      -target : NodeASTZet
+      -value : NodeASTZet
+      +AssignmentZet()
+      +accept()
+    }
+  }
+  package "com.compi.backend.languages.zetariano.ast.definitions" {
+    class "com.compi.backend.languages.zetariano.ast.definitions.AttributeDefZet" as T108 {
+      -dataType : String
+      -name : String
+      +AttributeDefZet()
+      +accept()
+    }
+    class "com.compi.backend.languages.zetariano.ast.definitions.ClassDefZet" as T109 {
+      -name : String
+      -attributes : List<AttributeDefZet>
+      -methods : List<NodeASTZet>
+      +ClassDefZet()
+      +accept()
+    }
+    class "com.compi.backend.languages.zetariano.ast.definitions.MethodDefZet" as T110 {
+      -returnType : String
+      -name : String
+      -parameters : List<NodeASTZet>
+      -body : List<NodeASTZet>
+      +MethodDefZet()
+      +accept()
+    }
+    class "com.compi.backend.languages.zetariano.ast.definitions.ConstructorDefZet" as T111 {
+      -parameters : List<NodeASTZet>
+      -body : List<NodeASTZet>
+      +ConstructorDefZet()
+      +accept()
+    }
+  }
+  package "com.compi.backend.languages.piglatin" {
+    class "com.compi.backend.languages.piglatin.PigLatinSemanticVisitor" as T112 {
+      -symbolTable : SymbolTable
+      -errors : List<CompilationError>
+      -enCiclo : int
+      +PigLatinSemanticVisitor()
+      +getErrors()
+      +visitCiclo_dum()
+      +visitCiclo_facere()
+      -visitarCuerpo()
+      +visitVariables()
+      +visitDeclaracion()
+      +visitArreglo_declaracion()
+      -tipoDeLiteralArreglo()
+      -anchoDe()
+      -tipoDeValorArreglo()
+      +visitMaior()
+      +visitAsignacion_sentencia()
+      +visitExpresion()
+      +visitTermino()
+      +visitAcceso_miembro()
+      -contarIndices()
+      -comprobarIndice()
+      -buscarMiembro()
+      -tieneMiembrosConocidos()
+      -tipoDeclarado()
+      +visitLlamada_funcion()
+      +visitInicializacion_per()
+      +visitCondiciones_per()
+      +visitIncremento_per()
+      +visitCiclo_per()
+      +visitSalto_sentencia()
+      -resolveType()
+      -esConocido()
+    }
+    class "com.compi.backend.languages.piglatin.PigLatinC3DVisitor" as T113 {
+      -symbolTable : SymbolTable
+      -c3d : C3DGenerator
+      -salidaCiclo : Deque<String>
+      -vueltaCiclo : Deque<String>
+      +PigLatinC3DVisitor()
+      +visitVariables()
+      +visitDeclaracion()
+      +visitMaior()
+      +visitImprimir_sentencia()
+      +visitAsignacion_sentencia()
+      +visitSi_sentencia()
+      -emitirCadenaSi()
+      -emitirRamaConCondicion()
+      -emitirSaltoDeCondicion()
+      -emitirSaltoDeConjuncion()
+      -emitirSaltoDeNegacion()
+      -emitirSaltoDePrimaria()
+      -valorBooleano()
+      -relacionalDe()
+      -visitarSentencias()
+      -sentenciasDelSi()
+      -sentenciasDelAliterFinal()
+      +visitCiclo_dum()
+      +visitCiclo_facere()
+      +visitCiclo_per()
+      +visitSalto_sentencia()
+      +visitCondicion()
+      +visitConjuncion()
+      +visitNegacion_logica()
+      +visitPrimaria_logica()
+      +visitExpresion()
+      +visitTermino()
+      +visitArreglo_declaracion()
+      -llenar()
+      -leerElemento()
+      -escribirElemento()
+      -leerVariable()
+      -indicesDe()
+      -contarIndices()
+      +visitAcceso_miembro()
+      +visitLlamada_funcion()
+      -nombreDeLaLlamada()
+    }
+    class "com.compi.backend.languages.piglatin.PigLatinTripletVisitor" as T114 {
+      -symbolTable : SymbolTable
+      -tg : TripletGenerator
+      +PigLatinTripletVisitor()
+      +visitMaior()
+      +visitAsignacion_sentencia()
+      +visitImprimir_sentencia()
+      +visitSi_sentencia()
+      +visitExpresion()
+      +visitTermino()
+      +getGenerator()
+    }
+  }
+  package "com.compi.backend.languages.piglatin.ast" {
+    class "com.compi.backend.languages.piglatin.ast.PigLatinASTGraphvizVisitor" as T115 {
+      -g : GraphvizASTGenerator
+    }
+    class "com.compi.backend.languages.piglatin.ast.NodeASTPig" as T116 {
+      #line : int
+      #column : int
+      +NodeASTPig()
+      +NodeASTPig()
+      +accept()
+    }
+    interface "com.compi.backend.languages.piglatin.ast.PigLatinVisitorCustom" as T117 {
+      +visit()
+      +visit()
+      +visit()
+      +visit()
+      +visit()
+      +visit()
+      +visit()
+      +visit()
+      +visit()
+      +visit()
+      +visit()
+      +visit()
+      +visit()
+      +visit()
+      +visit()
+      +visit()
+      +visit()
+      +visit()
+      +visit()
+      +visit()
+      +visit()
+      +visit()
+    }
+    class "com.compi.backend.languages.piglatin.ast.PigLatinRoot" as T118 {
+      -sentences : List<NodeASTPig>
+      +PigLatinRoot()
+      +accept()
+    }
+  }
+  package "com.compi.backend.languages.piglatin.ast.sentence" {
+    class "com.compi.backend.languages.piglatin.ast.sentence.JumpSentence" as T119 {
+      -jumpType : String
+      -expression : NodeASTPig
+      +JumpSentence()
+      +accept()
+    }
+    class "com.compi.backend.languages.piglatin.ast.sentence.IfSentence" as T120 {
+      -condition : NodeASTPig
+      -thenBody : List<NodeASTPig>
+      -elseBody : List<NodeASTPig>
+      +IfSentence()
+      +accept()
+    }
+    class "com.compi.backend.languages.piglatin.ast.sentence.ImportSentence" as T121 {
+      -path : String
+      +ImportSentence()
+      +accept()
+    }
+    class "com.compi.backend.languages.piglatin.ast.sentence.SentenceAssignment" as T122 {
+      -name : String
+      -expression : NodeASTPig
+      +SentenceAssignment()
+      +accept()
+    }
+    class "com.compi.backend.languages.piglatin.ast.sentence.FacereLoop" as T123 {
+      -body : List<NodeASTPig>
+      -condition : NodeASTPig
+      +FacereLoop()
+      +accept()
+    }
+    class "com.compi.backend.languages.piglatin.ast.sentence.PerLoop" as T124 {
+      -initialization : NodeASTPig
+      -condition : NodeASTPig
+      -update : NodeASTPig
+      -body : List<NodeASTPig>
+      +PerLoop()
+      +accept()
+    }
+    class "com.compi.backend.languages.piglatin.ast.sentence.ArrayDeclaration" as T125 {
+      -name : String
+      -dataType : String
+      -expression : NodeASTPig
+      +ArrayDeclaration()
+      +accept()
+    }
+    class "com.compi.backend.languages.piglatin.ast.sentence.Declaration" as T126 {
+      -dataType : String
+      -name : String
+      -expression : NodeASTPig
+      +Declaration()
+      +accept()
+    }
+    class "com.compi.backend.languages.piglatin.ast.sentence.PrintSentence" as T127 {
+      -expressions : List<NodeASTPig>
+      +PrintSentence()
+      +accept()
+    }
+    class "com.compi.backend.languages.piglatin.ast.sentence.DumLoop" as T128 {
+      -condition : NodeASTPig
+      -body : List<NodeASTPig>
+      +DumLoop()
+      +accept()
+    }
+    class "com.compi.backend.languages.piglatin.ast.sentence.ReadSentence" as T129 {
+      -variableName : String
+      +ReadSentence()
+      +accept()
+    }
+  }
+  package "com.compi.backend.languages.piglatin.ast.expressions" {
+    class "com.compi.backend.languages.piglatin.ast.expressions.AccessArrayPig" as T130 {
+      -array : NodeASTPig
+      -index : NodeASTPig
+      +AccessArrayPig()
+      +accept()
+    }
+    class "com.compi.backend.languages.piglatin.ast.expressions.ArithmeticOperationPig" as T131 {
+      +ArithmeticOperationPig()
+      +accept()
+    }
+    class "com.compi.backend.languages.piglatin.ast.expressions.IdentifierPig" as T132 {
+      -name : String
+      +IdentifierPig()
+      +accept()
+    }
+    class "com.compi.backend.languages.piglatin.ast.expressions.InstantiationStructurePig" as T133 {
+      -structName : String
+      -fieldValues : Map<String, NodeASTPig>
+      +InstantiationStructurePig()
+      +accept()
+    }
+    class "com.compi.backend.languages.piglatin.ast.expressions.LiteralArrayPig" as T134 {
+      -elements : List<NodeASTPig>
+      +LiteralArrayPig()
+      +accept()
+    }
+    class "com.compi.backend.languages.piglatin.ast.expressions.RelationalOperationPig" as T135 {
+      -left : NodeASTPig
+      -operator : String
+      -right : NodeASTPig
+      +RelationalOperationPig()
+      +accept()
+    }
+    class "com.compi.backend.languages.piglatin.ast.expressions.FunctionCallPig" as T136 {
+      -functionName : String
+      -arguments : List<NodeASTPig>
+      +FunctionCallPig()
+      +accept()
+    }
+    class "com.compi.backend.languages.piglatin.ast.expressions.LiteralPig" as T137 {
+      -type : String
+      +LiteralPig()
+      +accept()
+    }
+    class "com.compi.backend.languages.piglatin.ast.expressions.LogicalOperationPig" as T138 {
+      -left : NodeASTPig
+      -operator : String
+      -right : NodeASTPig
+      +LogicalOperationPig()
+      +accept()
+    }
+    class "com.compi.backend.languages.piglatin.ast.expressions.MemberAccessPig" as T139 {
+      -object : NodeASTPig
+      -property : String
+      +MemberAccessPig()
+      +accept()
+    }
+  }
+  package "com.compi.backend.languages2" {
+    class "com.compi.backend.languages2.ZetarianoCompiler" as T140 {
+      -sourceFileName : String
+      +id()
+      +setSourceFileName()
+      +displayName()
+      +extensions()
+      +parse()
+      +analyze()
+      -comprobarNombreDelArchivo()
+      +generateIntermediate()
+    }
+    class "com.compi.backend.languages2.LanguageCompilerFactory" as T141 {
+      -BY_EXTENSION : Map<String, String>
+      -BY_ID : Map<String, LanguageCompiler>
+      -registerExtension()
+      -LanguageCompilerFactory()
+      +all()
+      +allowedExtensions()
+      +extensionPattern()
+      +hasAllowedExtension()
+      +extensionOf()
+      +extensionOfLanguage()
+      +byExtensionLanguage()
+      +getCompiler()
+      +detectLanguageId()
+      +filter()
+    }
+    class "com.compi.backend.languages2.PigLatinCompiler" as T142 {
+      +id()
+      +displayName()
+      +extensions()
+      +parse()
+      +analyze()
+      +generateIntermediate()
+      +loadImports()
+      -loadImport()
+      -marcarOrigen()
+      -rutaDelImport()
+      -resolveImportFile()
+      -buscarPorFinalDeRuta()
+      -matchesImportPath()
+      -relativeToProject()
+    }
+    class "com.compi.backend.languages2.YCompiler" as T143 {
+      +id()
+      +displayName()
+      +extensions()
+      +parse()
+      +analyze()
+      +generateIntermediate()
+    }
+    class "com.compi.backend.languages2.AbstractLanguageCompiler" as T144 {
+      -workingDirectory : File
+      -vocabulary : Vocabulary
+      -ruleNames : String[]
+      +setWorkingDirectory()
+      #getWorkingDirectory()
+      +vocabulary()
+      +ruleNames()
+      #rememberParser()
+      #errorCollector()
+      #installErrorListener()
+      #installErrorListener()
+      #internalError()
+      #marcarLenguaje()
+      #internalError()
+    }
+    interface "com.compi.backend.languages2.LanguageCompiler" as T145 {
+      +id()
+      +displayName()
+      +extensions()
+      +parse()
+      +analyze()
+      +generateIntermediate()
+    }
+  }
+  package "com.compi.backend.errors" {
+    class "com.compi.backend.errors.AntlrErrorCollector" as T146 {
+      -errors : List<CompilationError>
+      -defaultType : ErrorType
+      +AntlrErrorCollector()
+      +syntaxError()
+      +getErrors()
+      +hasErrors()
+    }
+    class "com.compi.backend.errors.Diagnostico" as T147 {
+      -ABIERTO : char
+      -CERRADO : char
+      -MAXIMO_EN_LISTA : int
+      -CONJUNTO : Pattern
+      -CON_LITERAL : Pattern
+      -Diagnostico()
+      +desdeAntlr()
+      -dato()
+      -encontrado()
+      -recortado()
+      -lista()
+      -esperado()
+      -simbolicoDe()
+      -literal()
+      -cola()
+      -en()
+      -en()
+      -tipo()
+      +variableNoDeclarada()
+      +variableYaDeclarada()
+      +variableGlobalYaDeclarada()
+      +funcionNoDefinida()
+      +simboloNoResuelto()
+      +miembroNoExiste()
+      +asignacionIncompatible()
+      +inicializacionIncompatible()
+      +tipoDeRetornoErroneo()
+      +parametroDuplicado()
+      +nombreDeConstructorErroneo()
+      +condicionNoBooleana()
+      +operadorNegacionNoBooleano()
+      +operadorMenosNoNumerico()
+      +noEsArreglo()
+      +dimensionesDeIndice()
+      +formaDelInicializador()
+      +filasDesiguales()
+      +elementoIncompatible()
+      +indiceFueraDeRango()
+      +arregloSinTamano()
+    }
+    enum "com.compi.backend.errors.ErrorType" as T148 {
+    }
+    class "com.compi.backend.errors.CompilationError" as T149 {
+      -type : ErrorType
+      -message : String
+      -line : int
+      -column : int
+      -fileName : String
+      +CompilationError()
+      +getErrorType()
+      +getType()
+      +getMessage()
+      +getLine()
+      +getColumn()
+      +getFileName()
+      +inFile()
+      +toString()
+    }
+  }
+  package "com.compi.backend.symbols" {
+    class "com.compi.backend.symbols.Scope" as T150 {
+      -name : String
+      -parent : Scope
+      -symbols : Map<String, Symbol>
+      -currentOffset : int
+      +Scope()
+      +Scope()
+      +getName()
+      +getParent()
+      +define()
+      +resolveLocal()
+      +resolve()
+      +allocateOffset()
+      +getCurrentOffset()
+      +getSymbols()
+      +clear()
+    }
+    class "com.compi.backend.symbols.TypeCompatibility" as T151 {
+      +checkArithmetic()
+      +checkRelational()
+      +checkEquality()
+      +checkLogical()
+    }
+    class "com.compi.backend.symbols.TypeTable" as T152 {
+      -types : Map<String, Type>
+      +TypeTable()
+      -addPrimitive()
+      +define()
+      +resolve()
+      +exists()
+    }
+    class "com.compi.backend.symbols.Symbol" as T153 {
+      -name : String
+      -type : Type
+      -category : SymbolCategory
+      -offset : int
+      -isGlobal : boolean
+      -isByReference : boolean
+      -parameters : List<Symbol>
+      -returnType : Type
+      -members : List<Symbol>
+      -line : int
+      -column : int
+      -scope : String
+      -language : String
+      -sourceFile : String
+      -working : boolean
+      +Symbol()
+      +Symbol()
+      +getName()
+      +getType()
+      +getCategory()
+      +getOffset()
+      +setOffset()
+      +isGlobal()
+      +setGlobal()
+      +isByReference()
+      +setByReference()
+      +getParameters()
+      +setParameters()
+      +addParameter()
+      +getReturnType()
+      +setReturnType()
+      +getMembers()
+      +setMembers()
+      +addMember()
+      +getMember()
+      +getLine()
+      +getColumn()
+      +getScope()
+      +getLanguage()
+      +getSourceFile()
+      +inFile()
+      +at()
+      +setScopeIfAbsent()
+      +inLanguage()
+      +markWorking()
+      +isWorking()
+      +toString()
+    }
+    class "com.compi.backend.symbols.SymbolTable" as T154 {
+      -currentScope : Scope
+      -globalScope : Scope
+      -structs : Map<String, Symbol>
+      -classes : Map<String, Symbol>
+      -functions : Map<String, Symbol>
+      -typeTable : TypeTable
+      -closedScopes : List<Scope>
+      +SymbolTable()
+      +getTypeTable()
+      +enterScope()
+      +enterScope()
+      +exitScope()
+      +getCurrentScope()
+      +clear()
+      +getGlobalScope()
+      +define()
+      +defineGlobal()
+      +defineByTypeName()
+      +resolveType()
+      +resolve()
+      +addStruct()
+      +getStruct()
+      +addClass()
+      +getClass()
+      +addFunction()
+      +getFunction()
+      +getAllSymbols()
+      -addNested()
+      -collectAllSymbols()
+    }
+    class "com.compi.backend.symbols.LiteralDeArreglo" as T155 {
+      -LiteralDeArreglo()
+      +validar()
+      +completarTamanos()
+    }
+    enum "com.compi.backend.symbols.DataType" as T156 {
+      ~UNKNOWN : NULL,
+      +isNumeric()
+      +isPrimitive()
+    }
+    class "com.compi.backend.symbols.Type" as T157 {
+      +INT : Type
+      +DOUBLE : Type
+      +CHAR : Type
+      +BOOLEAN : Type
+      +STRING : Type
+      +VOID : Type
+      +NULL : Type
+      +UNKNOWN : Type
+      +TAMANO_DESCONOCIDO : int
+      -dataType : DataType
+      -customTypeName : String
+      -elementType : Type
+      -dimensions : int
+      -sizes : int[]
+      +Type()
+      +Type()
+      +Type()
+      +Type()
+      +array()
+      +arrayOf()
+      +conTamanos()
+      +structType()
+      +classType()
+      +getDataType()
+      +getCustomTypeName()
+      +getElementType()
+      +getDimensions()
+      +getSizes()
+      +totalSize()
+      +tieneTamanos()
+      +desindexar()
+      +elemento()
+      +mismaForma()
+      +isArray()
+      +isStruct()
+      +isClass()
+      +isNumeric()
+      +isAssignableTo()
+      +equals()
+      +hashCode()
+      +toString()
+      +label()
+      -labelDe()
+    }
+    enum "com.compi.backend.symbols.SymbolCategory" as T158 {
+      -label : String
+      +label()
+      +toString()
+    }
+  }
+}
+package "ANTLR 4.13.2 generado — paquete com.compi" {
+  package "ANTLR: com.compi" {
+    interface "com.compi.PigLatinVisitor" as T159 {
+      +visitInit()
+      +visitPig_latin()
+      +visitImport_declaracion()
+      +visitVariables()
+      +visitDeclaracion()
+      +visitArreglo_declaracion()
+      +visitElemento_arreglo()
+      +visitElemento_arreglo_valor()
+      +visitElemento_arreglo_struct()
+      +visitStructura_instanciacion()
+      +visitAtributo_asignacion()
+      +visitArreglo_literal()
+      +visitTipo_dato()
+      +visitExpresion()
+      +visitTermino()
+      +visitAcceso_miembro()
+      +visitArreglo_acceso()
+      +visitOperacion_aritmetica()
+      +visitMaior()
+      +visitSentencia()
+      +visitLeer_sentencia()
+      +visitAsignacion_sentencia()
+      +visitImprimir_sentencia()
+      +visitSi_sentencia()
+      +visitAliter_bloque()
+      +visitCiclo_dum()
+      +visitCiclo_facere()
+      +visitCiclo_per()
+      +visitInicializacion_per()
+      +visitCondiciones_per()
+      +visitIncremento_per()
+      +visitSalto_sentencia()
+      +visitCondicion()
+      +visitConjuncion()
+      +visitNegacion_logica()
+      +visitPrimaria_logica()
+      +visitOperador_relacional()
+      +visitLlamada_funcion()
+      +visitArgumentos()
+    }
+    class "com.compi.ZetarianoBaseVisitor" as T160 {
+    }
+    class "com.compi.PigLatinBaseListener" as T161 {
+    }
+    class "com.compi.YParser" as T162 {
+      #_decisionToDFA : DFA[]
+      +ruleNames : String[]
+      -_LITERAL_NAMES : String[]
+      -_SYMBOLIC_NAMES : String[]
+      +VOCABULARY : Vocabulary
+      +tokenNames : String[]
+      -makeRuleNames()
+      -makeLiteralNames()
+      -makeSymbolicNames()
+      +getTokenNames()
+      +getVocabulary()
+      +getGrammarFileName()
+      +getRuleNames()
+      +getSerializedATN()
+      +getATN()
+      +YParser()
+      +init()
+      +archivo()
+      +estructuras_seccion()
+      +estructura_def()
+      +estructura_anidada_o_variable()
+      +campo_struct()
+      +funciones_seccion()
+      +funcion_def()
+      +parametros()
+      +parametro()
+      +bloque()
+      +sentencia()
+      +declaracion_estructura_local()
+      +declaracion_variable()
+      +expresion_inicializacion()
+      +elemento_lista()
+      +asignacion()
+      +acceso_miembro()
+      +si_sentencia()
+      +sino_si_bloque()
+      +sino_bloque()
+      +contrario_bloque()
+      +saltos()
+      +elegir_sentencia()
+      +caso_bloque()
+      +siempre_bloque()
+      +bloque_interno_opcional()
+      +para_sentencia()
+      +mientras_sentencia()
+      +hacer_mientras_sentencia()
+      +retornar_sentencia()
+      +romper_sentencia()
+      +continuar_sentencia()
+      +imprimir_sentencia()
+      +llamada_funcion()
+      +argumentos()
+      +incremento_decremento()
+      +expresion()
+      -expresion()
+      +termino()
+      +leer_funcion()
+      +condicion()
+      +tipo_dato()
+      +operador_aritmetico()
+      +operador_relacional()
+      +operador_logico()
+      +operador_negacion()
+      +sempred()
+      -expresion_sempred()
+    }
+    class "com.compi.YParser.InitContext" as T163 {
+      +archivo()
+      +EOF()
+      +InitContext()
+      +enterRule()
+      +exitRule()
+      +accept()
+    }
+    class "com.compi.YParser.ArchivoContext" as T164 {
+      +estructuras_seccion()
+      +funciones_seccion()
+      +saltos()
+      +ArchivoContext()
+      +enterRule()
+      +exitRule()
+      +accept()
+    }
+    class "com.compi.YParser.Estructuras_seccionContext" as T165 {
+      +ESTRUCTURAS_SEC()
+      +estructura_def()
+      +estructura_def()
+      +NUEVA_LINEA()
+      +NUEVA_LINEA()
+      +saltos()
+      +saltos()
+      +Estructuras_seccionContext()
+      +enterRule()
+      +exitRule()
+      +accept()
+    }
+    class "com.compi.YParser.Estructura_defContext" as T166 {
+      +ESTRUCTURA()
+      +ID()
+      +DOS_PUNTOS()
+      +NUEVA_LINEA()
+      +INDENT()
+      +DEDENT()
+      +campo_struct()
+      +campo_struct()
+      +estructura_anidada_o_variable()
+      +Estructura_defContext()
+      +enterRule()
+      +exitRule()
+      +accept()
+    }
+    class "com.compi.YParser.Estructura_anidada_o_variableContext" as T167 {
+      +ID()
+      +ID()
+      +Estructura_anidada_o_variableContext()
+      +enterRule()
+      +exitRule()
+      +accept()
+    }
+    class "com.compi.YParser.Campo_structContext" as T168 {
+      +tipo_dato()
+      +ID()
+      +ID()
+      +saltos()
+      +CORCHETE_IZQ()
+      +CORCHETE_IZQ()
+      +NUMERO_ENTERO()
+      +NUMERO_ENTERO()
+      +CORCHETE_DER()
+      +CORCHETE_DER()
+      +estructura_anidada_o_variable()
+      +Campo_structContext()
+      +enterRule()
+      +exitRule()
+      +accept()
+    }
+    class "com.compi.YParser.Funciones_seccionContext" as T169 {
+      +FUNCIONES_SEC()
+      +funcion_def()
+      +funcion_def()
+      +NUEVA_LINEA()
+      +NUEVA_LINEA()
+      +saltos()
+      +saltos()
+      +Funciones_seccionContext()
+      +enterRule()
+      +exitRule()
+      +accept()
+    }
+    class "com.compi.YParser.Funcion_defContext" as T170 {
+      +DEFINIR()
+      +ID()
+      +PARENTESIS_IZQ()
+      +PARENTESIS_DER()
+      +DOS_PUNTOS()
+      +bloque()
+      +parametros()
+      +FLECHA()
+      +tipo_dato()
+      +Funcion_defContext()
+      +enterRule()
+      +exitRule()
+      +accept()
+    }
+    class "com.compi.YParser.ParametrosContext" as T171 {
+      +parametro()
+      +parametro()
+      +COMA()
+      +COMA()
+      +ParametrosContext()
+      +enterRule()
+      +exitRule()
+      +accept()
+    }
+    class "com.compi.YParser.ParametroContext" as T172 {
+      +CORCHETE_IZQ()
+      +CORCHETE_DER()
+      +tipo_dato()
+      +ID()
+      +LLAVE_IZQ()
+      +LLAVE_DER()
+      +ParametroContext()
+      +enterRule()
+      +exitRule()
+      +accept()
+    }
+    class "com.compi.YParser.BloqueContext" as T173 {
+      +NUEVA_LINEA()
+      +INDENT()
+      +DEDENT()
+      +sentencia()
+      +sentencia()
+      +BloqueContext()
+      +enterRule()
+      +exitRule()
+      +accept()
+    }
+    class "com.compi.YParser.SentenciaContext" as T174 {
+      +declaracion_variable()
+      +PUNTO_COMA()
+      +asignacion()
+      +si_sentencia()
+      +elegir_sentencia()
+      +para_sentencia()
+      +mientras_sentencia()
+      +hacer_mientras_sentencia()
+      +retornar_sentencia()
+      +romper_sentencia()
+      +continuar_sentencia()
+      +imprimir_sentencia()
+      +llamada_funcion()
+      +incremento_decremento()
+      +declaracion_estructura_local()
+      +NUEVA_LINEA()
+      +SentenciaContext()
+      +enterRule()
+      +exitRule()
+      +accept()
+    }
+    class "com.compi.YParser.Declaracion_estructura_localContext" as T175 {
+      +ESTRUCTURA()
+      +ID()
+      +DOS_PUNTOS()
+      +NUEVA_LINEA()
+      +INDENT()
+      +DEDENT()
+      +campo_struct()
+      +campo_struct()
+      +Declaracion_estructura_localContext()
+      +enterRule()
+      +exitRule()
+      +accept()
+    }
+    class "com.compi.YParser.Declaracion_variableContext" as T176 {
+      +tipo_dato()
+      +ID()
+      +ID()
+      +CORCHETE_IZQ()
+      +CORCHETE_IZQ()
+      +NUMERO_ENTERO()
+      +NUMERO_ENTERO()
+      +CORCHETE_DER()
+      +CORCHETE_DER()
+      +ASIGNACION()
+      +expresion_inicializacion()
+      +BOOL_TIPO()
+      +Declaracion_variableContext()
+      +enterRule()
+      +exitRule()
+      +accept()
+    }
+    class "com.compi.YParser.Expresion_inicializacionContext" as T177 {
+      +LLAVE_IZQ()
+      +saltos()
+      +saltos()
+      +elemento_lista()
+      +elemento_lista()
+      +LLAVE_DER()
+      +COMA()
+      +COMA()
+      +expresion()
+      +Expresion_inicializacionContext()
+      +enterRule()
+      +exitRule()
+      +accept()
+    }
+    class "com.compi.YParser.Elemento_listaContext" as T178 {
+      +LLAVE_IZQ()
+      +saltos()
+      +saltos()
+      +elemento_lista()
+      +elemento_lista()
+      +LLAVE_DER()
+      +COMA()
+      +COMA()
+      +expresion()
+      +Elemento_listaContext()
+      +enterRule()
+      +exitRule()
+      +accept()
+    }
+    class "com.compi.YParser.AsignacionContext" as T179 {
+      +acceso_miembro()
+      +ASIGNACION()
+      +expresion()
+      +expresion()
+      +ID()
+      +CORCHETE_IZQ()
+      +CORCHETE_IZQ()
+      +CORCHETE_DER()
+      +CORCHETE_DER()
+      +AsignacionContext()
+      +enterRule()
+      +exitRule()
+      +accept()
+    }
+    class "com.compi.YParser.Acceso_miembroContext" as T180 {
+      +ID()
+      +ID()
+      +CORCHETE_IZQ()
+      +CORCHETE_IZQ()
+      +expresion()
+      +expresion()
+      +CORCHETE_DER()
+      +CORCHETE_DER()
+      +PUNTO()
+      +PUNTO()
+      +Acceso_miembroContext()
+      +enterRule()
+      +exitRule()
+      +accept()
+    }
+    class "com.compi.YParser.Si_sentenciaContext" as T181 {
+      +SI()
+      +PARENTESIS_IZQ()
+      +condicion()
+      +PARENTESIS_DER()
+      +bloque()
+      +ENTONCES()
+      +DOS_PUNTOS()
+      +saltos()
+      +saltos()
+      +sino_si_bloque()
+      +sino_si_bloque()
+      +sino_bloque()
+      +contrario_bloque()
+      +Si_sentenciaContext()
+      +enterRule()
+      +exitRule()
+      +accept()
+    }
+    class "com.compi.YParser.Sino_si_bloqueContext" as T182 {
+      +SINO()
+      +PARENTESIS_IZQ()
+      +condicion()
+      +PARENTESIS_DER()
+      +bloque()
+      +ENTONCES()
+      +DOS_PUNTOS()
+      +Sino_si_bloqueContext()
+      +enterRule()
+      +exitRule()
+      +accept()
+    }
+    class "com.compi.YParser.Sino_bloqueContext" as T183 {
+      +SINO()
+      +PARENTESIS_IZQ()
+      +condicion()
+      +PARENTESIS_DER()
+      +bloque()
+      +ENTONCES()
+      +DOS_PUNTOS()
+      +Sino_bloqueContext()
+      +enterRule()
+      +exitRule()
+      +accept()
+    }
+    class "com.compi.YParser.Contrario_bloqueContext" as T184 {
+      +CONTRARIO()
+      +bloque()
+      +DOS_PUNTOS()
+      +Contrario_bloqueContext()
+      +enterRule()
+      +exitRule()
+      +accept()
+    }
+    class "com.compi.YParser.SaltosContext" as T185 {
+      +NUEVA_LINEA()
+      +NUEVA_LINEA()
+      +SaltosContext()
+      +enterRule()
+      +exitRule()
+      +accept()
+    }
+    class "com.compi.YParser.Elegir_sentenciaContext" as T186 {
+      +ELEGIR()
+      +PARENTESIS_IZQ()
+      +expresion()
+      +PARENTESIS_DER()
+      +NUEVA_LINEA()
+      +INDENT()
+      +DEDENT()
+      +saltos()
+      +LLAVE_IZQ()
+      +DOS_PUNTOS()
+      +LLAVE_DER()
+      +caso_bloque()
+      +caso_bloque()
+      +siempre_bloque()
+      +Elegir_sentenciaContext()
+      +enterRule()
+      +exitRule()
+      +accept()
+    }
+    class "com.compi.YParser.Caso_bloqueContext" as T187 {
+      +CASO()
+      +expresion()
+      +DOS_PUNTOS()
+      +bloque_interno_opcional()
+      +ROMPER()
+      +NUEVA_LINEA()
+      +NUEVA_LINEA()
+      +PUNTO_COMA()
+      +Caso_bloqueContext()
+      +enterRule()
+      +exitRule()
+      +accept()
+    }
+    class "com.compi.YParser.Siempre_bloqueContext" as T188 {
+      +SIEMPRE()
+      +DOS_PUNTOS()
+      +bloque_interno_opcional()
+      +ROMPER()
+      +NUEVA_LINEA()
+      +NUEVA_LINEA()
+      +PUNTO_COMA()
+      +Siempre_bloqueContext()
+      +enterRule()
+      +exitRule()
+      +accept()
+    }
+    class "com.compi.YParser.Bloque_interno_opcionalContext" as T189 {
+      +NUEVA_LINEA()
+      +INDENT()
+      +DEDENT()
+      +sentencia()
+      +sentencia()
+      +Bloque_interno_opcionalContext()
+      +enterRule()
+      +exitRule()
+      +accept()
+    }
+    class "com.compi.YParser.Para_sentenciaContext" as T190 {
+      +PARA()
+      +PARENTESIS_IZQ()
+      +PUNTO_COMA()
+      +PUNTO_COMA()
+      +condicion()
+      +incremento_decremento()
+      +PARENTESIS_DER()
+      +bloque()
+      +declaracion_variable()
+      +asignacion()
+      +DOS_PUNTOS()
+      +Para_sentenciaContext()
+      +enterRule()
+      +exitRule()
+      +accept()
+    }
+    class "com.compi.YParser.Mientras_sentenciaContext" as T191 {
+      +MIENTRAS()
+      +PARENTESIS_IZQ()
+      +condicion()
+      +PARENTESIS_DER()
+      +bloque()
+      +HACER()
+      +DOS_PUNTOS()
+      +Mientras_sentenciaContext()
+      +enterRule()
+      +exitRule()
+      +accept()
+    }
+    class "com.compi.YParser.Hacer_mientras_sentenciaContext" as T192 {
+      +HACER()
+      +bloque()
+      +saltos()
+      +MIENTRAS()
+      +PARENTESIS_IZQ()
+      +condicion()
+      +PARENTESIS_DER()
+      +DOS_PUNTOS()
+      +PUNTO_COMA()
+      +Hacer_mientras_sentenciaContext()
+      +enterRule()
+      +exitRule()
+      +accept()
+    }
+    class "com.compi.YParser.Retornar_sentenciaContext" as T193 {
+      +RETORNAR()
+      +expresion()
+      +Retornar_sentenciaContext()
+      +enterRule()
+      +exitRule()
+      +accept()
+    }
+    class "com.compi.YParser.Romper_sentenciaContext" as T194 {
+      +ROMPER()
+      +Romper_sentenciaContext()
+      +enterRule()
+      +exitRule()
+      +accept()
+    }
+    class "com.compi.YParser.Continuar_sentenciaContext" as T195 {
+      +CONTINUAR()
+      +Continuar_sentenciaContext()
+      +enterRule()
+      +exitRule()
+      +accept()
+    }
+    class "com.compi.YParser.Imprimir_sentenciaContext" as T196 {
+      +IMPRIMIR()
+      +PARENTESIS_IZQ()
+      +PARENTESIS_DER()
+      +argumentos()
+      +Imprimir_sentenciaContext()
+      +enterRule()
+      +exitRule()
+      +accept()
+    }
+    class "com.compi.YParser.Llamada_funcionContext" as T197 {
+      +ID()
+      +PARENTESIS_IZQ()
+      +PARENTESIS_DER()
+      +argumentos()
+      +Llamada_funcionContext()
+      +enterRule()
+      +exitRule()
+      +accept()
+    }
+    class "com.compi.YParser.ArgumentosContext" as T198 {
+      +expresion()
+      +expresion()
+      +COMA()
+      +COMA()
+      +ArgumentosContext()
+      +enterRule()
+      +exitRule()
+      +accept()
+    }
+    class "com.compi.YParser.Incremento_decrementoContext" as T199 {
+      +SUMA_ABREVIADA()
+      +RESTA_ABREVIADA()
+      +ID()
+      +acceso_miembro()
+      +Incremento_decrementoContext()
+      +enterRule()
+      +exitRule()
+      +accept()
+    }
+    class "com.compi.YParser.ExpresionContext" as T200 {
+      +termino()
+      +termino()
+      +operador_aritmetico()
+      +operador_aritmetico()
+      +operador_negacion()
+      +expresion()
+      +expresion()
+      +llamada_funcion()
+      +leer_funcion()
+      +operador_relacional()
+      +operador_logico()
+      +ExpresionContext()
+      +enterRule()
+      +exitRule()
+      +accept()
+    }
+    class "com.compi.YParser.TerminoContext" as T201 {
+      +ID()
+      +acceso_miembro()
+      +NUMERO_ENTERO()
+      +NUMERO_DECIMAL()
+      +CADENA_TEXTO()
+      +CARACTER()
+      +VERDADERO()
+      +FALSO()
+      +PARENTESIS_IZQ()
+      +expresion()
+      +PARENTESIS_DER()
+      +LLAVE_IZQ()
+      +saltos()
+      +saltos()
+      +elemento_lista()
+      +elemento_lista()
+      +LLAVE_DER()
+      +COMA()
+      +COMA()
+      +MENOS()
+      +termino()
+      +TerminoContext()
+      +enterRule()
+      +exitRule()
+      +accept()
+    }
+    class "com.compi.YParser.Leer_funcionContext" as T202 {
+      +LEER()
+      +PARENTESIS_IZQ()
+      +PARENTESIS_DER()
+      +Leer_funcionContext()
+      +enterRule()
+      +exitRule()
+      +accept()
+    }
+    class "com.compi.YParser.CondicionContext" as T203 {
+      +expresion()
+      +CondicionContext()
+      +enterRule()
+      +exitRule()
+      +accept()
+    }
+    class "com.compi.YParser.Tipo_datoContext" as T204 {
+      +ENTERO_TIPO()
+      +CADENA_TIPO()
+      +FLOTANTE_TIPO()
+      +CARACTER_TIPO()
+      +BOOL_TIPO()
+      +ID()
+      +Tipo_datoContext()
+      +enterRule()
+      +exitRule()
+      +accept()
+    }
+    class "com.compi.YParser.Operador_aritmeticoContext" as T205 {
+      +MAS()
+      +MENOS()
+      +MULTIPLICACION()
+      +DIVISION()
+      +Operador_aritmeticoContext()
+      +enterRule()
+      +exitRule()
+      +accept()
+    }
+    class "com.compi.YParser.Operador_relacionalContext" as T206 {
+      +IGUAL()
+      +NO_IGUAL()
+      +MENOR_QUE()
+      +MAYOR_QUE()
+      +Operador_relacionalContext()
+      +enterRule()
+      +exitRule()
+      +accept()
+    }
+    class "com.compi.YParser.Operador_logicoContext" as T207 {
+      +AND()
+      +OR()
+      +Operador_logicoContext()
+      +enterRule()
+      +exitRule()
+      +accept()
+    }
+    class "com.compi.YParser.Operador_negacionContext" as T208 {
+      +NEGACION()
+      +Operador_negacionContext()
+      +enterRule()
+      +exitRule()
+      +accept()
+    }
+    interface "com.compi.ZetarianoListener" as T209 {
+      +enterPrograma()
+      +exitPrograma()
+      +enterClaseDef()
+      +exitClaseDef()
+      +enterMiembroClase()
+      +exitMiembroClase()
+      +enterAtributoDef()
+      +exitAtributoDef()
+      +enterConstructorDef()
+      +exitConstructorDef()
+      +enterMetodoDef()
+      +exitMetodoDef()
+      +enterParametros()
+      +exitParametros()
+      +enterParametro()
+      +exitParametro()
+      +enterBloque()
+      +exitBloque()
+      +enterSentencia()
+      +exitSentencia()
+      +enterDeclaracionVariable()
+      +exitDeclaracionVariable()
+      +enterAsignacion()
+      +exitAsignacion()
+      +enterIncrementoDecremento()
+      +exitIncrementoDecremento()
+      +enterSentenciaIf()
+      +exitSentenciaIf()
+      +enterSentenciaSwitch()
+      +exitSentenciaSwitch()
+      +enterCasoSwitch()
+      +exitCasoSwitch()
+      +enterDefectoSwitch()
+      +exitDefectoSwitch()
+      +enterSentenciaFor()
+      +exitSentenciaFor()
+      +enterForInit()
+      +exitForInit()
+      +enterAsignacionExpresion()
+      +exitAsignacionExpresion()
+      +enterForUpdate()
+      +exitForUpdate()
+      +enterSentenciaWhile()
+      +exitSentenciaWhile()
+      +enterSentenciaDoWhile()
+      +exitSentenciaDoWhile()
+      +enterRetorno()
+      +exitRetorno()
+      +enterRomper()
+      +exitRomper()
+      +enterContinuar()
+      +exitContinuar()
+      +enterLlamadaFuncionSemilla()
+      +exitLlamadaFuncionSemilla()
+      +enterArgumentos()
+      +exitArgumentos()
+      +enterAndExpr()
+      +exitAndExpr()
+      +enterTrueExpr()
+      +exitTrueExpr()
+      +enterIdExpr()
+      +exitIdExpr()
+      +enterNewObjectExpr()
+      +exitNewObjectExpr()
+      +enterStringLiteralExpr()
+      +exitStringLiteralExpr()
+      +enterNegExpr()
+      +exitNegExpr()
+      +enterCharLiteralExpr()
+      +exitCharLiteralExpr()
+      +enterRelationalExpr()
+      +exitRelationalExpr()
+      +enterLiteralArregloExpr()
+      +exitLiteralArregloExpr()
+      +enterOrExpr()
+      +exitOrExpr()
+      +enterNullExpr()
+      +exitNullExpr()
+      +enterFalseExpr()
+      +exitFalseExpr()
+      +enterIntLiteralExpr()
+      +exitIntLiteralExpr()
+      +enterFunctionCallExpr()
+      +exitFunctionCallExpr()
+      +enterEqualityExpr()
+      +exitEqualityExpr()
+      +enterNewArrayExpr()
+      +exitNewArrayExpr()
+      +enterDoubleLiteralExpr()
+      +exitDoubleLiteralExpr()
+      +enterMulDivModExpr()
+      +exitMulDivModExpr()
+      +enterPreIncDecExpr()
+      +exitPreIncDecExpr()
+      +enterNotExpr()
+      +exitNotExpr()
+      +enterMemberAccessExpr()
+      +exitMemberAccessExpr()
+      +enterParenExpr()
+      +exitParenExpr()
+      +enterAddSubExpr()
+      +exitAddSubExpr()
+      +enterTernaryExpr()
+      +exitTernaryExpr()
+      +enterLiteralArreglo()
+      +exitLiteralArreglo()
+      +enterAccesoMiembro()
+      +exitAccesoMiembro()
+      +enterMiembroAcceso()
+      +exitMiembroAcceso()
+      +enterTipoDato()
+      +exitTipoDato()
+    }
+    class "com.compi.ZetarianoBaseListener" as T210 {
+    }
+    interface "com.compi.YListener" as T211 {
+      +enterInit()
+      +exitInit()
+      +enterArchivo()
+      +exitArchivo()
+      +enterEstructuras_seccion()
+      +exitEstructuras_seccion()
+      +enterEstructura_def()
+      +exitEstructura_def()
+      +enterEstructura_anidada_o_variable()
+      +exitEstructura_anidada_o_variable()
+      +enterCampo_struct()
+      +exitCampo_struct()
+      +enterFunciones_seccion()
+      +exitFunciones_seccion()
+      +enterFuncion_def()
+      +exitFuncion_def()
+      +enterParametros()
+      +exitParametros()
+      +enterParametro()
+      +exitParametro()
+      +enterBloque()
+      +exitBloque()
+      +enterSentencia()
+      +exitSentencia()
+      +enterDeclaracion_estructura_local()
+      +exitDeclaracion_estructura_local()
+      +enterDeclaracion_variable()
+      +exitDeclaracion_variable()
+      +enterExpresion_inicializacion()
+      +exitExpresion_inicializacion()
+      +enterElemento_lista()
+      +exitElemento_lista()
+      +enterAsignacion()
+      +exitAsignacion()
+      +enterAcceso_miembro()
+      +exitAcceso_miembro()
+      +enterSi_sentencia()
+      +exitSi_sentencia()
+      +enterSino_si_bloque()
+      +exitSino_si_bloque()
+      +enterSino_bloque()
+      +exitSino_bloque()
+      +enterContrario_bloque()
+      +exitContrario_bloque()
+      +enterSaltos()
+      +exitSaltos()
+      +enterElegir_sentencia()
+      +exitElegir_sentencia()
+      +enterCaso_bloque()
+      +exitCaso_bloque()
+      +enterSiempre_bloque()
+      +exitSiempre_bloque()
+      +enterBloque_interno_opcional()
+      +exitBloque_interno_opcional()
+      +enterPara_sentencia()
+      +exitPara_sentencia()
+      +enterMientras_sentencia()
+      +exitMientras_sentencia()
+      +enterHacer_mientras_sentencia()
+      +exitHacer_mientras_sentencia()
+      +enterRetornar_sentencia()
+      +exitRetornar_sentencia()
+      +enterRomper_sentencia()
+      +exitRomper_sentencia()
+      +enterContinuar_sentencia()
+      +exitContinuar_sentencia()
+      +enterImprimir_sentencia()
+      +exitImprimir_sentencia()
+      +enterLlamada_funcion()
+      +exitLlamada_funcion()
+      +enterArgumentos()
+      +exitArgumentos()
+      +enterIncremento_decremento()
+      +exitIncremento_decremento()
+      +enterExpresion()
+      +exitExpresion()
+      +enterTermino()
+      +exitTermino()
+      +enterLeer_funcion()
+      +exitLeer_funcion()
+      +enterCondicion()
+      +exitCondicion()
+      +enterTipo_dato()
+      +exitTipo_dato()
+      +enterOperador_aritmetico()
+      +exitOperador_aritmetico()
+      +enterOperador_relacional()
+      +exitOperador_relacional()
+      +enterOperador_logico()
+      +exitOperador_logico()
+      +enterOperador_negacion()
+      +exitOperador_negacion()
+    }
+    interface "com.compi.PigLatinListener" as T212 {
+      +enterInit()
+      +exitInit()
+      +enterPig_latin()
+      +exitPig_latin()
+      +enterImport_declaracion()
+      +exitImport_declaracion()
+      +enterVariables()
+      +exitVariables()
+      +enterDeclaracion()
+      +exitDeclaracion()
+      +enterArreglo_declaracion()
+      +exitArreglo_declaracion()
+      +enterElemento_arreglo()
+      +exitElemento_arreglo()
+      +enterElemento_arreglo_valor()
+      +exitElemento_arreglo_valor()
+      +enterElemento_arreglo_struct()
+      +exitElemento_arreglo_struct()
+      +enterStructura_instanciacion()
+      +exitStructura_instanciacion()
+      +enterAtributo_asignacion()
+      +exitAtributo_asignacion()
+      +enterArreglo_literal()
+      +exitArreglo_literal()
+      +enterTipo_dato()
+      +exitTipo_dato()
+      +enterExpresion()
+      +exitExpresion()
+      +enterTermino()
+      +exitTermino()
+      +enterAcceso_miembro()
+      +exitAcceso_miembro()
+      +enterArreglo_acceso()
+      +exitArreglo_acceso()
+      +enterOperacion_aritmetica()
+      +exitOperacion_aritmetica()
+      +enterMaior()
+      +exitMaior()
+      +enterSentencia()
+      +exitSentencia()
+      +enterLeer_sentencia()
+      +exitLeer_sentencia()
+      +enterAsignacion_sentencia()
+      +exitAsignacion_sentencia()
+      +enterImprimir_sentencia()
+      +exitImprimir_sentencia()
+      +enterSi_sentencia()
+      +exitSi_sentencia()
+      +enterAliter_bloque()
+      +exitAliter_bloque()
+      +enterCiclo_dum()
+      +exitCiclo_dum()
+      +enterCiclo_facere()
+      +exitCiclo_facere()
+      +enterCiclo_per()
+      +exitCiclo_per()
+      +enterInicializacion_per()
+      +exitInicializacion_per()
+      +enterCondiciones_per()
+      +exitCondiciones_per()
+      +enterIncremento_per()
+      +exitIncremento_per()
+      +enterSalto_sentencia()
+      +exitSalto_sentencia()
+      +enterCondicion()
+      +exitCondicion()
+      +enterConjuncion()
+      +exitConjuncion()
+      +enterNegacion_logica()
+      +exitNegacion_logica()
+      +enterPrimaria_logica()
+      +exitPrimaria_logica()
+      +enterOperador_relacional()
+      +exitOperador_relacional()
+      +enterLlamada_funcion()
+      +exitLlamada_funcion()
+      +enterArgumentos()
+      +exitArgumentos()
+    }
+    class "com.compi.YLexer" as T213 {
+      #_decisionToDFA : DFA[]
+      +ruleNames : String[]
+      -_LITERAL_NAMES : String[]
+      -_SYMBOLIC_NAMES : String[]
+      +VOCABULARY : Vocabulary
+      +tokenNames : String[]
+      -makeRuleNames()
+      -makeLiteralNames()
+      -makeSymbolicNames()
+      +getTokenNames()
+      +getVocabulary()
+      +YLexer()
+      +getGrammarFileName()
+      +getRuleNames()
+      +getSerializedATN()
+      +getChannelNames()
+      +getModeNames()
+      +getATN()
+    }
+    interface "com.compi.ZetarianoVisitor" as T214 {
+      +visitPrograma()
+      +visitClaseDef()
+      +visitMiembroClase()
+      +visitAtributoDef()
+      +visitConstructorDef()
+      +visitMetodoDef()
+      +visitParametros()
+      +visitParametro()
+      +visitBloque()
+      +visitSentencia()
+      +visitDeclaracionVariable()
+      +visitAsignacion()
+      +visitIncrementoDecremento()
+      +visitSentenciaIf()
+      +visitSentenciaSwitch()
+      +visitCasoSwitch()
+      +visitDefectoSwitch()
+      +visitSentenciaFor()
+      +visitForInit()
+      +visitAsignacionExpresion()
+      +visitForUpdate()
+      +visitSentenciaWhile()
+      +visitSentenciaDoWhile()
+      +visitRetorno()
+      +visitRomper()
+      +visitContinuar()
+      +visitLlamadaFuncionSemilla()
+      +visitArgumentos()
+      +visitAndExpr()
+      +visitTrueExpr()
+      +visitIdExpr()
+      +visitNewObjectExpr()
+      +visitStringLiteralExpr()
+      +visitNegExpr()
+      +visitCharLiteralExpr()
+      +visitRelationalExpr()
+      +visitLiteralArregloExpr()
+      +visitOrExpr()
+      +visitNullExpr()
+      +visitFalseExpr()
+      +visitIntLiteralExpr()
+      +visitFunctionCallExpr()
+      +visitEqualityExpr()
+      +visitNewArrayExpr()
+      +visitDoubleLiteralExpr()
+      +visitMulDivModExpr()
+      +visitPreIncDecExpr()
+      +visitNotExpr()
+      +visitMemberAccessExpr()
+      +visitParenExpr()
+      +visitAddSubExpr()
+      +visitTernaryExpr()
+      +visitLiteralArreglo()
+      +visitAccesoMiembro()
+      +visitMiembroAcceso()
+      +visitTipoDato()
+    }
+    class "com.compi.PigLatinBaseVisitor" as T215 {
+    }
+    class "com.compi.PigLatinLexer" as T216 {
+      #_decisionToDFA : DFA[]
+      +ruleNames : String[]
+      -_LITERAL_NAMES : String[]
+      -_SYMBOLIC_NAMES : String[]
+      +VOCABULARY : Vocabulary
+      +tokenNames : String[]
+      -makeRuleNames()
+      -makeLiteralNames()
+      -makeSymbolicNames()
+      +getTokenNames()
+      +getVocabulary()
+      +PigLatinLexer()
+      +getGrammarFileName()
+      +getRuleNames()
+      +getSerializedATN()
+      +getChannelNames()
+      +getModeNames()
+      +getATN()
+    }
+    class "com.compi.YBaseVisitor" as T217 {
+    }
+    class "com.compi.PigLatinParser" as T218 {
+      #_decisionToDFA : DFA[]
+      +ruleNames : String[]
+      -_LITERAL_NAMES : String[]
+      -_SYMBOLIC_NAMES : String[]
+      +VOCABULARY : Vocabulary
+      +tokenNames : String[]
+      -makeRuleNames()
+      -makeLiteralNames()
+      -makeSymbolicNames()
+      +getTokenNames()
+      +getVocabulary()
+      +getGrammarFileName()
+      +getRuleNames()
+      +getSerializedATN()
+      +getATN()
+      +PigLatinParser()
+      +init()
+      +pig_latin()
+      +import_declaracion()
+      +variables()
+      +declaracion()
+      +arreglo_declaracion()
+      +elemento_arreglo()
+      +elemento_arreglo_valor()
+      +elemento_arreglo_struct()
+      +structura_instanciacion()
+      +atributo_asignacion()
+      +arreglo_literal()
+      +tipo_dato()
+      +expresion()
+      +termino()
+      +acceso_miembro()
+      +arreglo_acceso()
+      +operacion_aritmetica()
+      +maior()
+      +sentencia()
+      +leer_sentencia()
+      +asignacion_sentencia()
+      +imprimir_sentencia()
+      +si_sentencia()
+      +aliter_bloque()
+      +ciclo_dum()
+      +ciclo_facere()
+      +ciclo_per()
+      +inicializacion_per()
+      +condiciones_per()
+      +incremento_per()
+      +salto_sentencia()
+      +condicion()
+      -condicion()
+      +conjuncion()
+      -conjuncion()
+      +negacion_logica()
+      +primaria_logica()
+      +operador_relacional()
+      +llamada_funcion()
+      +argumentos()
+      +sempred()
+      -condicion_sempred()
+      -conjuncion_sempred()
+    }
+    class "com.compi.PigLatinParser.InitContext" as T219 {
+      +pig_latin()
+      +InitContext()
+      +enterRule()
+      +exitRule()
+      +accept()
+    }
+    class "com.compi.PigLatinParser.Pig_latinContext" as T220 {
+      +maior()
+      +import_declaracion()
+      +import_declaracion()
+      +variables()
+      +Pig_latinContext()
+      +enterRule()
+      +exitRule()
+      +accept()
+    }
+    class "com.compi.PigLatinParser.Import_declaracionContext" as T221 {
+      +IMPORT()
+      +VARIABLE()
+      +VARIABLE()
+      +PUNTO()
+      +PUNTO()
+      +PUNTO_COMA()
+      +Import_declaracionContext()
+      +enterRule()
+      +exitRule()
+      +accept()
+    }
+    class "com.compi.PigLatinParser.VariablesContext" as T222 {
+      +VARIABILES()
+      +MAYOR_QUE()
+      +declaracion()
+      +declaracion()
+      +arreglo_declaracion()
+      +arreglo_declaracion()
+      +VariablesContext()
+      +enterRule()
+      +exitRule()
+      +accept()
+    }
+    class "com.compi.PigLatinParser.DeclaracionContext" as T223 {
+      +ESTO()
+      +VARIABLE()
+      +VARIABLE()
+      +tipo_dato()
+      +expresion()
+      +PUNTO_COMA()
+      +DOS_PUNTOS()
+      +TEXTUM()
+      +CADENA_TEXTO()
+      +LITTERA()
+      +CARACTER()
+      +NOVUS()
+      +PARENTESIS_IZQ()
+      +PARENTESIS_DER()
+      +argumentos()
+      +structura_instanciacion()
+      +arreglo_declaracion()
+      +DeclaracionContext()
+      +enterRule()
+      +exitRule()
+      +accept()
+    }
+    class "com.compi.PigLatinParser.Arreglo_declaracionContext" as T224 {
+      +SERIES()
+      +VARIABLE()
+      +VARIABLE()
+      +tipo_dato()
+      +PUNTO_COMA()
+      +CORCHETE_IZQ()
+      +CORCHETE_IZQ()
+      +NUMERO_ENTERO()
+      +NUMERO_ENTERO()
+      +CORCHETE_DER()
+      +CORCHETE_DER()
+      +DOS_PUNTOS()
+      +LLAVE_IZQ()
+      +LLAVE_DER()
+      +elemento_arreglo()
+      +elemento_arreglo_struct()
+      +Arreglo_declaracionContext()
+      +enterRule()
+      +exitRule()
+      +accept()
+    }
+    class "com.compi.PigLatinParser.Elemento_arregloContext" as T225 {
+      +elemento_arreglo_valor()
+      +elemento_arreglo_valor()
+      +COMA()
+      +COMA()
+      +Elemento_arregloContext()
+      +enterRule()
+      +exitRule()
+      +accept()
+    }
+    class "com.compi.PigLatinParser.Elemento_arreglo_valorContext" as T226 {
+      +expresion()
+      +LLAVE_IZQ()
+      +LLAVE_DER()
+      +elemento_arreglo()
+      +Elemento_arreglo_valorContext()
+      +enterRule()
+      +exitRule()
+      +accept()
+    }
+    class "com.compi.PigLatinParser.Elemento_arreglo_structContext" as T227 {
+      +structura_instanciacion()
+      +structura_instanciacion()
+      +COMA()
+      +COMA()
+      +Elemento_arreglo_structContext()
+      +enterRule()
+      +exitRule()
+      +accept()
+    }
+    class "com.compi.PigLatinParser.Structura_instanciacionContext" as T228 {
+      +LLAVE_IZQ()
+      +atributo_asignacion()
+      +atributo_asignacion()
+      +LLAVE_DER()
+      +VARIABLE()
+      +COMA()
+      +COMA()
+      +CORCHETE_IZQ()
+      +NUMERO_ENTERO()
+      +CORCHETE_DER()
+      +Structura_instanciacionContext()
+      +enterRule()
+      +exitRule()
+      +accept()
+    }
+    class "com.compi.PigLatinParser.Atributo_asignacionContext" as T229 {
+      +VARIABLE()
+      +VARIABLE()
+      +expresion()
+      +structura_instanciacion()
+      +arreglo_literal()
+      +NOVUS()
+      +PARENTESIS_IZQ()
+      +PARENTESIS_DER()
+      +DOS_PUNTOS()
+      +argumentos()
+      +Atributo_asignacionContext()
+      +enterRule()
+      +exitRule()
+      +accept()
+    }
+    class "com.compi.PigLatinParser.Arreglo_literalContext" as T230 {
+      +LLAVE_IZQ()
+      +LLAVE_DER()
+      +elemento_arreglo()
+      +Arreglo_literalContext()
+      +enterRule()
+      +exitRule()
+      +accept()
+    }
+    class "com.compi.PigLatinParser.Tipo_datoContext" as T231 {
+      +NUMERUS()
+      +TEXTUM()
+      +DECIMALIS()
+      +LITTERA()
+      +VERUM()
+      +FALSUS()
+      +Tipo_datoContext()
+      +enterRule()
+      +exitRule()
+      +accept()
+    }
+    class "com.compi.PigLatinParser.ExpresionContext" as T232 {
+      +termino()
+      +termino()
+      +operacion_aritmetica()
+      +operacion_aritmetica()
+      +ExpresionContext()
+      +enterRule()
+      +exitRule()
+      +accept()
+    }
+    class "com.compi.PigLatinParser.TerminoContext" as T233 {
+      +VARIABLE()
+      +acceso_miembro()
+      +NUMERO_ENTERO()
+      +NUMERO_DECIMAL()
+      +CADENA_TEXTO()
+      +CARACTER()
+      +VERUM()
+      +FALSUS()
+      +llamada_funcion()
+      +NOVUS()
+      +PARENTESIS_IZQ()
+      +PARENTESIS_DER()
+      +argumentos()
+      +MENOS()
+      +termino()
+      +TerminoContext()
+      +enterRule()
+      +exitRule()
+      +accept()
+    }
+    class "com.compi.PigLatinParser.Acceso_miembroContext" as T234 {
+      +VARIABLE()
+      +VARIABLE()
+      +PUNTO()
+      +PUNTO()
+      +CORCHETE_IZQ()
+      +CORCHETE_IZQ()
+      +expresion()
+      +expresion()
+      +CORCHETE_DER()
+      +CORCHETE_DER()
+      +Acceso_miembroContext()
+      +enterRule()
+      +exitRule()
+      +accept()
+    }
+    class "com.compi.PigLatinParser.Arreglo_accesoContext" as T235 {
+      +VARIABLE()
+      +VARIABLE()
+      +CORCHETE_IZQ()
+      +expresion()
+      +CORCHETE_DER()
+      +PUNTO()
+      +PUNTO()
+      +Arreglo_accesoContext()
+      +enterRule()
+      +exitRule()
+      +accept()
+    }
+    class "com.compi.PigLatinParser.Operacion_aritmeticaContext" as T236 {
+      +MAS()
+      +MENOS()
+      +MULTIPLICACION()
+      +DIVISION()
+      +Operacion_aritmeticaContext()
+      +enterRule()
+      +exitRule()
+      +accept()
+    }
+    class "com.compi.PigLatinParser.MaiorContext" as T237 {
+      +MAIOR()
+      +MAYOR_QUE()
+      +FINIS()
+      +PUNTO_COMA()
+      +sentencia()
+      +sentencia()
+      +MaiorContext()
+      +enterRule()
+      +exitRule()
+      +accept()
+    }
+    class "com.compi.PigLatinParser.SentenciaContext" as T238 {
+      +imprimir_sentencia()
+      +leer_sentencia()
+      +asignacion_sentencia()
+      +si_sentencia()
+      +ciclo_dum()
+      +ciclo_facere()
+      +ciclo_per()
+      +salto_sentencia()
+      +llamada_funcion()
+      +PUNTO_COMA()
+      +SUMA_ABREVIADA()
+      +RESTA_ABREVIADA()
+      +VARIABLE()
+      +acceso_miembro()
+      +SentenciaContext()
+      +enterRule()
+      +exitRule()
+      +accept()
+    }
+    class "com.compi.PigLatinParser.Leer_sentenciaContext" as T239 {
+      +LEER()
+      +VARIABLE()
+      +acceso_miembro()
+      +Leer_sentenciaContext()
+      +enterRule()
+      +exitRule()
+      +accept()
+    }
+    class "com.compi.PigLatinParser.Asignacion_sentenciaContext" as T240 {
+      +ASIGNACION()
+      +VARIABLE()
+      +VARIABLE()
+      +acceso_miembro()
+      +expresion()
+      +condicion()
+      +structura_instanciacion()
+      +arreglo_literal()
+      +NOVUS()
+      +PARENTESIS_IZQ()
+      +PARENTESIS_DER()
+      +PUNTO_COMA()
+      +argumentos()
+      +Asignacion_sentenciaContext()
+      +enterRule()
+      +exitRule()
+      +accept()
+    }
+    class "com.compi.PigLatinParser.Imprimir_sentenciaContext" as T241 {
+      +IMPRIMIR()
+      +IMPRIMIR()
+      +CADENA_TEXTO()
+      +CADENA_TEXTO()
+      +VARIABLE()
+      +VARIABLE()
+      +acceso_miembro()
+      +acceso_miembro()
+      +llamada_funcion()
+      +llamada_funcion()
+      +PUNTO_COMA()
+      +Imprimir_sentenciaContext()
+      +enterRule()
+      +exitRule()
+      +accept()
+    }
+    class "com.compi.PigLatinParser.Si_sentenciaContext" as T242 {
+      +SI()
+      +PARENTESIS_IZQ()
+      +condicion()
+      +PARENTESIS_DER()
+      +LLAVE_IZQ()
+      +LLAVE_IZQ()
+      +LLAVE_DER()
+      +LLAVE_DER()
+      +FINIS()
+      +PUNTO_COMA()
+      +sentencia()
+      +sentencia()
+      +aliter_bloque()
+      +aliter_bloque()
+      +ALITER()
+      +Si_sentenciaContext()
+      +enterRule()
+      +exitRule()
+      +accept()
+    }
+    class "com.compi.PigLatinParser.Aliter_bloqueContext" as T243 {
+      +ALITER()
+      +PARENTESIS_IZQ()
+      +condicion()
+      +PARENTESIS_DER()
+      +LLAVE_IZQ()
+      +LLAVE_DER()
+      +sentencia()
+      +sentencia()
+      +Aliter_bloqueContext()
+      +enterRule()
+      +exitRule()
+      +accept()
+    }
+    class "com.compi.PigLatinParser.Ciclo_dumContext" as T244 {
+      +DUM()
+      +PARENTESIS_IZQ()
+      +condicion()
+      +PARENTESIS_DER()
+      +LLAVE_IZQ()
+      +LLAVE_DER()
+      +FINIS()
+      +PUNTO_COMA()
+      +sentencia()
+      +sentencia()
+      +Ciclo_dumContext()
+      +enterRule()
+      +exitRule()
+      +accept()
+    }
+    class "com.compi.PigLatinParser.Ciclo_facereContext" as T245 {
+      +FACERE()
+      +LLAVE_IZQ()
+      +LLAVE_DER()
+      +DUM()
+      +PARENTESIS_IZQ()
+      +condicion()
+      +PARENTESIS_DER()
+      +PUNTO_COMA()
+      +sentencia()
+      +sentencia()
+      +Ciclo_facereContext()
+      +enterRule()
+      +exitRule()
+      +accept()
+    }
+    class "com.compi.PigLatinParser.Ciclo_perContext" as T246 {
+      +PER()
+      +PARENTESIS_IZQ()
+      +inicializacion_per()
+      +condiciones_per()
+      +PUNTO_COMA()
+      +incremento_per()
+      +PARENTESIS_DER()
+      +LLAVE_IZQ()
+      +LLAVE_DER()
+      +sentencia()
+      +sentencia()
+      +Ciclo_perContext()
+      +enterRule()
+      +exitRule()
+      +accept()
+    }
+    class "com.compi.PigLatinParser.Inicializacion_perContext" as T247 {
+      +ESTO()
+      +VARIABLE()
+      +tipo_dato()
+      +expresion()
+      +PUNTO_COMA()
+      +DOS_PUNTOS()
+      +ASIGNACION()
+      +acceso_miembro()
+      +Inicializacion_perContext()
+      +enterRule()
+      +exitRule()
+      +accept()
+    }
+    class "com.compi.PigLatinParser.Condiciones_perContext" as T248 {
+      +condicion()
+      +Condiciones_perContext()
+      +enterRule()
+      +exitRule()
+      +accept()
+    }
+    class "com.compi.PigLatinParser.Incremento_perContext" as T249 {
+      +SUMA_ABREVIADA()
+      +VARIABLE()
+      +acceso_miembro()
+      +RESTA_ABREVIADA()
+      +ASIGNACION()
+      +expresion()
+      +Incremento_perContext()
+      +enterRule()
+      +exitRule()
+      +accept()
+    }
+    class "com.compi.PigLatinParser.Salto_sentenciaContext" as T250 {
+      +PERGE()
+      +PUNTO_COMA()
+      +INTERRUMPE()
+      +Salto_sentenciaContext()
+      +enterRule()
+      +exitRule()
+      +accept()
+    }
+    class "com.compi.PigLatinParser.CondicionContext" as T251 {
+      +conjuncion()
+      +condicion()
+      +OR()
+      +CondicionContext()
+      +enterRule()
+      +exitRule()
+      +accept()
+    }
+    class "com.compi.PigLatinParser.ConjuncionContext" as T252 {
+      +negacion_logica()
+      +conjuncion()
+      +AND()
+      +ConjuncionContext()
+      +enterRule()
+      +exitRule()
+      +accept()
+    }
+    class "com.compi.PigLatinParser.Negacion_logicaContext" as T253 {
+      +NEGACION()
+      +negacion_logica()
+      +primaria_logica()
+      +Negacion_logicaContext()
+      +enterRule()
+      +exitRule()
+      +accept()
+    }
+    class "com.compi.PigLatinParser.Primaria_logicaContext" as T254 {
+      +PARENTESIS_IZQ()
+      +condicion()
+      +PARENTESIS_DER()
+      +expresion()
+      +expresion()
+      +operador_relacional()
+      +VERUM()
+      +FALSUS()
+      +VARIABLE()
+      +llamada_funcion()
+      +Primaria_logicaContext()
+      +enterRule()
+      +exitRule()
+      +accept()
+    }
+    class "com.compi.PigLatinParser.Operador_relacionalContext" as T255 {
+      +MAYOR_IGUAL()
+      +MENOR_IGUAL()
+      +IGUAL()
+      +NO_IGUAL()
+      +MENOR_QUE()
+      +MAYOR_QUE()
+      +Operador_relacionalContext()
+      +enterRule()
+      +exitRule()
+      +accept()
+    }
+    class "com.compi.PigLatinParser.Llamada_funcionContext" as T256 {
+      +PARENTESIS_IZQ()
+      +PARENTESIS_DER()
+      +VARIABLE()
+      +acceso_miembro()
+      +argumentos()
+      +Llamada_funcionContext()
+      +enterRule()
+      +exitRule()
+      +accept()
+    }
+    class "com.compi.PigLatinParser.ArgumentosContext" as T257 {
+      +expresion()
+      +expresion()
+      +COMA()
+      +COMA()
+      +ArgumentosContext()
+      +enterRule()
+      +exitRule()
+      +accept()
+    }
+    class "com.compi.ZetarianoParser" as T258 {
+      #_decisionToDFA : DFA[]
+      +ruleNames : String[]
+      -_LITERAL_NAMES : String[]
+      -_SYMBOLIC_NAMES : String[]
+      +VOCABULARY : Vocabulary
+      +tokenNames : String[]
+      -makeRuleNames()
+      -makeLiteralNames()
+      -makeSymbolicNames()
+      +getTokenNames()
+      +getVocabulary()
+      +getGrammarFileName()
+      +getRuleNames()
+      +getSerializedATN()
+      +getATN()
+      +ZetarianoParser()
+      +programa()
+      +claseDef()
+      +miembroClase()
+      +atributoDef()
+      +constructorDef()
+      +metodoDef()
+      +parametros()
+      +parametro()
+      +bloque()
+      +sentencia()
+      +declaracionVariable()
+      +asignacion()
+      +incrementoDecremento()
+      +sentenciaIf()
+      +sentenciaSwitch()
+      +casoSwitch()
+      +defectoSwitch()
+      +sentenciaFor()
+      +forInit()
+      +asignacionExpresion()
+      +forUpdate()
+      +sentenciaWhile()
+      +sentenciaDoWhile()
+      +retorno()
+      +romper()
+      +continuar()
+      +llamadaFuncionSemilla()
+      +argumentos()
+      +expresion()
+      -expresion()
+      +literalArreglo()
+      +accesoMiembro()
+      +miembroAcceso()
+      +tipoDato()
+      +sempred()
+      -expresion_sempred()
+    }
+    class "com.compi.ZetarianoParser.ProgramaContext" as T259 {
+      +claseDef()
+      +claseDef()
+      +ProgramaContext()
+      +enterRule()
+      +exitRule()
+      +accept()
+    }
+    class "com.compi.ZetarianoParser.ClaseDefContext" as T260 {
+      +CLASS()
+      +ID()
+      +LBRACE()
+      +RBRACE()
+      +PUBLIC()
+      +miembroClase()
+      +miembroClase()
+      +ClaseDefContext()
+      +enterRule()
+      +exitRule()
+      +accept()
+    }
+    class "com.compi.ZetarianoParser.MiembroClaseContext" as T261 {
+      +atributoDef()
+      +constructorDef()
+      +metodoDef()
+      +MiembroClaseContext()
+      +enterRule()
+      +exitRule()
+      +accept()
+    }
+    class "com.compi.ZetarianoParser.AtributoDefContext" as T262 {
+      +tipoDato()
+      +ID()
+      +SEMICOLON()
+      +LBRACK()
+      +LBRACK()
+      +RBRACK()
+      +RBRACK()
+      +ASSIGN()
+      +expresion()
+      +AtributoDefContext()
+      +enterRule()
+      +exitRule()
+      +accept()
+    }
+    class "com.compi.ZetarianoParser.ConstructorDefContext" as T263 {
+      +ID()
+      +LPAREN()
+      +RPAREN()
+      +bloque()
+      +PUBLIC()
+      +parametros()
+      +ConstructorDefContext()
+      +enterRule()
+      +exitRule()
+      +accept()
+    }
+    class "com.compi.ZetarianoParser.MetodoDefContext" as T264 {
+      +tipoDato()
+      +ID()
+      +LPAREN()
+      +RPAREN()
+      +bloque()
+      +PUBLIC()
+      +parametros()
+      +MetodoDefContext()
+      +enterRule()
+      +exitRule()
+      +accept()
+    }
+    class "com.compi.ZetarianoParser.ParametrosContext" as T265 {
+      +parametro()
+      +parametro()
+      +COMMA()
+      +COMMA()
+      +ParametrosContext()
+      +enterRule()
+      +exitRule()
+      +accept()
+    }
+    class "com.compi.ZetarianoParser.ParametroContext" as T266 {
+      +tipoDato()
+      +ID()
+      +ParametroContext()
+      +enterRule()
+      +exitRule()
+      +accept()
+    }
+    class "com.compi.ZetarianoParser.BloqueContext" as T267 {
+      +LBRACE()
+      +RBRACE()
+      +sentencia()
+      +sentencia()
+      +BloqueContext()
+      +enterRule()
+      +exitRule()
+      +accept()
+    }
+    class "com.compi.ZetarianoParser.SentenciaContext" as T268 {
+      +declaracionVariable()
+      +asignacion()
+      +sentenciaIf()
+      +sentenciaSwitch()
+      +sentenciaFor()
+      +sentenciaWhile()
+      +sentenciaDoWhile()
+      +retorno()
+      +romper()
+      +continuar()
+      +llamadaFuncionSemilla()
+      +SEMICOLON()
+      +incrementoDecremento()
+      +SentenciaContext()
+      +enterRule()
+      +exitRule()
+      +accept()
+    }
+    class "com.compi.ZetarianoParser.DeclaracionVariableContext" as T269 {
+      +tipoDato()
+      +ID()
+      +SEMICOLON()
+      +LBRACK()
+      +LBRACK()
+      +RBRACK()
+      +RBRACK()
+      +ASSIGN()
+      +expresion()
+      +DeclaracionVariableContext()
+      +enterRule()
+      +exitRule()
+      +accept()
+    }
+    class "com.compi.ZetarianoParser.AsignacionContext" as T270 {
+      +expresion()
+      +expresion()
+      +SEMICOLON()
+      +ASSIGN()
+      +PLUS_ASSIGN()
+      +MINUS_ASSIGN()
+      +MUL_ASSIGN()
+      +ID()
+      +accesoMiembro()
+      +LBRACK()
+      +LBRACK()
+      +RBRACK()
+      +RBRACK()
+      +AsignacionContext()
+      +enterRule()
+      +exitRule()
+      +accept()
+    }
+    class "com.compi.ZetarianoParser.IncrementoDecrementoContext" as T271 {
+      +INCREMENT()
+      +DECREMENT()
+      +ID()
+      +accesoMiembro()
+      +IncrementoDecrementoContext()
+      +enterRule()
+      +exitRule()
+      +accept()
+    }
+    class "com.compi.ZetarianoParser.SentenciaIfContext" as T272 {
+      +IF()
+      +IF()
+      +LPAREN()
+      +LPAREN()
+      +expresion()
+      +expresion()
+      +RPAREN()
+      +RPAREN()
+      +bloque()
+      +bloque()
+      +ELSE()
+      +ELSE()
+      +SentenciaIfContext()
+      +enterRule()
+      +exitRule()
+      +accept()
+    }
+    class "com.compi.ZetarianoParser.SentenciaSwitchContext" as T273 {
+      +SWITCH()
+      +LPAREN()
+      +expresion()
+      +RPAREN()
+      +LBRACE()
+      +RBRACE()
+      +casoSwitch()
+      +casoSwitch()
+      +defectoSwitch()
+      +SentenciaSwitchContext()
+      +enterRule()
+      +exitRule()
+      +accept()
+    }
+    class "com.compi.ZetarianoParser.CasoSwitchContext" as T274 {
+      +CASE()
+      +expresion()
+      +COLON()
+      +sentencia()
+      +sentencia()
+      +BREAK()
+      +SEMICOLON()
+      +CasoSwitchContext()
+      +enterRule()
+      +exitRule()
+      +accept()
+    }
+    class "com.compi.ZetarianoParser.DefectoSwitchContext" as T275 {
+      +DEFAULT()
+      +COLON()
+      +sentencia()
+      +sentencia()
+      +BREAK()
+      +SEMICOLON()
+      +DefectoSwitchContext()
+      +enterRule()
+      +exitRule()
+      +accept()
+    }
+    class "com.compi.ZetarianoParser.SentenciaForContext" as T276 {
+      +FOR()
+      +LPAREN()
+      +SEMICOLON()
+      +SEMICOLON()
+      +RPAREN()
+      +bloque()
+      +forInit()
+      +expresion()
+      +forUpdate()
+      +SentenciaForContext()
+      +enterRule()
+      +exitRule()
+      +accept()
+    }
+    class "com.compi.ZetarianoParser.ForInitContext" as T277 {
+      +declaracionVariable()
+      +asignacionExpresion()
+      +ForInitContext()
+      +enterRule()
+      +exitRule()
+      +accept()
+    }
+    class "com.compi.ZetarianoParser.AsignacionExpresionContext" as T278 {
+      +expresion()
+      +ASSIGN()
+      +PLUS_ASSIGN()
+      +MINUS_ASSIGN()
+      +MUL_ASSIGN()
+      +ID()
+      +accesoMiembro()
+      +AsignacionExpresionContext()
+      +enterRule()
+      +exitRule()
+      +accept()
+    }
+    class "com.compi.ZetarianoParser.ForUpdateContext" as T279 {
+      +incrementoDecremento()
+      +asignacionExpresion()
+      +ForUpdateContext()
+      +enterRule()
+      +exitRule()
+      +accept()
+    }
+    class "com.compi.ZetarianoParser.SentenciaWhileContext" as T280 {
+      +WHILE()
+      +LPAREN()
+      +expresion()
+      +RPAREN()
+      +bloque()
+      +SentenciaWhileContext()
+      +enterRule()
+      +exitRule()
+      +accept()
+    }
+    class "com.compi.ZetarianoParser.SentenciaDoWhileContext" as T281 {
+      +DO()
+      +bloque()
+      +WHILE()
+      +LPAREN()
+      +expresion()
+      +RPAREN()
+      +SEMICOLON()
+      +SentenciaDoWhileContext()
+      +enterRule()
+      +exitRule()
+      +accept()
+    }
+    class "com.compi.ZetarianoParser.RetornoContext" as T282 {
+      +RETURN()
+      +SEMICOLON()
+      +expresion()
+      +RetornoContext()
+      +enterRule()
+      +exitRule()
+      +accept()
+    }
+    class "com.compi.ZetarianoParser.RomperContext" as T283 {
+      +BREAK()
+      +SEMICOLON()
+      +RomperContext()
+      +enterRule()
+      +exitRule()
+      +accept()
+    }
+    class "com.compi.ZetarianoParser.ContinuarContext" as T284 {
+      +CONTINUE()
+      +SEMICOLON()
+      +ContinuarContext()
+      +enterRule()
+      +exitRule()
+      +accept()
+    }
+    class "com.compi.ZetarianoParser.LlamadaFuncionSemillaContext" as T285 {
+      +PRINTLN()
+      +LPAREN()
+      +RPAREN()
+      +argumentos()
+      +PRINT()
+      +READLN()
+      +ID()
+      +accesoMiembro()
+      +LlamadaFuncionSemillaContext()
+      +enterRule()
+      +exitRule()
+      +accept()
+    }
+    class "com.compi.ZetarianoParser.ArgumentosContext" as T286 {
+      +expresion()
+      +expresion()
+      +COMMA()
+      +COMMA()
+      +ArgumentosContext()
+      +enterRule()
+      +exitRule()
+      +accept()
+    }
+    class "com.compi.ZetarianoParser.ExpresionContext" as T287 {
+      +ExpresionContext()
+      +ExpresionContext()
+      +copyFrom()
+    }
+    class "com.compi.ZetarianoParser.AndExprContext" as T288 {
+      +expresion()
+      +expresion()
+      +AND()
+      +AndExprContext()
+      +enterRule()
+      +exitRule()
+      +accept()
+    }
+    class "com.compi.ZetarianoParser.TrueExprContext" as T289 {
+      +TRUE()
+      +TrueExprContext()
+      +enterRule()
+      +exitRule()
+      +accept()
+    }
+    class "com.compi.ZetarianoParser.IdExprContext" as T290 {
+      +ID()
+      +IdExprContext()
+      +enterRule()
+      +exitRule()
+      +accept()
+    }
+    class "com.compi.ZetarianoParser.NewObjectExprContext" as T291 {
+      +NEW()
+      +ID()
+      +LPAREN()
+      +RPAREN()
+      +argumentos()
+      +NewObjectExprContext()
+      +enterRule()
+      +exitRule()
+      +accept()
+    }
+    class "com.compi.ZetarianoParser.StringLiteralExprContext" as T292 {
+      +CADENA_TEXTO()
+      +StringLiteralExprContext()
+      +enterRule()
+      +exitRule()
+      +accept()
+    }
+    class "com.compi.ZetarianoParser.NegExprContext" as T293 {
+      +MINUS()
+      +expresion()
+      +NegExprContext()
+      +enterRule()
+      +exitRule()
+      +accept()
+    }
+    class "com.compi.ZetarianoParser.CharLiteralExprContext" as T294 {
+      +CARACTER()
+      +CharLiteralExprContext()
+      +enterRule()
+      +exitRule()
+      +accept()
+    }
+    class "com.compi.ZetarianoParser.RelationalExprContext" as T295 {
+      +expresion()
+      +expresion()
+      +LT()
+      +GT()
+      +LE()
+      +GE()
+      +RelationalExprContext()
+      +enterRule()
+      +exitRule()
+      +accept()
+    }
+    class "com.compi.ZetarianoParser.LiteralArregloExprContext" as T296 {
+      +literalArreglo()
+      +LiteralArregloExprContext()
+      +enterRule()
+      +exitRule()
+      +accept()
+    }
+    class "com.compi.ZetarianoParser.OrExprContext" as T297 {
+      +expresion()
+      +expresion()
+      +OR()
+      +OrExprContext()
+      +enterRule()
+      +exitRule()
+      +accept()
+    }
+    class "com.compi.ZetarianoParser.NullExprContext" as T298 {
+      +NULL()
+      +NullExprContext()
+      +enterRule()
+      +exitRule()
+      +accept()
+    }
+    class "com.compi.ZetarianoParser.FalseExprContext" as T299 {
+      +FALSE()
+      +FalseExprContext()
+      +enterRule()
+      +exitRule()
+      +accept()
+    }
+    class "com.compi.ZetarianoParser.IntLiteralExprContext" as T300 {
+      +LITERAL_ENTERO()
+      +IntLiteralExprContext()
+      +enterRule()
+      +exitRule()
+      +accept()
+    }
+    class "com.compi.ZetarianoParser.FunctionCallExprContext" as T301 {
+      +llamadaFuncionSemilla()
+      +FunctionCallExprContext()
+      +enterRule()
+      +exitRule()
+      +accept()
+    }
+    class "com.compi.ZetarianoParser.EqualityExprContext" as T302 {
+      +expresion()
+      +expresion()
+      +EQUALS()
+      +NOTEQUALS()
+      +EqualityExprContext()
+      +enterRule()
+      +exitRule()
+      +accept()
+    }
+    class "com.compi.ZetarianoParser.NewArrayExprContext" as T303 {
+      +NEW()
+      +tipoDato()
+      +LBRACK()
+      +LBRACK()
+      +expresion()
+      +expresion()
+      +RBRACK()
+      +RBRACK()
+      +NewArrayExprContext()
+      +enterRule()
+      +exitRule()
+      +accept()
+    }
+    class "com.compi.ZetarianoParser.DoubleLiteralExprContext" as T304 {
+      +LITERAL_DECIMAL()
+      +DoubleLiteralExprContext()
+      +enterRule()
+      +exitRule()
+      +accept()
+    }
+    class "com.compi.ZetarianoParser.MulDivModExprContext" as T305 {
+      +expresion()
+      +expresion()
+      +MUL()
+      +DIV()
+      +MOD()
+      +MulDivModExprContext()
+      +enterRule()
+      +exitRule()
+      +accept()
+    }
+    class "com.compi.ZetarianoParser.PreIncDecExprContext" as T306 {
+      +INCREMENTO_PRE : Token
+      +INCREMENT()
+      +DECREMENT()
+      +ID()
+      +accesoMiembro()
+      +PreIncDecExprContext()
+      +enterRule()
+      +exitRule()
+      +accept()
+    }
+    class "com.compi.ZetarianoParser.NotExprContext" as T307 {
+      +NOT()
+      +expresion()
+      +NotExprContext()
+      +enterRule()
+      +exitRule()
+      +accept()
+    }
+    class "com.compi.ZetarianoParser.MemberAccessExprContext" as T308 {
+      +accesoMiembro()
+      +MemberAccessExprContext()
+      +enterRule()
+      +exitRule()
+      +accept()
+    }
+    class "com.compi.ZetarianoParser.ParenExprContext" as T309 {
+      +LPAREN()
+      +expresion()
+      +RPAREN()
+      +ParenExprContext()
+      +enterRule()
+      +exitRule()
+      +accept()
+    }
+    class "com.compi.ZetarianoParser.AddSubExprContext" as T310 {
+      +expresion()
+      +expresion()
+      +PLUS()
+      +MINUS()
+      +AddSubExprContext()
+      +enterRule()
+      +exitRule()
+      +accept()
+    }
+    class "com.compi.ZetarianoParser.TernaryExprContext" as T311 {
+      +expresion()
+      +expresion()
+      +TernaryOp()
+      +COLON()
+      +TernaryExprContext()
+      +enterRule()
+      +exitRule()
+      +accept()
+    }
+    class "com.compi.ZetarianoParser.LiteralArregloContext" as T312 {
+      +LBRACE()
+      +RBRACE()
+      +expresion()
+      +expresion()
+      +literalArreglo()
+      +literalArreglo()
+      +COMMA()
+      +COMMA()
+      +LiteralArregloContext()
+      +enterRule()
+      +exitRule()
+      +accept()
+    }
+    class "com.compi.ZetarianoParser.AccesoMiembroContext" as T313 {
+      +ID()
+      +miembroAcceso()
+      +miembroAcceso()
+      +AccesoMiembroContext()
+      +enterRule()
+      +exitRule()
+      +accept()
+    }
+    class "com.compi.ZetarianoParser.MiembroAccesoContext" as T314 {
+      +DOT()
+      +ID()
+      +LBRACK()
+      +LBRACK()
+      +expresion()
+      +expresion()
+      +RBRACK()
+      +RBRACK()
+      +MiembroAccesoContext()
+      +enterRule()
+      +exitRule()
+      +accept()
+    }
+    class "com.compi.ZetarianoParser.TipoDatoContext" as T315 {
+      +INT_TYPE()
+      +DOUBLE_TYPE()
+      +CHAR_TYPE()
+      +BOOLEAN_TYPE()
+      +STRING_TYPE()
+      +VOID()
+      +ID()
+      +TipoDatoContext()
+      +enterRule()
+      +exitRule()
+      +accept()
+    }
+    interface "com.compi.YVisitor" as T316 {
+      +visitInit()
+      +visitArchivo()
+      +visitEstructuras_seccion()
+      +visitEstructura_def()
+      +visitEstructura_anidada_o_variable()
+      +visitCampo_struct()
+      +visitFunciones_seccion()
+      +visitFuncion_def()
+      +visitParametros()
+      +visitParametro()
+      +visitBloque()
+      +visitSentencia()
+      +visitDeclaracion_estructura_local()
+      +visitDeclaracion_variable()
+      +visitExpresion_inicializacion()
+      +visitElemento_lista()
+      +visitAsignacion()
+      +visitAcceso_miembro()
+      +visitSi_sentencia()
+      +visitSino_si_bloque()
+      +visitSino_bloque()
+      +visitContrario_bloque()
+      +visitSaltos()
+      +visitElegir_sentencia()
+      +visitCaso_bloque()
+      +visitSiempre_bloque()
+      +visitBloque_interno_opcional()
+      +visitPara_sentencia()
+      +visitMientras_sentencia()
+      +visitHacer_mientras_sentencia()
+      +visitRetornar_sentencia()
+      +visitRomper_sentencia()
+      +visitContinuar_sentencia()
+      +visitImprimir_sentencia()
+      +visitLlamada_funcion()
+      +visitArgumentos()
+      +visitIncremento_decremento()
+      +visitExpresion()
+      +visitTermino()
+      +visitLeer_funcion()
+      +visitCondicion()
+      +visitTipo_dato()
+      +visitOperador_aritmetico()
+      +visitOperador_relacional()
+      +visitOperador_logico()
+      +visitOperador_negacion()
+    }
+    class "com.compi.YBaseListener" as T317 {
+    }
+    class "com.compi.ZetarianoLexer" as T318 {
+      #_decisionToDFA : DFA[]
+      +ruleNames : String[]
+      -_LITERAL_NAMES : String[]
+      -_SYMBOLIC_NAMES : String[]
+      +VOCABULARY : Vocabulary
+      +tokenNames : String[]
+      -makeRuleNames()
+      -makeLiteralNames()
+      -makeSymbolicNames()
+      +getTokenNames()
+      +getVocabulary()
+      +ZetarianoLexer()
+      +getGrammarFileName()
+      +getRuleNames()
+      +getSerializedATN()
+      +getChannelNames()
+      +getModeNames()
+      +getATN()
+    }
+  }
+}
+T0 ..> T32 : inicia interfaz
+T32 ..> T41 : coordina compilación
+T32 ..> T141 : resuelve extensiones
+T32 *-- T4
+T32 *-- T9
+T32 *-- T24
+T32 *-- T5
+T32 *-- T22
+T4 *-- T23
+T5 *-- T15
+T15 *-- T20
+T15 *-- T11
+T15 *-- T30
+T15 *-- T7
+T144 ..|> T145
+T142 --|> T144
+T143 --|> T144
+T140 --|> T144
+T141 ..> T145 : crea compiladores
+T41 *-- T154
+T41 *-- T50
+T41 *-- T54
+T50 o-- T51
+T54 o-- T48
+T154 *-- T150
+T154 o-- T153
+T154 *-- T152
+
+note top of T216
+ANTLR genera Lexer, Parser, Listener, BaseListener, Visitor y BaseVisitor desde src/main/antlr4/com/compi/*.g4.
+Se recorren todos los .java bajo target/generated-sources/antlr4; actualmente están en com/compi y declaran package com.compi.
+end note
+@enduml

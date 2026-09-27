@@ -1,6 +1,7 @@
 grammar Zetariano;
 
-programa: claseDef+;
+// GRAMÁTICA
+programa: claseDef+ EOF;
 
 claseDef: PUBLIC? CLASS ID LBRACE miembroClase* RBRACE;
 
@@ -78,15 +79,15 @@ llamadaFuncionSemilla: PRINTLN LPAREN argumentos? RPAREN
 
 argumentos: expresion (COMMA expresion)*;
 
-expresion: expresion TernaryOp expresion COLON expresion # TernaryExpr
+expresion: MINUS expresion # NegExpr
+         | NOT expresion # NotExpr
          | expresion (MUL | DIV | MOD) expresion # MulDivModExpr
          | expresion (PLUS | MINUS) expresion # AddSubExpr
          | expresion (LT | GT | LE | GE) expresion # RelationalExpr
          | expresion (EQUALS | NOTEQUALS) expresion # EqualityExpr
          | expresion AND expresion # AndExpr
          | expresion OR expresion # OrExpr
-         | NOT expresion # NotExpr
-         | MINUS expresion # NegExpr
+         | expresion TernaryOp expresion COLON expresion # TernaryExpr
          | INCREMENTO_PRE=(INCREMENT | DECREMENT) (ID | accesoMiembro) # PreIncDecExpr
          | NEW ID LPAREN argumentos? RPAREN # NewObjectExpr
          | NEW tipoDato LBRACK expresion RBRACK (LBRACK expresion RBRACK)* # NewArrayExpr

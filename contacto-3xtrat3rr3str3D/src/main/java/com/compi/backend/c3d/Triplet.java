@@ -1,13 +1,8 @@
 package com.compi.backend.c3d;
 
-/**
- * Triplete en codigo de tres direcciones: una instruccion {@code op arg1 arg2}.
- *
- * <p>A diferencia de la cuarteta, el triplete no muestra el destino: ese campo
- * queda aqui solo para que quien lo consume (por ejemplo, la traduccion a C)
- * sepa donde escribir el resultado. El listado que se muestra al usuario sigue
- * siendo la forma clasica de tres campos.</p>
- */
+import lombok.Getter;
+
+@Getter
 public class Triplet {
     private final QuadrupleOp op;
     private final String arg1;
@@ -24,11 +19,6 @@ public class Triplet {
         this.arg2 = arg2;
         this.result = result;
     }
-
-    public QuadrupleOp getOp(){ return op; }
-    public String getArg1(){ return arg1; }
-    public String getArg2(){ return arg2; }
-    public String getResult(){ return result; }
 
     @Override public String toString(){
         return String.format("%s %s %s", op, arg1 == null ? "" : arg1, arg2 == null ? "" : arg2);

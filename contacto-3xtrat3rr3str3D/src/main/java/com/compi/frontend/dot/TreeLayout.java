@@ -11,16 +11,6 @@ import java.util.Map;
 import java.util.Set;
 import javax.swing.JPanel;
 
-/**
- * Calculo de posiciones de un arbol DOT y dibujo del mismo.
- *
- * Usa un reparto clasico de subarboles: las hojas se colocan a la misma altura,
- * el padre se centra sobre el intervalo que ocupan sus hijos y despues se
- * separa cada nivel. Ese reparto deja las hojas arriba y la raiz en el fondo, asi
- * que al terminar se refleja en vertical ({@link #flipAndNormalize}) y el arbol
- * se lee como es habitual: raiz arriba y hijos hacia abajo. El resultado es un
- * arbol legible sin depender de Graphviz.
- */
 public class TreeLayout {
 
     private static final int H_GAP = 14;
@@ -35,12 +25,6 @@ public class TreeLayout {
     private int maxHeight;
     private int leafCursor;
 
-    /**
-     * Calcula las coordenadas de cada nodo.
-     *
-     * @param model grafo ya parseado
-     * @param font  fuente con la que se mediran las etiquetas
-     */
     public void compute(DotModel model, Font font) {
         positions.clear();
         sizes.clear();
@@ -58,16 +42,6 @@ public class TreeLayout {
         flipAndNormalize(fm);
     }
 
-    /**
-     * Da la vuelta al reparto y calcula el tamaño total.
-     *
-     * <p>El reparto de {@link #place} deja las hojas arriba y a la raiz en el
-     * fondo, que se lee al reves. Como todas las cajas miden lo mismo, basta
-     * con reflejar el eje vertical (y' = maxY - y) para dejar la raiz arriba y
-     * los hijos colgando hacia abajo, y despues se separa del margen izquierdo.
-     * El ancho se mide con el borde derecho de la caja mas a la derecha, que es
-     * lo que necesita el lienzo para poder desplazarse en horizontal.</p>
-     */
     private void flipAndNormalize(FontMetrics fm) {
         int maxY = 0;
         int minX = Integer.MAX_VALUE;
@@ -94,8 +68,6 @@ public class TreeLayout {
         maxWidth = Math.max(1, rightX - minX) + PADDING * 2;
         maxHeight = maxY + nodeHeight(fm) + PADDING * 2;
     }
-
-    // ====================== Reparto ======================
 
     private int place(DotModel model, String id, FontMetrics fm) {
         DotModel.DotNode node = model.node(id);
@@ -136,7 +108,7 @@ public class TreeLayout {
         int y = level + nodeHeight(fm) + V_GAP;
 
         int x = center - size.width / 2;
-        // Evita solapar al nodo con el primero de sus hijos.
+
         positions.put(id, new int[]{x, y});
         return center;
     }
@@ -165,8 +137,6 @@ public class TreeLayout {
         return new ArrayList<>(new LinkedHashSet<>(ids));
     }
 
-    // ====================== Consulta ======================
-
     public int[] positionOf(String id) {
         return positions.get(id);
     }
@@ -183,10 +153,6 @@ public class TreeLayout {
         return positions.keySet();
     }
 
-    /**
-     * Padre de un nodo segun la posicion horizontal: el nodo mas cercano por
-     * encima cuya caja solapa verticalmente.
-     */
     public String findParent(DotModel model, String id) {
         int[] child = positions.get(id);
         if (child == null) {

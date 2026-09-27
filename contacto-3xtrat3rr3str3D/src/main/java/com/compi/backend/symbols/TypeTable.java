@@ -7,7 +7,7 @@ public class TypeTable {
     private final Map<String, Type> types = new HashMap<>();
 
     public TypeTable(){
-        // Tipos primitivos base
+
         addPrimitive("entero", DataType.INT);
         addPrimitive("flotante", DataType.DOUBLE);
         addPrimitive("cadena", DataType.STRING);

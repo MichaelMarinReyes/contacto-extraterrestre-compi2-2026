@@ -1,17 +1,13 @@
 package com.compi.backend.runtime;
 
+import com.compi.backend.StackAction;
+import lombok.Getter;
+
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 
-/**
- * Instantanea de la pila de procesos en un instante concreto de la ejecucion.
- * Se usa para alimentar el panel de visualizacion de pila del frontend.
- *
- * Ademas del contenido de la pila guarda que instruccion lo produjo, si la
- * instruccion fue un desplazamiento o una reduccion, y que valores se
- * desapilaron y apilaron en ese paso.
- */
+@Getter
 public class StackState {
 
     private final int index;
@@ -37,15 +33,6 @@ public class StackState {
         this.pushed = pushed;
     }
 
-    public int getIndex() {
-        return index;
-    }
-
-    public String getOperation() {
-        return operation;
-    }
-
-    /** Elementos de la pila de abajo (indice 0) hacia arriba (ultimo indice = tope). */
     public List<String> getStackElements() {
         return Collections.unmodifiableList(elements);
     }
@@ -54,35 +41,17 @@ public class StackState {
         return getStackElements();
     }
 
-    public String getC3dInstruction() {
-        return c3dInstruction;
-    }
-
-    /** Desplazamiento o reduccion que ejecuto la instruccion de este paso. */
-    public StackAction getAction() {
-        return action;
-    }
-
-    /** Valores desapilados por la instruccion, en el orden en que salieron. */
     public List<String> getPopped() {
         return Collections.unmodifiableList(popped);
-    }
-
-    /** Valor apilado por la instruccion, o null si no apilo nada. */
-    public String getPushed() {
-        return pushed;
     }
 
     public int depth() {
         return elements.size();
     }
 
-    public String getTop() {
-        return elements.isEmpty() ? null : elements.get(elements.size() - 1);
-    }
 
     @Override
     public String toString() {
-        return String.format("[%02d] %-6s %-24s | pila=%s", index, action.tag(), operation, elements);
+        return String.format("[%02d] %-6s %-24s | pila=%s", index, action.getTag(), operation, elements);
     }
 }

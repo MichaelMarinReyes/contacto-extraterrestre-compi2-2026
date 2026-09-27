@@ -12,22 +12,12 @@ import javax.swing.JComponent;
 import javax.swing.UIManager;
 import javax.swing.border.Border;
 
-/**
- * Tokens visuales compartidos por todos los paneles.
- *
- * Delega en los valores de {@link UIManager} (que fija FlatLaf) para que el
- * tema se respete automaticamente y solo define lo que la distribucion por
- * defecto de IntelliJ no cubre.
- */
 public final class UiTheme {
 
-    /** Marca los ajustes ya aplicados, para que sean idempotentes. */
     private static final Set<String> APPLIED = new HashSet<>();
 
     private UiTheme() {
     }
-
-    // ---------- Tipografías ----------
 
     public static final String MONO = "JetBrains Mono";
     public static final String SANS = "Inter";
@@ -48,7 +38,6 @@ public final class UiTheme {
         return new Font(SANS, Font.BOLD, size);
     }
 
-    /** true si la fuente pedida existe en el sistema. */
     public static boolean isFontAvailable(String name) {
         try {
             for (String family : GraphicsEnvironment.getLocalGraphicsEnvironment()
@@ -62,8 +51,6 @@ public final class UiTheme {
             return false;
         }
     }
-
-    // ---------- Colores derivados de FlatLaf ----------
 
     public static Color color(String key, Color fallback) {
         Color c = UIManager.getColor(key);
@@ -114,9 +101,6 @@ public final class UiTheme {
         return color("Separator.foreground", new Color(0x393B40));
     }
 
-    // ---------- Bordes ----------
-
-    /** Separador de 1px usando el color de divisor de FlatLaf. */
     public static Border hairline() {
         return BorderFactory.createMatteBorder(0, 0, 1, 0, separator());
     }
@@ -133,23 +117,15 @@ public final class UiTheme {
         return BorderFactory.createMatteBorder(1, 0, 0, 0, separator());
     }
 
-    /** Relleno uniforme de N px. */
     public static Border pad(int top, int left, int bottom, int right) {
         return BorderFactory.createEmptyBorder(top, left, bottom, right);
     }
 
-    // ---------- Comportamiento ----------
-
-    /** Aplica el cursor de mano, usado por todos los botones de icono. */
     public static <T extends JComponent> T asButton(T c) {
         c.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
         return c;
     }
 
-    /**
-     * Ajustes globales de FlatLaf para aproximar la densidad y los radios de
-     * IntelliJ. Es idempotente: puede llamarse mas de una vez.
-     */
     public static void applyFlatLafTweaks() {
         if (!APPLIED.add("flatlaf-tweaks")) {
             return;
@@ -187,7 +163,6 @@ public final class UiTheme {
         UIManager.put("TextField.background", color("TextField.background", new Color(0x1E1F22)));
     }
 
-    /** Formatea un identificador de lenguaje para mostrarlo bonito. */
     public static String prettifyLanguage(String raw) {
         if (raw == null || raw.isBlank()) {
             return "-";

@@ -5,19 +5,13 @@ import java.awt.Component;
 import javax.swing.JPanel;
 import javax.swing.JTabbedPane;
 
-/**
- * Dock derecho de herramientas del compilador.
- *
- * Agrupa las cuatro vistas de analisis en pestanas, al estilo de las tool
- * windows de IntelliJ: AST, tabla de simbolos, pila de procesos y errores.
- */
 public class ToolWindowDock extends JPanel {
 
     public enum View {
         AST("Árbol AST", 0),
-        SIMBOLOS("Símbolos", 1),
-        PILA("Pila", 2),
-        ERRORES("Errores", 3);
+        SYMBOLS("Símbolos", 1),
+        STACK("Pila", 2),
+        ERRORS("Errores", 3);
 
         private final String title;
         private final int index;
@@ -57,16 +51,13 @@ public class ToolWindowDock extends JPanel {
         tabs.setFont(UiTheme.sans(12));
         tabs.setTabLayoutPolicy(JTabbedPane.SCROLL_TAB_LAYOUT);
         tabs.addTab(View.AST.title(), astPanel);
-        tabs.addTab(View.SIMBOLOS.title(), symbolPanel);
-        tabs.addTab(View.PILA.title(), stackPanel);
-        tabs.addTab(View.ERRORES.title(), errorPanel);
+        tabs.addTab(View.SYMBOLS.title(), symbolPanel);
+        tabs.addTab(View.STACK.title(), stackPanel);
+        tabs.addTab(View.ERRORS.title(), errorPanel);
 
         add(tabs, BorderLayout.CENTER);
     }
 
-    // ====================== Navegacion ======================
-
-    /** Selecciona la vista pedida. */
     public void select(View view) {
         int idx = view.index();
         if (idx >= 0 && idx < tabs.getTabCount()) {
@@ -87,8 +78,6 @@ public class ToolWindowDock extends JPanel {
         return View.AST;
     }
 
-    // ====================== Accesos a las vistas ======================
-
     public ParserTreePanel getAstPanel() {
         return astPanel;
     }
@@ -105,9 +94,6 @@ public class ToolWindowDock extends JPanel {
         return errorPanel;
     }
 
-    /**
-     * Actualiza el contador de errores en el titulo de la pestaña.
-     */
     public void setErrorCount(int count) {
         this.errorCount = count;
         refreshErrorTabTitle();
@@ -119,14 +105,13 @@ public class ToolWindowDock extends JPanel {
 
     private void refreshErrorTabTitle() {
         if (errorCount > 0) {
-            tabs.setTitleAt(View.ERRORES.index(),
-                    View.ERRORES.title() + "  (" + errorCount + ")");
+            tabs.setTitleAt(View.ERRORS.index(),
+                    View.ERRORS.title() + "  (" + errorCount + ")");
         } else {
-            tabs.setTitleAt(View.ERRORES.index(), View.ERRORES.title());
+            tabs.setTitleAt(View.ERRORS.index(), View.ERRORS.title());
         }
     }
 
-    /** Aplica el tema a las vistas contenidas. */
     public void applyTheme() {
         for (Component c : tabs.getComponents()) {
             if (c instanceof javax.swing.JComponent jc) {

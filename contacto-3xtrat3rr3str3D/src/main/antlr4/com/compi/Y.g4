@@ -98,10 +98,9 @@ contrario_bloque: CONTRARIO DOS_PUNTOS? bloque;
 
 saltos: NUEVA_LINEA*;
 
-elegir_sentencia: ELEGIR PARENTESIS_IZQ expresion PARENTESIS_DER (LLAVE_IZQ)? DOS_PUNTOS?
+elegir_sentencia: ELEGIR PARENTESIS_IZQ expresion PARENTESIS_DER DOS_PUNTOS?
                   (NUEVA_LINEA INDENT caso_bloque+ siempre_bloque? DEDENT
                   | saltos caso_bloque+ siempre_bloque?)
-                  (LLAVE_DER)?
                   ;
 
 caso_bloque: CASO expresion DOS_PUNTOS bloque_interno_opcional (ROMPER PUNTO_COMA?)? NUEVA_LINEA*;
@@ -132,13 +131,21 @@ incremento_decremento: (ID | acceso_miembro) (SUMA_ABREVIADA | RESTA_ABREVIADA)
                      | (SUMA_ABREVIADA | RESTA_ABREVIADA) (ID | acceso_miembro)
                      ;
 
-expresion: termino (operador_aritmetico termino)*
+expresion: sumatoria
          | expresion operador_relacional expresion
          | expresion operador_logico expresion
          | operador_negacion expresion
          | llamada_funcion
          | leer_funcion
          ;
+
+sumatoria: productoria (operador_aditivo productoria)*;
+
+productoria: termino (operador_multiplicativo termino)*;
+
+operador_aditivo: MAS | MENOS;
+
+operador_multiplicativo: MULTIPLICACION | DIVISION;
 
 termino: ID
        | acceso_miembro

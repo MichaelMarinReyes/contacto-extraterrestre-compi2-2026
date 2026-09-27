@@ -7,12 +7,6 @@ import javax.swing.BorderFactory;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
 
-/**
- * Barra de estado inferior, al estilo de la de IntelliJ.
- *
- * Muestra posicion del cursor, pestana activa, lenguaje, resultado de la
- * compilacion y contadores de instrucciones y errores.
- */
 public class StatusBar extends JPanel {
 
     private final JLabel positionLabel = label("Ln 1, Col 1");
@@ -48,8 +42,6 @@ public class StatusBar extends JPanel {
         return l;
     }
 
-    // ====================== Actualizaciones ======================
-
     public void setPosition(int line, int column) {
         positionLabel.setText("Ln " + line + ", Col " + column);
     }
@@ -62,7 +54,6 @@ public class StatusBar extends JPanel {
         languageLabel.setText("Lenguaje: " + UiTheme.prettifyLanguage(languageId));
     }
 
-    /** Resultado de la ultima compilacion. */
     public void setResult(boolean success, int errorCount) {
         resultLabel.setText(success ? "Compilación correcta" : "Compilación con errores");
         resultLabel.setForeground(success ? UiTheme.success() : UiTheme.error());

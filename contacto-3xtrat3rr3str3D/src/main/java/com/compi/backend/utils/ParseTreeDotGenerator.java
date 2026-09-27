@@ -7,25 +7,12 @@ import org.antlr.v4.runtime.tree.ErrorNode;
 import org.antlr.v4.runtime.tree.ParseTree;
 import org.antlr.v4.runtime.tree.TerminalNode;
 
-/**
- * Genera una representacion DOT de cualquier {@link ParseTree} de ANTLR.
- *
- * Se usa como fallback generico cuando el lenguaje no provee un visitor
- * Graphviz especifico para su AST.
- */
 public class ParseTreeDotGenerator {
 
     private final Map<ParseTree, Integer> ids = new IdentityHashMap<>();
     private final StringBuilder sb = new StringBuilder();
     private int counter = 0;
 
-    /**
-     * Construye el DOT completo del arbol.
-     *
-     * @param tree  raiz del arbol de parseo
-     * @param title titulo del grafo
-     * @return String con el codigo DOT
-     */
     public String build(ParseTree tree, String title) {
         sb.setLength(0);
         ids.clear();
@@ -93,8 +80,7 @@ public class ParseTreeDotGenerator {
     }
 
     private String ruleName(ParserRuleContext ctx) {
-        // El runtime de ANTLR 4.13 ya no expone getRuleNames() en el contexto,
-        // asi que se deriva el nombre de la clase <Regla>Context.
+
         String simple = ctx.getClass().getSimpleName();
         if (simple.endsWith("Context") && simple.length() > "Context".length()) {
             simple = simple.substring(0, simple.length() - "Context".length());

@@ -1,6 +1,6 @@
 package com.compi.frontend;
 
-import com.compi.backend.languages2.LanguageCompilerFactory;
+import com.compi.backend.languages.LanguageCompilerFactory;
 import java.awt.BorderLayout;
 import java.awt.Component;
 import java.awt.Container;
@@ -24,22 +24,11 @@ import javax.swing.SwingUtilities;
 import javax.swing.event.DocumentEvent;
 import javax.swing.event.DocumentListener;
 
-/**
- * Dialogo de archivo nuevo: nombre, lenguaje y carpeta de destino.
- *
- * <p>Antes se preguntaba la extension en un desplegable y la carpeta en otro
- * dialogo aparte, y el nombre lo ponia el programa: no habia forma de llamarlo
- * como uno quiere ni de decidir en que carpeta del proyecto nace. Aqui se
- * preguntan las tres cosas a la vez, con las carpetas del proyecto ya cargadas en
- * el desplegable y una vista previa del nombre completo.</p>
- */
 public class NewFileDialog extends javax.swing.JDialog {
 
-    /** Lo que el usuario eligio, o null si se cancelo. */
     public record Choice(String baseName, String languageId, File directory) {
     }
 
-    /** Marca el desplegable de carpetas para abrir el selector del sistema. */
     private static final String OTHER_FOLDER = "… otra carpeta…";
 
     private final JTextField nameField = new JTextField(18);
@@ -52,15 +41,6 @@ public class NewFileDialog extends javax.swing.JDialog {
     private final File projectRoot;
     private Choice choice;
 
-    /**
-     * Monta el dialogo.
-     *
-     * @param owner         componente padre
-     * @param projectRoot   raiz del proyecto, o null si no hay ninguna
-     * @param folderChoices carpetas a ofrecer (la raiz ya incluida)
-     * @param languageId    lenguaje que se propone, por ser el de la pestana activa
-     * @param suggestedName nombre que se propone
-     */
     public NewFileDialog(Component owner, File projectRoot, List<File> folderChoices,
                           String languageId, String suggestedName) {
         super(padreDe(owner), "Archivo nuevo", ModalityType.APPLICATION_MODAL);
@@ -100,9 +80,9 @@ public class NewFileDialog extends javax.swing.JDialog {
         extensionBox.addActionListener(e -> updatePreview());
 
         setContentPane(buildContent());
-        JButton crear = findButton(getContentPane(), "Crear");
-        if (crear != null) {
-            getRootPane().setDefaultButton(crear);
+        JButton create = findButton(getContentPane(), "Crear");
+        if (create != null) {
+            getRootPane().setDefaultButton(create);
         }
         getRootPane().registerKeyboardAction(e -> dispose(),
                 KeyStroke.getKeyStroke("ESCAPE"), javax.swing.JComponent.WHEN_IN_FOCUSED_WINDOW);
@@ -113,14 +93,6 @@ public class NewFileDialog extends javax.swing.JDialog {
         updatePreview();
     }
 
-    /**
-     * Ventana a la que colgarse.
-     *
-     * <p>{@code getWindowAncestor} sube por los contenedores, y un JFrame no es
-     * ancestro de si mismo: si el que se pasa ya es una ventana, se usa
-     * directamente. Sin esto el dialogo salia sin padre y sin icono, y con el
-     * icono de la aplicacion al lado.</p>
-     */
     private static java.awt.Window padreDe(Component owner) {
         if (owner instanceof java.awt.Window window) {
             return window;
@@ -182,15 +154,15 @@ public class NewFileDialog extends javax.swing.JDialog {
         preview.setForeground(UiTheme.dim());
         form.add(preview, gbc);
 
-        JButton crear = new JButton("Crear");
-        crear.addActionListener(e -> accept());
-        JButton cancelar = new JButton("Cancelar");
-        cancelar.addActionListener(e -> dispose());
+        JButton create = new JButton("Crear");
+        create.addActionListener(e -> accept());
+        JButton cancel = new JButton("Cancelar");
+        cancel.addActionListener(e -> dispose());
 
         JPanel buttons = new JPanel(new BorderLayout());
         buttons.setBorder(BorderFactory.createEmptyBorder(8, 16, 14, 16));
-        buttons.add(crear, BorderLayout.WEST);
-        buttons.add(cancelar, BorderLayout.EAST);
+        buttons.add(create, BorderLayout.WEST);
+        buttons.add(cancel, BorderLayout.EAST);
 
         JPanel root = new JPanel(new BorderLayout());
         root.add(form, BorderLayout.CENTER);
@@ -198,17 +170,13 @@ public class NewFileDialog extends javax.swing.JDialog {
         return root;
     }
 
-    /**
-     * Al elegir "otra carpeta" se abre el selector y la carpeta encontrada se
-     * añade al desplegable, para no perder lo ya escrito en el nombre.
-     */
     private void onFolderPicked() {
         if (!OTHER_FOLDER.equals(folderBox.getSelectedItem())) {
             return;
         }
         File chosen = pickFolder(selectedFolder() != null ? selectedFolder() : projectRoot);
         if (chosen == null) {
-            // Volver a la anterior: sin carpeta nueva no se puede seguir.
+
             folderBox.setSelectedIndex(0);
             return;
         }
@@ -234,17 +202,10 @@ public class NewFileDialog extends javax.swing.JDialog {
         dispose();
     }
 
-    /**
-     * Muestra el dialogo y espera a que se cierre.
-     *
-     * @return la eleccion, o null si se cancelo
-     */
     public Choice ask() {
         setVisible(true);
         return choice;
     }
-
-    // ====================== Detalles de la vista ======================
 
     private static JLabel caption(String text) {
         JLabel l = new JLabel(text);
@@ -267,7 +228,6 @@ public class NewFileDialog extends javax.swing.JDialog {
         return null;
     }
 
-    /** Ruta de la carpeta relativa a la raiz del proyecto, para que se lea corta. */
     private String relativeLabel(File dir) {
         if (projectRoot == null || dir == null) {
             return dir == null ? "" : dir.getAbsolutePath();
@@ -302,7 +262,6 @@ public class NewFileDialog extends javax.swing.JDialog {
         return index < 0 || index >= folders.size() ? null : folders.get(index);
     }
 
-    /** Muestra como se va a llamar el archivo, para que no haya sorpresas. */
     private void updatePreview() {
         String base = nameField.getText().trim();
         File dir = selectedFolder();

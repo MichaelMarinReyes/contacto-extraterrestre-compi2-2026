@@ -14,13 +14,6 @@ import javax.swing.text.StyleConstants;
 import javax.swing.text.StyleContext;
 import javax.swing.text.StyledDocument;
 
-/**
- * Resaltado sintactico para PigLatin, Y y Zetariano.
- *
- * Trabaja sobre el {@link StyledDocument} del editor: primero limpia el rango
- * completo con el estilo por defecto y luego aplica un estilo por categoria
- * (palabra clave, tipo, cadena, comentario, numero, constante).
- */
 public class SyntaxHighlighter {
 
     private static final int MAX_DOC_LENGTH = 120_000;
@@ -31,9 +24,9 @@ public class SyntaxHighlighter {
 
     private String languageId = "pig";
     private boolean running;
-    /** true si ya hay un apply() en la cola de eventos. */
+
     private boolean pending;
-    /** Texto del ultimo resaltado, para no repetirlo si no cambio nada. */
+
     private String lastText;
 
     public SyntaxHighlighter(JTextPane pane) {
@@ -42,8 +35,6 @@ public class SyntaxHighlighter {
         buildStyles();
         setLanguage(languageId);
     }
-
-    // ====================== Definicion de lenguajes ======================
 
     private void registerLanguages() {
         languages.put("pig", new Language(
@@ -68,8 +59,6 @@ public class SyntaxHighlighter {
                 List.of("verdadero", "falso", "true", "false", "null", "este")));
     }
 
-    // ====================== Estilos ======================
-
     private void buildStyles() {
         styles.clear();
         styles.put("default", StyleContext.getDefaultStyleContext().getStyle(StyleContext.DEFAULT_STYLE));
@@ -92,7 +81,7 @@ public class SyntaxHighlighter {
 
     public void setLanguage(String id) {
         this.languageId = languages.containsKey(id) ? id : "pig";
-        // El texto no cambio pero las reglas si: hay que volver a pintar.
+
         this.lastText = null;
     }
 
@@ -100,15 +89,6 @@ public class SyntaxHighlighter {
         return languageId;
     }
 
-    // ====================== Resaltado ======================
-
-    /**
-     * Relanza el resaltado en el hilo de Swing.
-     *
-     * <p>Se descarta la peticion si ya hay un resaltado en marcha: de lo
-     * contrario los {@code setCharacterAttributes} que aplica el propio
-     * resaltador se realimentarian sin fin.</p>
-     */
     public void rehighlight() {
         if (running || pending) {
             return;
@@ -120,7 +100,6 @@ public class SyntaxHighlighter {
         });
     }
 
-    /** Aplica el resaltado sobre el documento actual. */
     public void apply() {
         if (running) {
             return;
@@ -138,8 +117,7 @@ public class SyntaxHighlighter {
         if (text.length() > MAX_DOC_LENGTH) {
             return;
         }
-        // Solo un cambio de texto obliga a repintar: los cambios de estilo que
-        // llegan despues son los que aplica este mismo metodo.
+
         if (text.equals(lastText)) {
             return;
         }
@@ -152,27 +130,22 @@ public class SyntaxHighlighter {
                 doc.setCharacterAttributes(0, len, styles.get("default"), true);
             }
 
-            // 1. Comentarios de bloque y de linea
             paint(doc, text, "##[\\s\\S]*?##", "comment");
             paint(doc, text, "//[^\\n]*", "comment");
             paint(doc, text, "/\\*[\\s\\S]*?\\*/", "comment");
 
-            // 2. Cadenas y caracteres
             paint(doc, text, "\"(?:\\\\.|[^\"\\\\\\n])*\"", "string");
             paint(doc, text, "'(?:\\\\.|[^'\\\\])'", "string");
 
-            // 3. Numeros
             paint(doc, text, "\\b\\d+\\.\\d+\\b", "number");
             paint(doc, text, "\\b\\d+\\b", "number");
 
-            // 4. Secciones o literales propios del lenguaje
             if ("pig".equals(languageId)) {
                 paint(doc, text, "\\b(VARIABILES|MUNERA|MAIOR)\\b", "constant");
             } else if ("y".equals(languageId)) {
                 paint(doc, text, "(?m)^\\s*%\\w+", "constant");
             }
 
-            // 5. Palabras clave, tipos y constantes
             Language lang = languages.get(languageId);
             paintWords(doc, text, lang.keywords(), "keyword");
             paintWords(doc, text, lang.types(), "type");
@@ -211,7 +184,6 @@ public class SyntaxHighlighter {
         paint(doc, text, regex.toString(), styleKey);
     }
 
-    /** Definicion de las palabras reservadas de un lenguaje. */
     private record Language(List<String> keywords, List<String> types, List<String> constants) {
     }
 }
