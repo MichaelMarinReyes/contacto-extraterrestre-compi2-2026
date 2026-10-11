@@ -2,6 +2,9 @@ package com.compi.backend.utils;
 
 import com.compi.backend.ast.ASTNode;
 import com.compi.backend.ast.AbstractNodeAST;
+import com.compi.backend.ast.decl.*;
+import com.compi.backend.ast.expr.*;
+import com.compi.backend.ast.stmt.*;
 import java.util.IdentityHashMap;
 import java.util.Map;
 
@@ -63,7 +66,41 @@ public class ASTDotGenerator {
         if (name.endsWith("NodeAST") && name.length() > "NodeAST".length()) {
             name = name.substring(0, name.length() - "NodeAST".length());
         }
-        return name + " @" + node.line() + ":" + node.column();
+        String detail = detail(node);
+        return name + (detail.isEmpty() ? "" : " · " + detail) + " @" + node.line() + ":" + node.column();
+    }
+
+    private String detail(AbstractNodeAST node) {
+        return switch (node) {
+            case IdentifierNodeAST n -> n.name();
+            case LiteralNodeAST n -> n.kind() + " " + String.valueOf(n.value());
+            case BinaryOperationNodeAST n -> n.operator();
+            case UnaryOperationNodeAST n -> n.operator();
+            case AssignmentNodeAST n -> n.operator();
+            case AssignmentExpressionNodeAST n -> n.operator();
+            case IncrementNodeAST n -> (n.prefix() ? "prefijo " : "posfijo ") + n.operator();
+            case DeclarationNodeAST n -> n.name() + ": " + n.type().label() + dimensions(n.dimensions().size());
+            case AttributeDefinitionNodeAST n -> n.name() + ": " + n.type().label() + dimensions(n.dimensions().size());
+            case FieldDefinitionNodeAST n -> n.name() + ": " + n.type().label() + dimensions(n.dimensions().size());
+            case ParameterNodeAST n -> n.name() + ": " + n.type().label() + (n.byReference() ? " &" : "");
+            case FunctionDefinitionNodeAST n -> n.name() + ": " + n.returnType().label();
+            case MethodDefinitionNodeAST n -> n.name() + ": " + n.returnType().label();
+            case ClassDefinitionNodeAST n -> n.name();
+            case StructDefinitionNodeAST n -> n.name();
+            case MemberAccessNodeAST n -> n.member();
+            case CallNodeAST n -> n.name();
+            case NewObjectNodeAST n -> n.typeName();
+            case NewArrayNodeAST n -> n.elementType().label();
+            case InstanceInitNodeAST n -> n.typeName() + (n.named().isEmpty() ? "" : " " + n.named().keySet());
+            case ImportNodeAST n -> n.path();
+            case ReadExpressionNodeAST n -> n.kind().toString();
+            case PrintNodeAST n -> n.newline() ? "con salto" : "sin salto";
+            default -> "";
+        };
+    }
+
+    private String dimensions(int count) {
+        return "[]".repeat(count);
     }
 
     private String escape(String s) {

@@ -1,5 +1,5 @@
 @startuml Diagrama de clases - Contacto 3xtrat3rr3str3D
-' Arquitectura implementada al completar la Fase 0 del AST.
+' Arquitectura implementada al completar la Fase 1 del AST.
 skinparam dpi 120
 skinparam shadowing false
 skinparam classAttributeIconSize 0
@@ -16,8 +16,8 @@ legend right
   **Arquitectura implementada**
   ..|> implementación · --|> herencia
   *-- composición · o-- agregación · ..> dependencia
-  El AST propio está disponible como infraestructura (Fase 0).
-  Los compiladores aún recorren ParseTree en sus fases actuales.
+  ParseTree → constructores → AST propio → panel AST (Fase 1).
+  Semántica y C3D todavía recorren ParseTree; migración pendiente.
 endlegend
 
 package "com.compi" {
@@ -72,6 +72,8 @@ package "com.compi.backend" {
     +compile(source, language, fileName) : boolean
     +setWorkingDirectory(File)
     +setCMode(Mode)
+    +getAst() : ProgramNodeAST
+    +getImportedAsts() : Map<String, ProgramNodeAST>
   }
   enum StackAction {
     SHIFT
@@ -82,6 +84,8 @@ package "com.compi.backend" {
 package "com.compi.backend.languages" {
   interface LanguageCompiler {
     +parse(source, errors) : ParseTree
+    +buildAst(ParseTree, sourceFile) : ProgramNodeAST
+    +importedAsts() : Map<String, ProgramNodeAST>
     +analyze(ParseTree, SymbolTable, errors)
     +generateIntermediate(ParseTree, SymbolTable, C3DGenerator)
     +loadImports(ParseTree, ...)
@@ -93,6 +97,7 @@ package "com.compi.backend.languages" {
   class ZetarianoCompiler
 }
 package "com.compi.backend.languages.piglatin" {
+  class PigLatinAstBuilder
   class PigLatinSemanticVisitor
   class PigLatinArrayAnalyzer
   class PigLatinConditionAnalyzer
@@ -101,6 +106,7 @@ package "com.compi.backend.languages.piglatin" {
   class PigLatinObjectEmitter
 }
 package "com.compi.backend.languages.y" {
+  class YAstBuilder
   class YIndentLexer
   class YSemanticVisitor
   class YC3DVisitor
@@ -109,6 +115,7 @@ package "com.compi.backend.languages.y" {
   class YAccessEmitter
 }
 package "com.compi.backend.languages.zetariano" {
+  class ZetarianoAstBuilder
   class ZetarianoSemanticVisitor
   class ZetarianoC3DVisitor
   class ZetarianoArrayEmitter
@@ -130,6 +137,9 @@ package "com.compi.backend.ast" {
   abstract AbstractNodeAST {
     -line : int
     -column : int
+    -sourceFile : String
+    +sourceFile() : String
+    +attachSource(String)
     +children() : List<ASTNode>
   }
   abstract AbstractStatementNodeAST
@@ -159,6 +169,7 @@ package "com.compi.backend.ast.stmt" {
   class BreakNodeAST
   class ContinueNodeAST
   class ExpressionStatementNodeAST
+  class DefinitionStatementNodeAST
   class ImportNodeAST
 }
 package "com.compi.backend.ast.expr" {
@@ -169,7 +180,10 @@ package "com.compi.backend.ast.expr" {
   class AssignmentExpressionNodeAST
   class MemberAccessNodeAST
   class IndexNodeAST
-  class CallNodeAST
+  class CallNodeAST {
+    -callee : AbstractExpressionNodeAST
+    -arguments : List<AbstractExpressionNodeAST>
+  }
   class NewObjectNodeAST
   class NewArrayNodeAST
   class ArrayLiteralNodeAST
@@ -330,7 +344,8 @@ Compiler *-- C3DGenerator
 Compiler *-- IntermediateCodeManager
 Compiler ..> LanguageCompilerFactory
 Compiler ..> LanguageCompiler
-Compiler ..> ParseTreeDotGenerator
+Compiler ..> ASTDotGenerator
+Compiler o-- ProgramNodeAST : principal e importados
 Compiler ..> ParseTrace
 Compiler ..> CCodeEmitter
 Compiler ..> StackSimulator
@@ -341,11 +356,14 @@ ZetarianoCompiler --|> AbstractLanguageCompiler
 LanguageCompilerFactory ..> LanguageCompiler
 PigLatinCompiler ..> PigLatinSemanticVisitor
 PigLatinCompiler ..> PigLatinC3DVisitor
+PigLatinCompiler ..> PigLatinAstBuilder
 YCompiler ..> YSemanticVisitor
 YCompiler ..> YC3DVisitor
+YCompiler ..> YAstBuilder
 YCompiler ..> YIndentLexer
 ZetarianoCompiler ..> ZetarianoSemanticVisitor
 ZetarianoCompiler ..> ZetarianoC3DVisitor
+ZetarianoCompiler ..> ZetarianoAstBuilder
 PigLatinSemanticVisitor *-- PigLatinArrayAnalyzer
 PigLatinSemanticVisitor *-- PigLatinConditionAnalyzer
 PigLatinC3DVisitor *-- PigLatinConditionEmitter
@@ -379,6 +397,8 @@ ReturnNodeAST --|> AbstractStatementNodeAST
 BreakNodeAST --|> AbstractStatementNodeAST
 ContinueNodeAST --|> AbstractStatementNodeAST
 ExpressionStatementNodeAST --|> AbstractStatementNodeAST
+DefinitionStatementNodeAST --|> AbstractStatementNodeAST
+DefinitionStatementNodeAST o-- AbstractDefinitionNodeAST
 ImportNodeAST --|> AbstractNodeAST
 LiteralNodeAST --|> AbstractExpressionNodeAST
 IdentifierNodeAST --|> AbstractExpressionNodeAST
@@ -388,6 +408,7 @@ AssignmentExpressionNodeAST --|> AbstractExpressionNodeAST
 MemberAccessNodeAST --|> AbstractExpressionNodeAST
 IndexNodeAST --|> AbstractExpressionNodeAST
 CallNodeAST --|> AbstractExpressionNodeAST
+CallNodeAST o-- AbstractExpressionNodeAST : receptor y argumentos
 NewObjectNodeAST --|> AbstractExpressionNodeAST
 NewArrayNodeAST --|> AbstractExpressionNodeAST
 ArrayLiteralNodeAST --|> AbstractExpressionNodeAST
@@ -415,6 +436,16 @@ ReadExpressionNodeAST ..> ReadKind
 IdentifierNodeAST ..> Symbol
 ASTNode ..> ASTVisitor : accept()
 ASTDotGenerator ..> AbstractNodeAST
+package "com.compi.backend.ast.build" {
+  abstract AbstractAstBuilder {
+    +build(ParseTree, sourceFile) : ProgramNodeAST
+    #buildRule(rule, ParserRuleContext) : ASTNode
+  }
+}
+PigLatinAstBuilder --|> AbstractAstBuilder
+YAstBuilder --|> AbstractAstBuilder
+ZetarianoAstBuilder --|> AbstractAstBuilder
+AbstractAstBuilder ..> ProgramNodeAST : construye
 SymbolTable *-- Scope
 SymbolTable *-- TypeTable
 TypeTable o-- TypeEntry

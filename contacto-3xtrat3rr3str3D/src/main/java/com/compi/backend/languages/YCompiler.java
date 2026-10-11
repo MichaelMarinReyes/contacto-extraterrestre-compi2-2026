@@ -1,4 +1,6 @@
 package com.compi.backend.languages;
+import com.compi.backend.ast.stmt.ProgramNodeAST;
+import com.compi.backend.languages.y.YAstBuilder;
 
 import com.compi.YParser;
 import com.compi.backend.c3d.C3DGenerator;
@@ -15,6 +17,10 @@ import org.antlr.v4.runtime.tree.ParseTree;
 import java.util.List;
 
 public class YCompiler extends AbstractLanguageCompiler {
+    @Override
+    public ProgramNodeAST buildAst(ParseTree tree, String sourceFile) {
+        return new YAstBuilder().build(tree, sourceFile);
+    }
 
     @Override
     public String id() {

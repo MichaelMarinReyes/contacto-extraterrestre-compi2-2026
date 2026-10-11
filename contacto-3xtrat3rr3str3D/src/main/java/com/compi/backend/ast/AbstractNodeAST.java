@@ -7,6 +7,7 @@ public abstract class AbstractNodeAST implements ASTNode {
 
     private final int line;
     private final int column;
+    private String sourceFile;
 
     protected AbstractNodeAST(int line, int column) {
         this.line = line;
@@ -21,6 +22,16 @@ public abstract class AbstractNodeAST implements ASTNode {
     @Override
     public int column() {
         return column;
+    }
+
+    public String sourceFile() { return sourceFile; }
+
+    /** Asocia el archivo al árbol completo, sin conservar contextos de ANTLR. */
+    public void attachSource(String fileName) {
+        sourceFile = fileName;
+        for (ASTNode child : children()) {
+            if (child instanceof AbstractNodeAST node) node.attachSource(fileName);
+        }
     }
 
     /** Nodos hijos directos, en orden de aparicion. */

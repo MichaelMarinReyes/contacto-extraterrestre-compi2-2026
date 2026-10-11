@@ -10,10 +10,16 @@ import java.util.List;
 public class PrintNodeAST extends AbstractStatementNodeAST {
 
     private final List<AbstractExpressionNodeAST> expressions;
+    private final boolean newline;
 
     public PrintNodeAST(int line, int column, List<AbstractExpressionNodeAST> expressions) {
+        this(line, column, expressions, true);
+    }
+
+    public PrintNodeAST(int line, int column, List<AbstractExpressionNodeAST> expressions, boolean newline) {
         super(line, column);
         this.expressions = expressions;
+        this.newline = newline;
     }
 
     @Override
@@ -31,4 +37,6 @@ public class PrintNodeAST extends AbstractStatementNodeAST {
     public List<AbstractExpressionNodeAST> expressions() {
         return expressions;
     }
+
+    public boolean newline() { return newline; }
 }

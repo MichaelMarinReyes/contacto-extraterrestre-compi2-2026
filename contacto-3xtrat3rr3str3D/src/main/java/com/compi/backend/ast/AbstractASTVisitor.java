@@ -44,6 +44,10 @@ import com.compi.backend.ast.stmt.WhileNodeAST;
 
 /** Implementacion por defecto: cada visita devuelve {@code null}. */
 public abstract class AbstractASTVisitor<R> implements ASTVisitor<R> {
+    @Override
+    public R visit(com.compi.backend.ast.stmt.DefinitionStatementNodeAST node) {
+        return null;
+    }
 
     @Override
     public R visit(LiteralNodeAST node) {

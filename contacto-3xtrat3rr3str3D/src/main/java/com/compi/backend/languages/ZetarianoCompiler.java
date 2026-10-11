@@ -1,4 +1,6 @@
 package com.compi.backend.languages;
+import com.compi.backend.ast.stmt.ProgramNodeAST;
+import com.compi.backend.languages.zetariano.ZetarianoAstBuilder;
 
 import com.compi.ZetarianoLexer;
 import com.compi.ZetarianoParser;
@@ -14,6 +16,10 @@ import org.antlr.v4.runtime.CommonTokenStream;
 import org.antlr.v4.runtime.tree.ParseTree;
 
 public class ZetarianoCompiler extends AbstractLanguageCompiler {
+    @Override
+    public ProgramNodeAST buildAst(ParseTree tree, String sourceFile) {
+        return new ZetarianoAstBuilder().build(tree, sourceFile);
+    }
 
     private String sourceFileName;
 

@@ -18,7 +18,8 @@ import com.compi.backend.runtime.StackState;
 import com.compi.backend.symbols.Symbol;
 import com.compi.backend.symbols.SymbolTable;
 import com.compi.backend.symbols.TypeEntry;
-import com.compi.backend.utils.ParseTreeDotGenerator;
+import com.compi.backend.utils.ASTDotGenerator;
+import com.compi.backend.ast.stmt.ProgramNodeAST;
 import lombok.AccessLevel;
 import lombok.Getter;
 
@@ -65,6 +66,8 @@ public class Compiler {
     private boolean workingDirectoryConfigured;
 
     private List<String> importedFiles = List.of();
+    private ProgramNodeAST ast;
+    private java.util.Map<String, ProgramNodeAST> importedAsts = java.util.Map.of();
 
     public void setWorkingDirectory(File directory) {
         this.workingDirectory = directory == null ? new File(".") : directory;
@@ -125,11 +128,16 @@ public class Compiler {
         ParseTree tree = compiler.parse(this.source, errors);
         if (tree != null) {
             parseSteps.addAll(ParseTrace.build(tree, compiler.vocabulary(), compiler.ruleNames()));
-            astDot = new ParseTreeDotGenerator().build(tree, "AST_" + compiler.id());
+        }
+
+        if (tree != null && errors.isEmpty()) {
+            ast = compiler.buildAst(tree, sourceFileName);
+            astDot = new ASTDotGenerator().build(ast, "AST_" + compiler.id());
         }
 
         if (tree != null && errors.isEmpty()) {
             importedFiles = compiler.loadImports(tree, symbolTable, c3dGenerator, errors, rootFiles());
+            importedAsts = compiler.importedAsts();
         }
 
         if (tree != null && errors.isEmpty()) {
@@ -186,6 +194,8 @@ public class Compiler {
         icm.clear();
         c3dGenerator.clear();
         astDot = "";
+        ast = null;
+        importedAsts = java.util.Map.of();
         translatedCode = "";
         c3dCode = "";
         tripletsCode = "";

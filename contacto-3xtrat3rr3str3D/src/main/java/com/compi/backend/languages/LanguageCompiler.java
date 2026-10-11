@@ -3,11 +3,13 @@ package com.compi.backend.languages;
 import com.compi.backend.c3d.C3DGenerator;
 import com.compi.backend.errors.CompilationError;
 import com.compi.backend.symbols.SymbolTable;
+import com.compi.backend.ast.stmt.ProgramNodeAST;
 import org.antlr.v4.runtime.Vocabulary;
 import org.antlr.v4.runtime.tree.ParseTree;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 public interface LanguageCompiler {
     String id();
@@ -17,6 +19,12 @@ public interface LanguageCompiler {
     List<String> extensions();
 
     ParseTree parse(String source, List<CompilationError> errors);
+
+    ProgramNodeAST buildAst(ParseTree tree, String sourceFile);
+
+    default Map<String, ProgramNodeAST> importedAsts() {
+        return Map.of();
+    }
 
     default Vocabulary vocabulary() {
         return null;

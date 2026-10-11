@@ -44,6 +44,7 @@ import com.compi.backend.ast.stmt.WhileNodeAST;
 
 /** Visitante tipado del AST (doble despacho). */
 public interface ASTVisitor<R> {
+    R visit(com.compi.backend.ast.stmt.DefinitionStatementNodeAST node);
     R visit(LiteralNodeAST node);
     R visit(IdentifierNodeAST node);
     R visit(BinaryOperationNodeAST node);

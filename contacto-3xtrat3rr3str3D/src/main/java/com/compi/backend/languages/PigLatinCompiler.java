@@ -7,6 +7,8 @@ import com.compi.backend.errors.CompilationError;
 import com.compi.backend.errors.ErrorType;
 import com.compi.backend.languages.piglatin.PigLatinC3DVisitor;
 import com.compi.backend.languages.piglatin.PigLatinSemanticVisitor;
+import com.compi.backend.languages.piglatin.PigLatinAstBuilder;
+import com.compi.backend.ast.stmt.ProgramNodeAST;
 import com.compi.backend.symbols.Symbol;
 import com.compi.backend.symbols.SymbolTable;
 import org.antlr.v4.runtime.CharStreams;
@@ -19,8 +21,22 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+import java.util.LinkedHashMap;
+import java.util.Collections;
 
 public class PigLatinCompiler extends AbstractLanguageCompiler {
+    private final Map<String, ProgramNodeAST> astImports = new LinkedHashMap<>();
+
+    @Override
+    public ProgramNodeAST buildAst(ParseTree tree, String sourceFile) {
+        return new PigLatinAstBuilder().build(tree, sourceFile);
+    }
+
+    @Override
+    public Map<String, ProgramNodeAST> importedAsts() {
+        return Collections.unmodifiableMap(new LinkedHashMap<>(astImports));
+    }
 
     @Override
     public String id() {
@@ -96,6 +112,7 @@ public class PigLatinCompiler extends AbstractLanguageCompiler {
         if (!(tree instanceof PigLatinParser.InitContext init)) {
             return nuevos;
         }
+        astImports.clear();
         for (PigLatinParser.Import_declaracionContext impCtx
                 : init.pig_latin().import_declaracion()) {
             nuevos.addAll(loadImport(impCtx, symbolTable, generator, errors, cargados));
@@ -154,8 +171,10 @@ public class PigLatinCompiler extends AbstractLanguageCompiler {
         target.setSourceFileName(found.getName());
         List<CompilationError> sink = new ArrayList<>();
         ParseTree importedTree = target.parse(content, sink);
+        if (sink.isEmpty() && importedTree != null) astImports.put(key, target.buildAst(importedTree, key));
         if (sink.isEmpty()) {
             nuevos.addAll(target.loadImports(importedTree, symbolTable, generator, sink, cargados));
+            astImports.putAll(target.importedAsts());
             List<Symbol> antes = new ArrayList<>(symbolTable.getAllSymbols());
             target.analyze(importedTree, symbolTable, sink);
             markSource(symbolTable, antes, key);
