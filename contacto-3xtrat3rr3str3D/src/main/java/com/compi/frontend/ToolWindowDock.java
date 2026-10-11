@@ -11,7 +11,8 @@ public class ToolWindowDock extends JPanel {
         AST("Árbol AST", 0),
         SYMBOLS("Símbolos", 1),
         STACK("Pila", 2),
-        ERRORS("Errores", 3);
+        ERRORS("Errores", 3),
+        TYPES("Tipos", 4);
 
         private final String title;
         private final int index;
@@ -35,15 +36,22 @@ public class ToolWindowDock extends JPanel {
     private final SymbolTablePanel symbolPanel;
     private final StackVisualizerPanel stackPanel;
     private final ErrorTablePanel errorPanel;
+    private final TypeTablePanel typePanel;
 
     private int errorCount = 0;
 
     public ToolWindowDock(ParserTreePanel astPanel, SymbolTablePanel symbolPanel,
                           StackVisualizerPanel stackPanel, ErrorTablePanel errorPanel) {
+        this(astPanel, symbolPanel, stackPanel, errorPanel, new TypeTablePanel());
+    }
+
+    public ToolWindowDock(ParserTreePanel astPanel, SymbolTablePanel symbolPanel,
+                          StackVisualizerPanel stackPanel, ErrorTablePanel errorPanel, TypeTablePanel typePanel) {
         this.astPanel = astPanel;
         this.symbolPanel = symbolPanel;
         this.stackPanel = stackPanel;
         this.errorPanel = errorPanel;
+        this.typePanel = typePanel;
 
         setLayout(new BorderLayout());
         setBorder(UiTheme.hairlineLeft());
@@ -54,6 +62,7 @@ public class ToolWindowDock extends JPanel {
         tabs.addTab(View.SYMBOLS.title(), symbolPanel);
         tabs.addTab(View.STACK.title(), stackPanel);
         tabs.addTab(View.ERRORS.title(), errorPanel);
+        tabs.addTab(View.TYPES.title(), typePanel);
 
         add(tabs, BorderLayout.CENTER);
     }
@@ -92,6 +101,10 @@ public class ToolWindowDock extends JPanel {
 
     public ErrorTablePanel getErrorPanel() {
         return errorPanel;
+    }
+
+    public TypeTablePanel getTypePanel() {
+        return typePanel;
     }
 
     public void setErrorCount(int count) {

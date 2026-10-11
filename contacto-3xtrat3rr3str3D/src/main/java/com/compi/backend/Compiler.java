@@ -17,6 +17,7 @@ import com.compi.backend.runtime.StackSimulator;
 import com.compi.backend.runtime.StackState;
 import com.compi.backend.symbols.Symbol;
 import com.compi.backend.symbols.SymbolTable;
+import com.compi.backend.symbols.TypeEntry;
 import com.compi.backend.utils.ParseTreeDotGenerator;
 import lombok.AccessLevel;
 import lombok.Getter;
@@ -79,14 +80,34 @@ public class Compiler {
         this.sourceFileName = fileName;
         reset();
 
+        LanguageCompiler compiler = resolveCompiler(language);
+        if (compiler == null) {
+            return false;
+        }
+        this.language = compiler.id();
+        configureWorkingDirectory(compiler, fileName);
+
+        try {
+            runPhases(compiler);
+        } catch (Exception e) {
+            recordInternalError(e);
+        }
+
+        return errors.isEmpty();
+    }
+
+    private LanguageCompiler resolveCompiler(String language) {
         LanguageCompiler compiler = LanguageCompilerFactory.getCompiler(language);
         if (compiler == null) {
             errors.add(new CompilationError(ErrorType.SEMANTIC,
                     "Lenguaje no soportado: " + language, -1, -1));
             importedFiles = List.of();
-            return false;
+            return null;
         }
-        this.language = compiler.id();
+        return compiler;
+    }
+
+    private void configureWorkingDirectory(LanguageCompiler compiler, String fileName) {
         File sourceDirectory = workingDirectory;
         if (fileName != null && !fileName.isBlank()) {
             File sourceFile = new File(fileName);
@@ -98,66 +119,62 @@ public class Compiler {
         compiler.setProjectDirectory(workingDirectoryConfigured ? workingDirectory : sourceDirectory);
         compiler.setSourceFileName(fileName);
         importedFiles = List.of();
+    }
 
-        try {
-
-            ParseTree tree = compiler.parse(this.source, errors);
-
-            if (tree != null) {
-                parseSteps.addAll(ParseTrace.build(tree, compiler.vocabulary(),
-                        compiler.ruleNames()));
-            }
-
-            if (tree != null) {
-                astDot = new ParseTreeDotGenerator().build(tree, "AST_" + compiler.id());
-            }
-
-            if (tree != null && errors.isEmpty()) {
-                List<String> loadedFiles = new ArrayList<>();
-                if (fileName != null && !fileName.isBlank()) {
-                    File rootFile = new File(fileName);
-                    if (!rootFile.isAbsolute() && rootFile.getParent() == null) rootFile = new File(sourceDirectory, fileName);
-                    loadedFiles.add(rootFile.toPath().toAbsolutePath().normalize().toString());
-                }
-                importedFiles = compiler.loadImports(tree, symbolTable, c3dGenerator, errors, loadedFiles);
-            }
-
-            if (tree != null) {
-                if (errors.isEmpty()) {
-                    compiler.analyze(tree, symbolTable, errors);
-                }
-            }
-
-            if (tree != null) {
-                if (errors.isEmpty()) {
-                    compiler.generateIntermediate(tree, symbolTable, c3dGenerator);
-                }
-            }
-
-            List<Quadruple> quadruples = c3dGenerator.getQuadruples();
-
-            icm.loadFromQuadruples(quadruples);
-            tripletsCode = icm.getTripletsString();
-            quadruplesCode = c3dGenerator.toQuadruplesString();
-            c3dCode = c3dGenerator.toC3DString();
-
-            translatedCode = buildTranslatedCode(compiler, quadruples);
-
-            if (errors.isEmpty()) {
-                cCode = generateCCode();
-            }
-
-            stackStates.addAll(new StackSimulator().simulate(quadruples));
-
-            translatedCode = buildTranslatedCode(compiler, quadruples);
-
-        } catch (Exception e) {
-            String msg = e.getMessage() == null ? e.getClass().getSimpleName() : e.getMessage();
-            errors.add(new CompilationError(ErrorType.SEMANTIC,
-                    "Error interno de compilación: " + msg, -1, -1));
+    private void runPhases(LanguageCompiler compiler) {
+        ParseTree tree = compiler.parse(this.source, errors);
+        if (tree != null) {
+            parseSteps.addAll(ParseTrace.build(tree, compiler.vocabulary(), compiler.ruleNames()));
+            astDot = new ParseTreeDotGenerator().build(tree, "AST_" + compiler.id());
         }
 
-        return errors.isEmpty();
+        if (tree != null && errors.isEmpty()) {
+            importedFiles = compiler.loadImports(tree, symbolTable, c3dGenerator, errors, rootFiles());
+        }
+
+        if (tree != null && errors.isEmpty()) {
+            compiler.analyze(tree, symbolTable, errors);
+        }
+
+        if (tree != null && errors.isEmpty()) {
+            compiler.generateIntermediate(tree, symbolTable, c3dGenerator);
+        }
+
+        publishIntermediate(compiler);
+    }
+
+    private List<String> rootFiles() {
+        List<String> loadedFiles = new ArrayList<>();
+        if (sourceFileName != null && !sourceFileName.isBlank()) {
+            File rootFile = new File(sourceFileName);
+            if (!rootFile.isAbsolute() && rootFile.getParent() == null) {
+                rootFile = new File(workingDirectory, sourceFileName);
+            }
+            loadedFiles.add(rootFile.toPath().toAbsolutePath().normalize().toString());
+        }
+        return loadedFiles;
+    }
+
+    private void publishIntermediate(LanguageCompiler compiler) {
+        List<Quadruple> quadruples = c3dGenerator.getQuadruples();
+
+        icm.loadFromQuadruples(quadruples);
+        tripletsCode = icm.getTripletsString();
+        quadruplesCode = c3dGenerator.toQuadruplesString();
+        c3dCode = c3dGenerator.toC3DString();
+
+        stackStates.addAll(new StackSimulator().simulate(quadruples));
+        translatedCode = buildTranslatedCode(compiler, quadruples);
+
+        if (errors.isEmpty()) {
+            cCode = generateCCode();
+        }
+    }
+
+    private void recordInternalError(Exception e) {
+        String msg = e.getMessage() == null ? e.getClass().getSimpleName() : e.getMessage();
+        errors.add(new CompilationError(ErrorType.SEMANTIC,
+                "Error interno de compilación: " + msg, -1, -1));
     }
 
     private void reset() {
@@ -227,6 +244,10 @@ public class Compiler {
 
     public List<Symbol> getSymbols() {
         return symbolTable.getAllSymbols();
+    }
+
+    public List<TypeEntry> getTypes() {
+        return symbolTable.getTypeEntries();
     }
 
     public List<Quadruple> getQuadrupleList() {

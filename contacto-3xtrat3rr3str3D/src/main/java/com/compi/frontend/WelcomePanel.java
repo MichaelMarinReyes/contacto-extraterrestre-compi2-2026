@@ -27,7 +27,10 @@ public class WelcomePanel extends JPanel {
         this.onOpenFile = onOpenFile;
         this.onOpenProject = onOpenProject;
         this.onCompile = onCompile;
+        initContent();
+    }
 
+    private void initContent() {
         setLayout(new java.awt.GridBagLayout());
         setBackground(UiTheme.editorBg());
         setBorder(BorderFactory.createEmptyBorder(40, 40, 40, 40));
@@ -54,11 +57,24 @@ public class WelcomePanel extends JPanel {
         actions.add(actionButton("Abrir proyecto", IdeIcons.folder(), onOpenProject));
         actions.add(actionButton("Compilar", IdeIcons.compile(), onCompile));
 
+        JPanel hint = createShortcutHint();
+
+        box.add(title);
+        box.add(Box.createVerticalStrut(6));
+        box.add(subtitle);
+        box.add(Box.createVerticalStrut(26));
+        box.add(actions);
+        box.add(Box.createVerticalStrut(34));
+        box.add(hint);
+        add(box);
+    }
+
+    private JPanel createShortcutHint() {
         JLabel shortcuts = new JLabel("<html><div style='text-align:center'>"
                 + "<b>Atajos</b><br/>"
                 + "Ctrl+N nuevo &middot; Ctrl+O abrir &middot; Ctrl+S guardar &middot; Ctrl+B compilar<br/>"
                 + "Ctrl+W cerrar pestana &middot; Ctrl+1 AST &middot; Ctrl+2 S&iacute;mbolos "
-                + "&middot; Ctrl+3 Pila &middot; Ctrl+4 Errores"
+                + "&middot; Ctrl+3 Pila &middot; Ctrl+4 Errores &middot; Ctrl+5 Tipos"
                 + "</div></html>", JLabel.CENTER);
         shortcuts.setFont(UiTheme.sans(12));
         shortcuts.setForeground(UiTheme.dim());
@@ -69,15 +85,7 @@ public class WelcomePanel extends JPanel {
         hint.setLayout(new BoxLayout(hint, BoxLayout.Y_AXIS));
         hint.add(shortcuts);
 
-        box.add(title);
-        box.add(Box.createVerticalStrut(6));
-        box.add(subtitle);
-        box.add(Box.createVerticalStrut(26));
-        box.add(actions);
-        box.add(Box.createVerticalStrut(34));
-        box.add(hint);
-
-        add(box);
+        return hint;
     }
 
     private JButton actionButton(String text, javax.swing.Icon icon, Runnable action) {

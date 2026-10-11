@@ -182,7 +182,12 @@ public class TreeCanvas extends JComponent implements Scrollable {
 
         g2.scale(zoom, zoom);
         hitAreas.clear();
+        drawEdges(g2);
+        drawNodes(g2);
+        g2.dispose();
+    }
 
+    private void drawEdges(Graphics2D g2) {
         g2.setColor(UiTheme.separator().brighter());
         g2.setStroke(new BasicStroke(1.4f));
         for (String[] edge : model.edges()) {
@@ -202,7 +207,9 @@ public class TreeCanvas extends JComponent implements Scrollable {
             g2.draw(new Line2D.Double(x1, midY, x2, midY));
             g2.draw(new Line2D.Double(x2, midY, x2, y2));
         }
+    }
 
+    private void drawNodes(Graphics2D g2) {
         Font font = getFont();
         g2.setFont(font);
         FontMetrics fm = g2.getFontMetrics(font);
@@ -237,7 +244,6 @@ public class TreeCanvas extends JComponent implements Scrollable {
 
             hitAreas.put(id, new Rectangle2D.Double(pos[0], pos[1], size.width, size.height));
         }
-        g2.dispose();
     }
 
     private static String fit(String text, FontMetrics fm, int maxWidth) {

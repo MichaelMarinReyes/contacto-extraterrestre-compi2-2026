@@ -118,40 +118,43 @@ public class YSemanticVisitor extends YBaseVisitor<Type> {
 
         symbolTable.enterScope("func_" + funcName, 0, ctx);
 
-        if (ctx.parametros() != null) {
-            for (YParser.ParametroContext paramCtx : ctx.parametros().parametro()) {
-                String paramName = paramCtx.ID().getText();
-                Type paramType = resolveType(paramCtx.tipo_dato().getText());
-                boolean isByRef = false;
-
-                if (!isTypeDefined(paramCtx.tipo_dato().getText())) {
-                    errors.add(Diagnostic.undefinedType(
-                            paramCtx.tipo_dato().getText(), paramCtx));
-                }
-
-                if (paramCtx.CORCHETE_IZQ() != null) {
-                    paramType = Type.array(paramType, 1);
-                    isByRef = true;
-                }
-                if (paramCtx.LLAVE_IZQ() != null) {
-                    paramType = Type.structType(paramCtx.tipo_dato().getText());
-                    isByRef = true;
-                }
-
-                int offset = symbolTable.getCurrentScope().allocateOffset(1);
-                Symbol paramSymbol = funcSymbol.getParameters().stream()
-                        .filter(parameter -> parameter.getName().equals(paramName)).findFirst().orElseThrow();
-
-                if (!symbolTable.define(paramSymbol)) {
-                    errors.add(Diagnostic.duplicateParameter(paramName, paramCtx));
-                }
-            }
-        }
+        registerParameters(ctx, funcSymbol);
 
         visit(ctx.bloque());
 
         symbolTable.exitScope();
         return Type.VOID;
+    }
+
+    private void registerParameters(YParser.Funcion_defContext ctx, Symbol funcSymbol) {
+        if (ctx.parametros() == null) {
+            return;
+        }
+        for (YParser.ParametroContext paramCtx : ctx.parametros().parametro()) {
+            String paramName = paramCtx.ID().getText();
+            Type paramType = resolveType(paramCtx.tipo_dato().getText());
+
+            if (!isTypeDefined(paramCtx.tipo_dato().getText())) {
+                errors.add(Diagnostic.undefinedType(
+                        paramCtx.tipo_dato().getText(), paramCtx));
+            }
+
+            if (paramCtx.CORCHETE_IZQ() != null) {
+                paramType = Type.array(paramType, 1);
+            }
+            if (paramCtx.LLAVE_IZQ() != null) {
+                paramType = Type.structType(paramCtx.tipo_dato().getText());
+            }
+
+            symbolTable.getCurrentScope().allocateOffset(1);
+            Symbol paramSymbol = funcSymbol.getParameters().stream()
+                    .filter(parameter -> parameter.getName().equals(paramName))
+                    .findFirst().orElseThrow();
+
+            if (!symbolTable.define(paramSymbol)) {
+                errors.add(Diagnostic.duplicateParameter(paramName, paramCtx));
+            }
+        }
     }
 
     @Override
@@ -417,33 +420,45 @@ public class YSemanticVisitor extends YBaseVisitor<Type> {
             ParseTree child = ctx.getChild(i);
             if (child.getText().equals(".")) {
                 String memberName = ctx.getChild(++i).getText();
-                if (!currentType.isStruct()) {
-                    return Type.UNKNOWN;
-                }
-                Symbol structDef = symbolTable.getStruct(currentType.getCustomTypeName());
-                if (structDef == null) {
-                    continue;
-                }
-                Symbol member = structDef.getMember(memberName);
-                if (member == null) {
-                    errors.add(Diagnostic.memberDoesNotExist(memberName,
-                            currentType.getCustomTypeName(), ctx));
-                    return Type.UNKNOWN;
-                }
-                currentType = member.getType();
+                currentType = appendMember(ctx, baseName, memberName, currentType);
             } else if (child instanceof YParser.ExpresionContext) {
-                Type indexType = visit(child);
-                if (Type.isKnown(indexType) && !Type.INT.equals(indexType))
-                    CallValidator.report("El índice de «" + baseName + "» debe ser entero", (YParser.ExpresionContext) child, errors);
-                if (!currentType.isArray()) {
-                    errors.add(Diagnostic.notAnArray(baseName, currentType, ctx));
-                    return Type.UNKNOWN;
-                }
-                checkIndex(child, currentType, baseName);
-                currentType = currentType.desindexar(1);
+                currentType = appendIndex(ctx, baseName, (YParser.ExpresionContext) child, currentType);
             }
         }
         return currentType;
+    }
+
+    private Type appendMember(YParser.Acceso_miembroContext ctx, String baseName,
+                              String memberName, Type currentType) {
+        if (!currentType.isStruct()) {
+            return Type.UNKNOWN;
+        }
+        Symbol structDef = symbolTable.getStruct(currentType.getCustomTypeName());
+        if (structDef == null) {
+            return currentType;
+        }
+        Symbol member = structDef.getMember(memberName);
+        if (member == null) {
+            errors.add(Diagnostic.memberDoesNotExist(memberName,
+                    currentType.getCustomTypeName(), ctx));
+            return Type.UNKNOWN;
+        }
+        return member.getType();
+    }
+
+    private Type appendIndex(YParser.Acceso_miembroContext ctx, String baseName,
+                             YParser.ExpresionContext index, Type currentType) {
+        Type indexType = visit(index);
+        if (Type.isKnown(indexType) && !Type.INT.equals(indexType)) {
+            CallValidator.report("El índice de «" + baseName + "» debe ser entero",
+                    index, errors);
+        }
+        if (!currentType.isArray()) {
+            errors.add(Diagnostic.notAnArray(baseName, currentType, ctx));
+            return Type.UNKNOWN;
+        }
+        checkIndex(index, currentType, baseName);
+        return currentType.desindexar(1);
     }
 
     private void checkIndex(ParseTree index, Type array, String name) {

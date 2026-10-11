@@ -494,34 +494,35 @@ public class ZetarianoSemanticVisitor extends ZetarianoBaseVisitor<Type> {
             return Type.UNKNOWN;
         }
 
-        for (ZetarianoParser.MiembroAccesoContext mac : ctx.miembroAcceso()) {
-            if (mac.DOT() != null) {
-                String memberName = mac.ID().getText();
-                if (current.isClass()) {
-                    Symbol cls = symbolTable.getClass(current.getCustomTypeName());
-                    if (cls != null) {
-                        Symbol member = cls.getMember(memberName);
-                        if (member != null) {
+        return resolveChain(ctx, baseName, current);
+    }
 
-                            current = member.getType();
-                        } else {
-                            return Type.UNKNOWN;
-                        }
-                    } else return Type.UNKNOWN;
+    private Type resolveChain(ZetarianoParser.AccesoMiembroContext ctx,
+                              String baseName, Type current) {
+        for (ZetarianoParser.MiembroAccesoContext mac : ctx.miembroAcceso()) {
+            if (mac.DOT() != null && current.isClass()) {
+                Symbol cls = symbolTable.getClass(current.getCustomTypeName());
+                if (cls == null) {
+                    return Type.UNKNOWN;
                 }
+                Symbol member = cls.getMember(mac.ID().getText());
+                if (member == null) {
+                    return Type.UNKNOWN;
+                }
+                current = member.getType();
             }
-            {
-                for (ZetarianoParser.ExpresionContext index : mac.expresion()) {
-                    Type indexType = visit(index);
-                    if (Type.isKnown(indexType) && !Type.INT.equals(indexType))
-                        CallValidator.report("El índice de «" + baseName + "» debe ser entero", index, errors);
-                    if (!current.isArray()) {
-                        errors.add(Diagnostic.notAnArray(baseName, current, ctx));
-                        return Type.UNKNOWN;
-                    }
-                    checkIndex(index, current, baseName);
-                    current = current.desindexar(1);
+            for (ZetarianoParser.ExpresionContext index : mac.expresion()) {
+                Type indexType = visit(index);
+                if (Type.isKnown(indexType) && !Type.INT.equals(indexType)) {
+                    CallValidator.report("El índice de «" + baseName
+                            + "» debe ser entero", index, errors);
                 }
+                if (!current.isArray()) {
+                    errors.add(Diagnostic.notAnArray(baseName, current, ctx));
+                    return Type.UNKNOWN;
+                }
+                checkIndex(index, current, baseName);
+                current = current.desindexar(1);
             }
         }
         return current;

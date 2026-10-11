@@ -61,7 +61,17 @@ public class SymbolTablePanel extends javax.swing.JPanel {
 
     private void initTableComponents() {
         this.setLayout(new BorderLayout());
+        initSymbolTable();
+        initTableListeners();
+        initTableContent();
+        initDetailsArea();
+        initFilterBar();
+        add(filterBar, BorderLayout.NORTH);
+        add(content, BorderLayout.CENTER);
+        add(detailsArea, BorderLayout.SOUTH);
+    }
 
+    private void initSymbolTable() {
         tableModel = new DefaultTableModel(
                 new Object[]{"Línea", "Col", "Símbolo", "Tipo", "Categoría", "Ámbito",
                         "Lenguaje", "Offset"}, 0) {
@@ -93,7 +103,9 @@ public class SymbolTablePanel extends javax.swing.JPanel {
         rightAlign(0);
         rightAlign(1);
         rightAlign(7);
+    }
 
+    private void initTableListeners() {
         table.getSelectionModel().addListSelectionListener(e -> {
             if (!e.getValueIsAdjusting()) {
                 showDetails();
@@ -111,7 +123,9 @@ public class SymbolTablePanel extends javax.swing.JPanel {
                 }
             }
         });
+    }
 
+    private void initTableContent() {
         JScrollPane scroll = new JScrollPane(table);
         scroll.setBorder(javax.swing.BorderFactory.createEmptyBorder());
         scroll.getVerticalScrollBar().setUnitIncrement(24);
@@ -126,7 +140,9 @@ public class SymbolTablePanel extends javax.swing.JPanel {
         content.add(scroll, CARD_TABLE);
         content.add(emptyMessageLabel, CARD_EMPTY);
         cards.show(content, CARD_EMPTY);
+    }
 
+    private void initDetailsArea() {
         detailsArea = new JTextArea();
         detailsArea.setEditable(false);
         detailsArea.setLineWrap(true);
@@ -136,16 +152,15 @@ public class SymbolTablePanel extends javax.swing.JPanel {
         detailsArea.setForeground(UiTheme.fg());
         detailsArea.setBorder(UiTheme.pad(6, 8, 6, 8));
         detailsArea.setVisible(false);
+    }
 
+    private void initFilterBar() {
         filterBar = new TableFilterBar("Filtrar símbolos");
         filterBar.setBorder(UiTheme.pad(6, 8, 6, 8));
         filterBar.setOnFilterChanged(this::applyFilter);
 
         filterBar.setVisible(false);
 
-        add(filterBar, BorderLayout.NORTH);
-        add(content, BorderLayout.CENTER);
-        add(detailsArea, BorderLayout.SOUTH);
     }
 
     private void rightAlign(int index) {

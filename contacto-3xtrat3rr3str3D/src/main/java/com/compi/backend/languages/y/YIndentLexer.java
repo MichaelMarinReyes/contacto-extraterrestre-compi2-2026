@@ -24,61 +24,80 @@ public class YIndentLexer extends YLexer {
 
     @Override
     public Token nextToken() {
-        if (!pendingTokens.isEmpty()) {
-            Token t = pendingTokens.poll();
-            lastToken = t;
-            return t;
+        Token pending = nextPending();
+        if (pending != null) {
+            return pending;
         }
 
         Token token = super.nextToken();
 
         if (token.getType() == Token.EOF) {
-            while (indentStack.size() > 1) {
-                indentStack.pop();
-                pendingTokens.add(createToken(com.compi.YParser.DEDENT, ""));
-            }
-            if (!pendingTokens.isEmpty()) {
-                pendingTokens.add(token);
-                Token t = pendingTokens.poll();
-                lastToken = t;
-                return t;
-            }
-            lastToken = token;
-            return token;
+            return handleEof(token);
         }
 
         if (token.getType() == YLexer.NUEVA_LINEA) {
-            if (bracketLevel == 0 && !emptyOrCommentLine()) {
-                int spaces = calculateIndent(token.getText());
-
-                int currentIndent = indentStack.peek();
-                if (spaces > currentIndent) {
-                    indentStack.push(spaces);
-                    pendingTokens.add(createToken(com.compi.YParser.INDENT, ""));
-                } else if (spaces < currentIndent) {
-                    while (!indentStack.isEmpty() && indentStack.peek() > spaces) {
-                        indentStack.pop();
-                        pendingTokens.add(createToken(com.compi.YParser.DEDENT, ""));
-                    }
-                }
-            }
-
-            lastToken = token;
-            return token;
+            return handleNewLine(token);
         }
 
-        if (token.getType() == YLexer.LLAVE_IZQ || token.getType() == YLexer.CORCHETE_IZQ
-                || token.getType() == YLexer.PARENTESIS_IZQ) {
+        trackBrackets(token);
+        lastToken = token;
+        return token;
+    }
+
+    private Token nextPending() {
+        if (pendingTokens.isEmpty()) {
+            return null;
+        }
+        Token token = pendingTokens.poll();
+        lastToken = token;
+        return token;
+    }
+
+    private Token handleEof(Token eof) {
+        while (indentStack.size() > 1) {
+            indentStack.pop();
+            pendingTokens.add(createToken(com.compi.YParser.DEDENT, ""));
+        }
+        if (!pendingTokens.isEmpty()) {
+            pendingTokens.add(eof);
+            return nextPending();
+        }
+        lastToken = eof;
+        return eof;
+    }
+
+    private Token handleNewLine(Token token) {
+        if (bracketLevel == 0 && !emptyOrCommentLine()) {
+            adjustIndent(calculateIndent(token.getText()));
+        }
+        lastToken = token;
+        return token;
+    }
+
+    private void adjustIndent(int spaces) {
+        int currentIndent = indentStack.peek();
+        if (spaces > currentIndent) {
+            indentStack.push(spaces);
+            pendingTokens.add(createToken(com.compi.YParser.INDENT, ""));
+        } else if (spaces < currentIndent) {
+            while (!indentStack.isEmpty() && indentStack.peek() > spaces) {
+                indentStack.pop();
+                pendingTokens.add(createToken(com.compi.YParser.DEDENT, ""));
+            }
+        }
+    }
+
+    private void trackBrackets(Token token) {
+        int type = token.getType();
+        if (type == YLexer.LLAVE_IZQ || type == YLexer.CORCHETE_IZQ
+                || type == YLexer.PARENTESIS_IZQ) {
             bracketLevel++;
-        } else if (token.getType() == YLexer.LLAVE_DER || token.getType() == YLexer.CORCHETE_DER
-                || token.getType() == YLexer.PARENTESIS_DER) {
+        } else if (type == YLexer.LLAVE_DER || type == YLexer.CORCHETE_DER
+                || type == YLexer.PARENTESIS_DER) {
             if (bracketLevel > 0) {
                 bracketLevel--;
             }
         }
-
-        lastToken = token;
-        return token;
     }
 
     private boolean emptyOrCommentLine() {

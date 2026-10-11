@@ -40,7 +40,12 @@ public class TabHeader extends JPanel {
         nameLabel.setForeground(UiTheme.fg());
         nameLabel.setVerticalAlignment(SwingConstants.CENTER);
         add(nameLabel, BorderLayout.CENTER);
+        initCloseButton();
+        initTrailingPanel();
+        setDirty(editor.isModified());
+    }
 
+    private void initCloseButton() {
         dirtyLabel.setPreferredSize(new Dimension(8, 8));
         dirtyLabel.setBorder(BorderFactory.createEmptyBorder(0, 0, 0, 2));
         dirtyLabel.setVisible(false);
@@ -82,14 +87,15 @@ public class TabHeader extends JPanel {
             }
         });
         closeButton.setForeground(UiTheme.dim());
+    }
 
+    private void initTrailingPanel() {
         JPanel right = new JPanel(new BorderLayout(2, 0));
         right.setOpaque(false);
         right.add(dirtyLabel, BorderLayout.WEST);
         right.add(closeButton, BorderLayout.EAST);
         add(right, BorderLayout.EAST);
 
-        setDirty(editor.isModified());
     }
 
     private void fireClose(MouseEvent e) {

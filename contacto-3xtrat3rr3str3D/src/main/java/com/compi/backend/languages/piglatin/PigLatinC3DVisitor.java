@@ -22,10 +22,14 @@ public class PigLatinC3DVisitor extends PigLatinBaseVisitor<String> {
     private final C3DGenerator c3d;
     private final Deque<String> loopExit = new ArrayDeque<>();
     private final Deque<String> loopContinue = new ArrayDeque<>();
+    private final PigLatinConditionEmitter conditions;
+    private final PigLatinObjectEmitter objects;
 
     public PigLatinC3DVisitor(SymbolTable symbolTable, C3DGenerator c3d) {
         this.symbolTable = symbolTable;
         this.c3d = c3d;
+        this.conditions = new PigLatinConditionEmitter(c3d);
+        this.objects = new PigLatinObjectEmitter(symbolTable, c3d);
     }
 
     @Override
@@ -46,12 +50,12 @@ public class PigLatinC3DVisitor extends PigLatinBaseVisitor<String> {
         }
         Symbol target = symbolTable.resolve(ctx.VARIABLE(0).getText());
         if (ctx.NOVUS() != null) {
-            c3d.emitAssign(target.getStorageName(), newObject(ctx.VARIABLE(1).getText(), ctx.argumentos()));
+            c3d.emitAssign(target.getStorageName(), objects.newObject(this, ctx.VARIABLE(1).getText(), ctx.argumentos()));
             return null;
         }
         if (ctx.structura_instanciacion() != null) {
             Symbol definition = HeapRuntime.definition(symbolTable, target.getType());
-            c3d.emitAssign(target.getStorageName(), initializeStruct(definition, ctx.structura_instanciacion()));
+            c3d.emitAssign(target.getStorageName(), objects.initializeStruct(this, definition, ctx.structura_instanciacion()));
             return null;
         }
 
@@ -63,7 +67,7 @@ public class PigLatinC3DVisitor extends PigLatinBaseVisitor<String> {
         }
 
         if (!ctx.VARIABLE().isEmpty() && ctx.condicion() != null) {
-            c3d.emitAssign(target.getStorageName(), valorBooleano(ctx.condicion()));
+            c3d.emitAssign(target.getStorageName(), conditions.booleanValue(this, ctx.condicion()));
         }
 
         if (!ctx.VARIABLE().isEmpty() && ctx.CADENA_TEXTO() != null) {
@@ -113,14 +117,14 @@ public class PigLatinC3DVisitor extends PigLatinBaseVisitor<String> {
     public String visitAsignacion_sentencia(PigLatinParser.Asignacion_sentenciaContext ctx) {
         if (ctx.NOVUS() != null) {
             Symbol target = symbolTable.resolve(ctx.VARIABLE(0).getText());
-            c3d.emitAssign(target.getStorageName(), newObject(ctx.VARIABLE(1).getText(), ctx.argumentos()));
+            c3d.emitAssign(target.getStorageName(), objects.newObject(this, ctx.VARIABLE(1).getText(), ctx.argumentos()));
             return null;
         }
         if (ctx.acceso_miembro() != null) {
             if (ctx.expresion() != null) {
-                writeElement(ctx.acceso_miembro(), visit(ctx.expresion()));
+                objects.writeElement(this, ctx.acceso_miembro(), visit(ctx.expresion()));
             } else if (ctx.condicion() != null) {
-                writeElement(ctx.acceso_miembro(), valorBooleano(ctx.condicion()));
+                objects.writeElement(this, ctx.acceso_miembro(), conditions.booleanValue(this, ctx.condicion()));
             }
             return null;
         }
@@ -129,7 +133,7 @@ public class PigLatinC3DVisitor extends PigLatinBaseVisitor<String> {
             Symbol s = symbolTable.resolve(varName);
             String val = ctx.expresion() != null
                     ? visit(ctx.expresion())
-                    : valorBooleano(ctx.condicion());
+                    : conditions.booleanValue(this, ctx.condicion());
             if (s != null) {
                 c3d.emitAssign(s.getStorageName(), val);
             }
@@ -140,150 +144,10 @@ public class PigLatinC3DVisitor extends PigLatinBaseVisitor<String> {
     @Override
     public String visitSi_sentencia(PigLatinParser.Si_sentenciaContext ctx) {
         String fin = c3d.newLabel();
-        emitStringIf(ctx, fin);
+        conditions.emitStringIf(this, ctx, fin);
         c3d.emitLabel(fin);
         return null;
     }
-
-    private void emitStringIf(PigLatinParser.Si_sentenciaContext ctx, String fin) {
-        String trueValue = c3d.newLabel();
-        String falseValue = c3d.newLabel();
-        emitConditionalJump(ctx.condicion(), trueValue, falseValue);
-
-        c3d.emitLabel(trueValue);
-        visitStatements(sentenciasDelSi(ctx));
-        c3d.emitGoto(fin);
-
-        c3d.emitLabel(falseValue);
-        List<PigLatinParser.Aliter_bloqueContext> aliteres = ctx.aliter_bloque();
-        for (PigLatinParser.Aliter_bloqueContext branch : aliteres) emitBranchWithCondition(branch, fin);
-        visitStatements(sentenciasDelAliterFinal(ctx));
-    }
-
-    private void emitBranchWithCondition(PigLatinParser.Aliter_bloqueContext aliter, String fin) {
-        String trueValue = c3d.newLabel();
-        String falseValue = c3d.newLabel();
-        emitConditionalJump(aliter.condicion(), trueValue, falseValue);
-
-        c3d.emitLabel(trueValue);
-        visitStatements(aliter.sentencia());
-        c3d.emitGoto(fin);
-
-        c3d.emitLabel(falseValue);
-    }
-
-    private void emitConditionalJump(PigLatinParser.CondicionContext condition,
-                                        String trueValue, String falseValue) {
-        if (condition.condicion() != null) {
-            String next = c3d.newLabel();
-            emitConditionalJump(condition.condicion(), trueValue, next);
-            c3d.emitLabel(next);
-            emitShortCircuitJump(condition.conjuncion(), trueValue, falseValue);
-            return;
-        }
-        emitShortCircuitJump(condition.conjuncion(), trueValue, falseValue);
-    }
-
-    private void emitShortCircuitJump(PigLatinParser.ConjuncionContext conjunction,
-                                         String trueValue, String falseValue) {
-        if (conjunction.conjuncion() != null) {
-            String next = c3d.newLabel();
-            emitShortCircuitJump(conjunction.conjuncion(), next, falseValue);
-            c3d.emitLabel(next);
-            emitNegationJump(conjunction.negacion_logica(), trueValue, falseValue);
-            return;
-        }
-        emitNegationJump(conjunction.negacion_logica(), trueValue, falseValue);
-    }
-
-    private void emitNegationJump(PigLatinParser.Negacion_logicaContext negation,
-                                       String trueValue, String falseValue) {
-        if (negation.NEGACION() != null) {
-            emitNegationJump(negation.negacion_logica(), falseValue, trueValue);
-            return;
-        }
-        emitPrimaryJump(negation.primaria_logica(), trueValue, falseValue);
-    }
-
-    private void emitPrimaryJump(PigLatinParser.Primaria_logicaContext primary,
-                                       String trueValue, String falseValue) {
-        if (primary.PARENTESIS_IZQ() != null) {
-            emitConditionalJump(primary.condicion(), trueValue, falseValue);
-            return;
-        }
-        if (primary.expresion().size() == 2 && primary.operador_relacional() != null) {
-            c3d.emit(relacionalDe(primary.operador_relacional().getText()),
-                    visit(primary.expresion(0)), visit(primary.expresion(1)), trueValue);
-        } else {
-            c3d.emit(QuadrupleOp.IF_TRUE, visit(primary), null, trueValue);
-        }
-        if (falseValue != null) {
-            c3d.emitGoto(falseValue);
-        }
-    }
-
-    private String valorBooleano(PigLatinParser.CondicionContext condition) {
-        String temp = c3d.newTemp();
-        String trueValue = c3d.newLabel();
-        String falseValue = c3d.newLabel();
-        String fin = c3d.newLabel();
-        emitConditionalJump(condition, trueValue, falseValue);
-        c3d.emitLabel(trueValue);
-        c3d.emitAssign(temp, "1");
-        c3d.emitGoto(fin);
-        c3d.emitLabel(falseValue);
-        c3d.emitAssign(temp, "0");
-        c3d.emitLabel(fin);
-        return temp;
-    }
-
-    private QuadrupleOp relacionalDe(String operator) {
-        return switch (operator) {
-            case "==" -> QuadrupleOp.IF_EQ;
-            case "!=" -> QuadrupleOp.IF_NE;
-            case "<" -> QuadrupleOp.IF_LT;
-            case "<=" -> QuadrupleOp.IF_LE;
-            case ">" -> QuadrupleOp.IF_GT;
-            case ">=" -> QuadrupleOp.IF_GE;
-            default -> QuadrupleOp.IF_EQ;
-        };
-    }
-
-    private void visitStatements(List<PigLatinParser.SentenciaContext> sentencias) {
-        for (PigLatinParser.SentenciaContext s : sentencias) {
-            visit(s);
-        }
-    }
-
-    private List<PigLatinParser.SentenciaContext> sentenciasDelSi(
-            PigLatinParser.Si_sentenciaContext ctx) {
-        List<PigLatinParser.SentenciaContext> propias = new ArrayList<>();
-        for (int i = 0; i < ctx.getChildCount(); i++) {
-            ParseTree child = ctx.getChild(i);
-            if (child instanceof PigLatinParser.Aliter_bloqueContext || "aliter".equals(child.getText())) {
-                break;
-            }
-            if (child instanceof PigLatinParser.SentenciaContext s) {
-                propias.add(s);
-            }
-        }
-        return propias;
-    }
-
-    private List<PigLatinParser.SentenciaContext> sentenciasDelAliterFinal(
-            PigLatinParser.Si_sentenciaContext ctx) {
-        List<PigLatinParser.SentenciaContext> propias = new ArrayList<>();
-        boolean afterElif = false;
-        for (int i = 0; i < ctx.getChildCount(); i++) {
-            ParseTree child = ctx.getChild(i);
-            if ("aliter".equals(child.getText())) afterElif = true;
-            if (afterElif && child instanceof PigLatinParser.SentenciaContext s) {
-                propias.add(s);
-            }
-        }
-        return propias;
-    }
-
 
     @Override
     public String visitCiclo_dum(PigLatinParser.Ciclo_dumContext ctx) {
@@ -292,12 +156,12 @@ public class PigLatinC3DVisitor extends PigLatinBaseVisitor<String> {
         String fin = c3d.newLabel();
 
         c3d.emitLabel(test);
-        emitConditionalJump(ctx.condicion(), body, fin);
+        conditions.emitConditionalJump(this, ctx.condicion(), body, fin);
 
         c3d.emitLabel(body);
         loopExit.push(fin);
         loopContinue.push(test);
-        visitStatements(ctx.sentencia());
+        conditions.visitStatements(this, ctx.sentencia());
         loopExit.pop();
         loopContinue.pop();
         c3d.emitGoto(test);
@@ -315,12 +179,12 @@ public class PigLatinC3DVisitor extends PigLatinBaseVisitor<String> {
         c3d.emitLabel(body);
         loopExit.push(fin);
         loopContinue.push(test);
-        visitStatements(ctx.sentencia());
+        conditions.visitStatements(this, ctx.sentencia());
         loopExit.pop();
         loopContinue.pop();
 
         c3d.emitLabel(test);
-        emitConditionalJump(ctx.condicion(), body, fin);
+        conditions.emitConditionalJump(this, ctx.condicion(), body, fin);
 
         c3d.emitLabel(fin);
         return null;
@@ -338,12 +202,12 @@ public class PigLatinC3DVisitor extends PigLatinBaseVisitor<String> {
             visit(ctx.inicializacion_per());
         }
         c3d.emitLabel(test);
-        emitConditionalJump(ctx.condiciones_per().condicion(), body, fin);
+        conditions.emitConditionalJump(this, ctx.condiciones_per().condicion(), body, fin);
 
         c3d.emitLabel(body);
         loopExit.push(fin);
         loopContinue.push(step);
-        visitStatements(ctx.sentencia());
+        conditions.visitStatements(this, ctx.sentencia());
         loopExit.pop();
         loopContinue.pop();
 
@@ -420,7 +284,7 @@ public class PigLatinC3DVisitor extends PigLatinBaseVisitor<String> {
 
     @Override
     public String visitCondicion(PigLatinParser.CondicionContext ctx) {
-        return valorBooleano(ctx);
+        return conditions.booleanValue(this, ctx);
     }
 
     @Override
@@ -452,7 +316,7 @@ public class PigLatinC3DVisitor extends PigLatinBaseVisitor<String> {
             String left = visit(ctx.expresion(0));
             String right = visit(ctx.expresion(1));
             String symbol = ctx.operador_relacional().getText();
-            QuadrupleOp op = relacionalDe(symbol);
+            QuadrupleOp op = conditions.relationalOp(symbol);
             String temp = c3d.newTemp();
             c3d.emit(op, left, right, temp);
             return temp;
@@ -524,7 +388,7 @@ public class PigLatinC3DVisitor extends PigLatinBaseVisitor<String> {
 
     @Override
     public String visitTermino(PigLatinParser.TerminoContext ctx) {
-        if (ctx.NOVUS() != null) return newObject(ctx.VARIABLE().getText(), ctx.argumentos());
+        if (ctx.NOVUS() != null) return objects.newObject(this, ctx.VARIABLE().getText(), ctx.argumentos());
         if (ctx.expresion() != null) return visit(ctx.expresion());
         if (ctx.NUMERO_ENTERO() != null) return ctx.NUMERO_ENTERO().getText();
         if (ctx.NUMERO_DECIMAL() != null) return ctx.NUMERO_DECIMAL().getText();
@@ -545,7 +409,7 @@ public class PigLatinC3DVisitor extends PigLatinBaseVisitor<String> {
         }
 
         if (ctx.acceso_miembro() != null) {
-            String element = readElement(ctx.acceso_miembro());
+            String element = objects.readElement(this, ctx.acceso_miembro());
             return element != null ? element : ctx.acceso_miembro().VARIABLE(0).getText();
         }
 
@@ -564,62 +428,8 @@ public class PigLatinC3DVisitor extends PigLatinBaseVisitor<String> {
 
     @Override
     public String visitArreglo_declaracion(PigLatinParser.Arreglo_declaracionContext ctx) {
-        Symbol s = symbolTable.resolve(ctx.VARIABLE(0).getText());
-        if (s == null || s.getType() == null || !s.getType().isArray()) {
-            return null;
-        }
-        Type type = s.getType();
-        if (type.totalSize() <= 0) {
-            return null;
-        }
-        if (ctx.elemento_arreglo() != null) {
-            int[] sizes = type.getSizes();
-            String base = ArrayRuntime.allocateArray(c3d, type.getSizes());
-            c3d.emitAssign(s.getStorageName(), base);
-            fill(base, ctx.elemento_arreglo(), sizes, new int[sizes.length], 0);
-        } else {
-            String base = ArrayRuntime.allocateArray(c3d, type.getSizes());
-            c3d.emitAssign(s.getStorageName(), base);
-            if (ctx.elemento_arreglo_struct() != null) {
-                int index = 0;
-                Symbol definition = HeapRuntime.definition(symbolTable, type.getElementType());
-                for (var initializer : ctx.elemento_arreglo_struct().structura_instanciacion()) {
-                    c3d.emit(QuadrupleOp.HEAP_SET, ArrayRuntime.add(c3d, base, index++), initializeStruct(definition, initializer), null);
-                }
-            }
-        }
+        objects.emitInitializer(this, ctx);
         return null;
-    }
-
-    private void fill(String name, PigLatinParser.Elemento_arregloContext ctx, int[] sizes,
-                        int[] indices, int dimension) {
-        List<PigLatinParser.Elemento_arreglo_valorContext> valores = ctx.elemento_arreglo_valor();
-        for (int i = 0; i < valores.size(); i++) {
-            PigLatinParser.Elemento_arreglo_valorContext valor = valores.get(i);
-            if (dimension >= indices.length) {
-                break;
-            }
-            indices[dimension] = i;
-            if (valor.LLAVE_IZQ() != null) {
-                if (valor.elemento_arreglo() != null) {
-                    fill(name, valor.elemento_arreglo(), sizes, indices, dimension + 1);
-                }
-            } else {
-                String data = visit(valor.expresion());
-                ArrayRuntime.writeConstant(c3d, name, indices, sizes, data);
-            }
-        }
-    }
-
-    private String readElement(PigLatinParser.Acceso_miembroContext ctx) {
-        String address = accessAddress(ctx, ctx.getChildCount());
-        Type type = new PigLatinSemanticVisitor(symbolTable).visit(ctx);
-        boolean partialArray = type != null && type.isArray() && "]".equals(ctx.getChild(ctx.getChildCount() - 1).getText());
-        return partialArray ? address : HeapRuntime.read(c3d, address);
-    }
-
-    private void writeElement(PigLatinParser.Acceso_miembroContext ctx, String valor) {
-        c3d.emit(QuadrupleOp.HEAP_SET, accessAddress(ctx, ctx.getChildCount()), valor, null);
     }
 
     private QuadrupleOp printOf(Type type) {
@@ -648,7 +458,7 @@ public class PigLatinC3DVisitor extends PigLatinBaseVisitor<String> {
 
     @Override
     public String visitAcceso_miembro(PigLatinParser.Acceso_miembroContext ctx) {
-        String element = readElement(ctx);
+        String element = objects.readElement(this, ctx);
         if (element != null) {
             return element;
         }
@@ -666,7 +476,7 @@ public class PigLatinC3DVisitor extends PigLatinBaseVisitor<String> {
             Type receiverType = base.getType();
             String receiver = base.getStorageName();
             if (access.getChildCount() > 3) {
-                receiver = HeapRuntime.read(c3d, accessAddress(access, access.getChildCount() - 2));
+                receiver = HeapRuntime.read(c3d, objects.accessAddress(this, access, access.getChildCount() - 2));
                 for (int i = 1; i < access.getChildCount() - 2;) {
                     if (".".equals(access.getChild(i).getText())) {
                         receiverType = HeapRuntime.definition(symbolTable, receiverType)
@@ -693,67 +503,4 @@ public class PigLatinC3DVisitor extends PigLatinBaseVisitor<String> {
         c3d.emit(QuadrupleOp.CALL, name, String.valueOf(argumentos), ret);
         return ret;
     }
-
-    private String accessAddress(PigLatinParser.Acceso_miembroContext access, int limit) {
-        Symbol base = symbolTable.resolve(access.VARIABLE(0).getText());
-        Type type = base.getType();
-        String value = base.getStorageName();
-        String address = value;
-        for (int i = 1; i < limit;) {
-            if (".".equals(access.getChild(i).getText())) {
-                String name = access.getChild(i + 1).getText();
-                Symbol owner = HeapRuntime.definition(symbolTable, type);
-                address = ArrayRuntime.add(c3d, value, HeapRuntime.fieldOffset(owner, name));
-                type = owner.getMember(name).getType();
-                i += 2;
-                if (i < limit) value = HeapRuntime.read(c3d, address);
-            } else {
-                address = ArrayRuntime.address(c3d, value, List.of(visit(access.getChild(i + 1))), type.getSizes());
-                type = type.desindexar(1);
-                i += 3;
-                value = i < limit && !type.isArray() ? HeapRuntime.read(c3d, address) : address;
-            }
-        }
-        return address;
-    }
-
-    private String newObject(String name, PigLatinParser.ArgumentosContext arguments) {
-        Symbol owner = symbolTable.getClass(name);
-        String base = HeapRuntime.allocateObject(c3d, owner);
-        c3d.emit(QuadrupleOp.PARAM, base, null, null);
-        int count = 1;
-        if (arguments != null) for (PigLatinParser.ExpresionContext argument : arguments.expresion()) {
-            c3d.emit(QuadrupleOp.PARAM, visit(argument), null, null);
-            count++;
-        }
-        c3d.emit(QuadrupleOp.CALL, com.compi.backend.c3d.FunctionRuntime.name(name, name, count - 1), String.valueOf(count), null);
-        return base;
-    }
-
-    private String initializeStruct(Symbol definition, PigLatinParser.Structura_instanciacionContext initializer) {
-        String base = HeapRuntime.allocateObject(c3d, definition);
-        if (!initializer.expresion().isEmpty()) {
-            for (int i = 0; i < initializer.expresion().size(); i++) {
-                c3d.emit(QuadrupleOp.HEAP_SET, ArrayRuntime.add(c3d, base, i), visit(initializer.expresion(i)), null);
-            }
-        } else {
-            for (PigLatinParser.Atributo_asignacionContext field : initializer.atributo_asignacion()) {
-                String name = field.VARIABLE(0).getText();
-                String value;
-                if (field.expresion() != null) value = visit(field.expresion());
-                else if (field.structura_instanciacion() != null) value = initializeStruct(
-                        HeapRuntime.definition(symbolTable, definition.getMember(name).getType()), field.structura_instanciacion());
-                else if (field.NOVUS() != null) value = newObject(field.VARIABLE(1).getText(), field.argumentos());
-                else {
-                    Type type = definition.getMember(name).getType();
-                    value = ArrayRuntime.allocateArray(c3d, type.getSizes());
-                    if (field.arreglo_literal().elemento_arreglo() != null)
-                        fill(value, field.arreglo_literal().elemento_arreglo(), type.getSizes(), new int[type.getDimensions()], 0);
-                }
-                c3d.emit(QuadrupleOp.HEAP_SET, ArrayRuntime.add(c3d, base, HeapRuntime.fieldOffset(definition, name)), value, null);
-            }
-        }
-        return base;
-    }
-
 }

@@ -50,59 +50,36 @@ public class StackSimulator {
             return;
         }
         switch (op) {
+            case ADD, SUB, MUL, DIV, INT_DIV, MOD, AND, OR, CONCAT,
+                    IF_EQ, IF_NE, IF_LT, IF_LE, IF_GT, IF_GE -> binary(q);
+            case NOT, NEG, ARRAY_GET -> unaryPopPush(q);
+            case ASSIGN, STACK_SET, HEAP_SET, SET_P, SET_H, PRINT_INT, PRINT_FLOAT,
+                    PRINT_CHAR, PRINT_STR, PRINTLN, PARAM, RETURN, IF_TRUE, IF_FALSE
+                    -> pop(1);
+            case ARRAY_SET -> pop(2);
+            case STACK_GET, HEAP_GET, GET_P, GET_H -> push(q.getResult());
+            case CALL -> maybePush(q.getResult());
+            case READ, READ_STR, READ_CHAR -> push(q.getArg1());
+            case GOTO, LABEL, FUNCTION_START, FUNCTION_END -> {
+                // Instrucciones sin efecto sobre la pila visible.
+            }
+            default -> maybePush(q.getResult());
+        }
+    }
 
-            case ADD: case SUB: case MUL: case DIV: case INT_DIV: case MOD:
-            case AND: case OR: case CONCAT:
-            case IF_EQ: case IF_NE: case IF_LT: case IF_LE: case IF_GT: case IF_GE:
-                pop(2);
-                push(q.getResult());
-                break;
+    private void binary(Quadruple q) {
+        pop(2);
+        push(q.getResult());
+    }
 
-            case NOT:
-            case NEG:
-                pop(1);
-                push(q.getResult());
-                break;
+    private void unaryPopPush(Quadruple q) {
+        pop(1);
+        push(q.getResult());
+    }
 
-            case ARRAY_GET:
-                pop(1);
-                push(q.getResult());
-                break;
-
-            case ARRAY_SET:
-                pop(2);
-                break;
-
-            case ASSIGN: case STACK_SET: case HEAP_SET:
-            case SET_P: case SET_H:
-            case PRINT_INT: case PRINT_FLOAT: case PRINT_CHAR: case PRINT_STR: case PRINTLN:
-            case PARAM: case RETURN:
-                pop(1);
-                break;
-
-            case STACK_GET: case HEAP_GET: case GET_P: case GET_H:
-                push(q.getResult());
-                break;
-
-            case IF_TRUE: case IF_FALSE:
-                pop(1);
-                break;
-
-            case CALL:
-                if (q.getResult() != null) push(q.getResult());
-                break;
-            case READ: case READ_STR: case READ_CHAR:
-                push(q.getArg1());
-                break;
-            case GOTO: case LABEL: case FUNCTION_START: case FUNCTION_END:
-
-                break;
-
-            default:
-                if (q.getResult() != null) {
-                    push(q.getResult());
-                }
-                break;
+    private void maybePush(String value) {
+        if (value != null) {
+            push(value);
         }
     }
 

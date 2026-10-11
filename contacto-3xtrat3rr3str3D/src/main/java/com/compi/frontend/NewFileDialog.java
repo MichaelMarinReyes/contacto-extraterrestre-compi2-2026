@@ -63,6 +63,11 @@ public class NewFileDialog extends javax.swing.JDialog {
 
         nameField.setText(suggestedName);
         nameField.selectAll();
+        initInputListeners();
+        initDialog();
+    }
+
+    private void initInputListeners() {
         nameField.getDocument().addDocumentListener(new DocumentListener() {
             public void insertUpdate(DocumentEvent e) {
                 updatePreview();
@@ -78,7 +83,9 @@ public class NewFileDialog extends javax.swing.JDialog {
         });
         folderBox.addActionListener(e -> onFolderPicked());
         extensionBox.addActionListener(e -> updatePreview());
+    }
 
+    private void initDialog() {
         setContentPane(buildContent());
         JButton create = findButton(getContentPane(), "Crear");
         if (create != null) {
@@ -109,6 +116,13 @@ public class NewFileDialog extends javax.swing.JDialog {
     }
 
     private JPanel buildContent() {
+        JPanel root = new JPanel(new BorderLayout());
+        root.add(buildForm(), BorderLayout.CENTER);
+        root.add(buildButtons(), BorderLayout.SOUTH);
+        return root;
+    }
+
+    private JPanel buildForm() {
         JPanel form = new JPanel(new GridBagLayout());
         form.setBorder(BorderFactory.createEmptyBorder(16, 16, 4, 16));
 
@@ -153,7 +167,10 @@ public class NewFileDialog extends javax.swing.JDialog {
         preview.setFont(UiTheme.sans(11));
         preview.setForeground(UiTheme.dim());
         form.add(preview, gbc);
+        return form;
+    }
 
+    private JPanel buildButtons() {
         JButton create = new JButton("Crear");
         create.addActionListener(e -> accept());
         JButton cancel = new JButton("Cancelar");
@@ -164,10 +181,7 @@ public class NewFileDialog extends javax.swing.JDialog {
         buttons.add(create, BorderLayout.WEST);
         buttons.add(cancel, BorderLayout.EAST);
 
-        JPanel root = new JPanel(new BorderLayout());
-        root.add(form, BorderLayout.CENTER);
-        root.add(buttons, BorderLayout.SOUTH);
-        return root;
+        return buttons;
     }
 
     private void onFolderPicked() {

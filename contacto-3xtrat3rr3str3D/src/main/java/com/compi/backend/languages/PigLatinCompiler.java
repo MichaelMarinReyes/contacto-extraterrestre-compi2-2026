@@ -124,7 +124,14 @@ public class PigLatinCompiler extends AbstractLanguageCompiler {
         }
         cargados.add(key);
         nuevos.add(relativeToProject(found));
+        compileImport(impCtx, found, key, symbolTable, generator, errors, cargados, nuevos);
+        return nuevos;
+    }
 
+    private void compileImport(PigLatinParser.Import_declaracionContext impCtx, File found,
+                               String key, SymbolTable symbolTable, C3DGenerator generator,
+                               List<CompilationError> errors, List<String> cargados,
+                               List<String> nuevos) {
         String content;
         try {
             content = Files.readString(found.toPath());
@@ -132,7 +139,7 @@ public class PigLatinCompiler extends AbstractLanguageCompiler {
             errors.add(new CompilationError(ErrorType.SEMANTIC,
                     "No se pudo leer el archivo importado \"" + key + "\": " + e.getMessage(),
                     impCtx.getStart().getLine(), impCtx.getStart().getCharPositionInLine()));
-            return nuevos;
+            return;
         }
 
         LanguageCompiler target = LanguageCompilerFactory.getCompiler(found.getName());
@@ -140,7 +147,7 @@ public class PigLatinCompiler extends AbstractLanguageCompiler {
             errors.add(new CompilationError(ErrorType.SEMANTIC,
                     "El archivo importado \"" + key + "\" no es de un lenguaje soportado",
                     impCtx.getStart().getLine(), impCtx.getStart().getCharPositionInLine()));
-            return nuevos;
+            return;
         }
         target.setWorkingDirectory(found.getAbsoluteFile().getParentFile());
         target.setProjectDirectory(getProjectDirectory());
@@ -159,7 +166,6 @@ public class PigLatinCompiler extends AbstractLanguageCompiler {
         for (CompilationError e : sink) {
             errors.add(e.inFile(found.getPath()));
         }
-        return nuevos;
     }
 
     private void markSource(SymbolTable symbolTable, List<Symbol> antes, String key) {

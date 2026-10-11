@@ -25,10 +25,16 @@ public class YC3DVisitor extends YBaseVisitor<String> {
     private final C3DGenerator c3d;
     private final Deque<String> breakLabels = new ArrayDeque<>();
     private final Deque<String> continueLabels = new ArrayDeque<>();
+    private final YDeclarationEmitter declarations;
+    private final YControlEmitter control;
+    private final YAccessEmitter accesses;
 
     public YC3DVisitor(SymbolTable symbolTable, C3DGenerator c3d) {
         this.symbolTable = symbolTable;
         this.c3d = c3d;
+        this.declarations = new YDeclarationEmitter(symbolTable, c3d);
+        this.control = new YControlEmitter(c3d);
+        this.accesses = new YAccessEmitter(symbolTable, c3d);
     }
 
     @Override
@@ -40,7 +46,7 @@ public class YC3DVisitor extends YBaseVisitor<String> {
 
         if (ctx.parametros() != null) {
             for (YParser.ParametroContext paramCtx : ctx.parametros().parametro()) {
-                Type parameterType = nameType(paramCtx.tipo_dato().getText());
+                Type parameterType = declarations.nameType(paramCtx.tipo_dato().getText());
                 if (paramCtx.CORCHETE_IZQ() != null) {
                     parameterType = Type.array(parameterType, 1);
                 }
@@ -62,140 +68,8 @@ public class YC3DVisitor extends YBaseVisitor<String> {
 
     @Override
     public String visitDeclaracion_variable(YParser.Declaracion_variableContext ctx) {
-        String varName = !ctx.ID().isEmpty() ? ctx.ID(ctx.ID().size() - 1).getText() : "bool";
-        String typeName = ctx.tipo_dato() != null ? ctx.tipo_dato().getText()
-                : (ctx.ID().size() >= 2 ? ctx.ID(0).getText() : null);
-        int[] sizes = new int[ctx.CORCHETE_IZQ().size()];
-        List<TerminalNode> numeros = ctx.NUMERO_ENTERO();
-        for (int i = 0; i < sizes.length && i < numeros.size(); i++) {
-            sizes[i] = Integer.parseInt(numeros.get(i).getText());
-        }
-        Type base = typeName == null ? Type.UNKNOWN : nameType(typeName);
-        Type type = sizes.length == 0 ? base : Type.arrayOf(base, sizes);
-
-        int offset = symbolTable.getCurrentScope().allocateOffset(1);
-        Symbol declared = new Symbol(varName, type, SymbolCategory.VARIABLE,
-                offset, false).at(ctx).markWorking();
-        symbolTable.define(declared);
-        Symbol sym = symbolTable.resolve(varName);
-        if (sym == null) {
-            sym = declared;
-        }
-
-        Symbol struct = typeName == null ? null : symbolTable.getStruct(typeName);
-        if (struct != null && sizes.length == 0) {
-            return declareStruct(sym, struct, ctx.expresion_inicializacion());
-        }
-
-        if (type.isArray()) {
-            return declareArray(sym, type, ctx.expresion_inicializacion());
-        }
-
-        if (ctx.expresion_inicializacion() != null && ctx.expresion_inicializacion().expresion() != null) {
-            String value = ctx.expresion_inicializacion().expresion().getText().equals("leer()")
-                    ? readValue(type) : visit(ctx.expresion_inicializacion().expresion());
-            c3d.emitAssign(sym.getStorageName(), value);
-        }
+        declarations.emitDeclaration(this, ctx);
         return null;
-    }
-
-    private Type nameType(String name) {
-        return switch (name.toLowerCase()) {
-            case "entero" -> Type.INT;
-            case "flotante" -> Type.DOUBLE;
-            case "cadena" -> Type.STRING;
-            case "caracter" -> Type.CHAR;
-            case "bool" -> Type.BOOLEAN;
-            default -> Type.structType(name);
-        };
-    }
-
-    private String declareStruct(Symbol sym, Symbol struct,
-                                      YParser.Expresion_inicializacionContext inicializador) {
-        String base = ArrayRuntime.allocate(c3d, celdasDe(struct));
-        c3d.emitAssign(sym.getStorageName(), base);
-
-        if (inicializador != null && !inicializador.elemento_lista().isEmpty()) {
-            fillFields(base, inicializador.elemento_lista(), struct, 0);
-        } else if (inicializador != null && inicializador.expresion() != null) {
-            c3d.emitAssign(sym.getStorageName(), visit(inicializador.expresion()));
-        }
-        return null;
-    }
-
-    private int celdasDe(Type type) {
-        return 1;
-    }
-
-    private int celdasDe(Symbol struct) {
-        int total = 0;
-        for (Symbol field : struct.getMembers()) {
-            total += celdasDe(field.getType());
-        }
-        return Math.max(total, 1);
-    }
-
-    private void fillFields(String base, List<YParser.Elemento_listaContext> elementos,
-                              Symbol struct, int cell) {
-        int i = 0;
-        for (Symbol field : struct.getMembers()) {
-            if (i >= elementos.size()) {
-                return;
-            }
-            YParser.Elemento_listaContext element = elementos.get(i);
-            Type fieldType = field.getType();
-            String start = ArrayRuntime.add(c3d, base, cell);
-
-            if (element.LLAVE_IZQ() != null && fieldType != null && fieldType.isArray()) {
-                int[] sizes = fieldType.getSizes();
-                String array = ArrayRuntime.allocateArray(c3d, fieldType.getSizes());
-                fill(array, element.elemento_lista(), sizes, new int[sizes.length], 0);
-                c3d.emit(QuadrupleOp.HEAP_SET, start, array, null);
-            } else if (element.LLAVE_IZQ() != null && fieldType != null && fieldType.isStruct()) {
-
-                Symbol anidada = symbolTable.getStruct(fieldType.getCustomTypeName());
-                if (anidada != null) {
-                    String nested = HeapRuntime.allocateObject(c3d, anidada);
-                    fillFields(nested, element.elemento_lista(), anidada, 0);
-                    c3d.emit(QuadrupleOp.HEAP_SET, start, nested, null);
-                }
-            } else {
-                c3d.emit(QuadrupleOp.HEAP_SET, start, visit(element.expresion()), null);
-            }
-
-            cell += celdasDe(fieldType);
-            i++;
-        }
-    }
-
-    private String declareArray(Symbol sym, Type type,
-                                   YParser.Expresion_inicializacionContext inicializador) {
-        int celdas = type.totalSize();
-        if (celdas <= 0) {
-            return null;
-        }
-        String base = ArrayRuntime.allocateArray(c3d, type.getSizes());
-        c3d.emitAssign(sym.getStorageName(), base);
-
-        if (inicializador != null && !inicializador.elemento_lista().isEmpty()) {
-            int[] sizes = type.getSizes();
-            fill(base, inicializador.elemento_lista(), sizes, new int[sizes.length], 0);
-        }
-        return null;
-    }
-
-    private void fill(String base, List<YParser.Elemento_listaContext> elementos, int[] sizes,
-                        int[] indices, int dimension) {
-        for (int i = 0; i < elementos.size() && dimension < indices.length; i++) {
-            YParser.Elemento_listaContext element = elementos.get(i);
-            indices[dimension] = i;
-            if (element.LLAVE_IZQ() != null) {
-                fill(base, element.elemento_lista(), sizes, indices, dimension + 1);
-            } else {
-                String data = visit(element.expresion());
-                ArrayRuntime.writeConstant(c3d, base, indices, sizes, data);
-            }
-        }
     }
 
     @Override
@@ -203,7 +77,7 @@ public class YC3DVisitor extends YBaseVisitor<String> {
         String val = ctx.expresion().isEmpty() ? "0" : visit(ctx.expresion(ctx.expresion().size() - 1));
 
         if (ctx.acceso_miembro() != null) {
-            if (writeOnAccess(ctx.acceso_miembro(), val)) {
+            if (accesses.writeOnAccess(this, ctx.acceso_miembro(), val)) {
                 return null;
             }
         }
@@ -218,92 +92,9 @@ public class YC3DVisitor extends YBaseVisitor<String> {
         return null;
     }
 
-    private boolean writeOnAccess(YParser.Acceso_miembroContext ctx, String valor) {
-        String address = accessAddress(ctx);
-        if (address == null) {
-            return false;
-        }
-        c3d.emit(QuadrupleOp.HEAP_SET, address, valor, null);
-        return true;
-    }
-
-    private String accessAddress(YParser.Acceso_miembroContext ctx) {
-        Symbol base = symbolTable.resolve(ctx.ID(0).getText());
-        if (base == null) {
-            return null;
-        }
-        String address = leerVariable(base);
-        Type type = base.getType();
-
-        List<Object> steps = accessSteps(ctx);
-        for (int index = 0; index < steps.size(); index++) {
-            Object step = steps.get(index);
-            if (step instanceof String fieldName) {
-                Symbol field = fieldOf(type, fieldName);
-                if (field == null) {
-                    return null;
-                }
-                Symbol owner = HeapRuntime.definition(symbolTable, type);
-                address = ArrayRuntime.add(c3d, address, HeapRuntime.fieldOffset(owner, fieldName));
-                type = field.getType();
-                if (index + 1 < steps.size() && (type.isArray() || type.isStruct())) address = HeapRuntime.read(c3d, address);
-            } else {
-                if (type == null || !type.isArray()) {
-                    return null;
-                }
-                address = ArrayRuntime.address(c3d, address,
-                        List.of(visit((YParser.ExpresionContext) step)), type.getSizes());
-                type = type.desindexar(1);
-            }
-        }
-        return address;
-    }
-
-    private List<Object> accessSteps(YParser.Acceso_miembroContext ctx) {
-        List<Object> pasos = new ArrayList<>();
-        int i = 1;
-        while (i < ctx.getChildCount()) {
-            if (".".equals(ctx.getChild(i).getText())) {
-                pasos.add(ctx.getChild(i + 1).getText());
-                i += 2;
-            } else {
-                pasos.add(ctx.getChild(i + 1));
-                i += 3;
-            }
-        }
-        return pasos;
-    }
-
-    private Symbol fieldOf(Type type, String name) {
-        if (type == null || !type.isStruct()) {
-            return null;
-        }
-        Symbol struct = symbolTable.getStruct(type.getCustomTypeName());
-        return struct == null ? null : struct.getMember(name);
-    }
-
-    private int[] fieldPosition(Symbol field) {
-        Symbol struct = symbolTable.getStruct(field.getScope());
-        if (struct == null) {
-            return new int[]{0};
-        }
-        int cell = 0;
-        for (Symbol other : struct.getMembers()) {
-            if (other == field) {
-                return new int[]{cell};
-            }
-            cell += celdasDe(other.getType());
-        }
-        return new int[]{0};
-    }
-
-    private String leerVariable(Symbol sym) {
-        return sym.getStorageName();
-    }
-
     @Override
     public String visitAcceso_miembro(YParser.Acceso_miembroContext ctx) {
-        String valor = readCell(ctx);
+        String valor = accesses.readCell(this, ctx);
         if (valor != null) {
             return valor;
         }
@@ -311,117 +102,10 @@ public class YC3DVisitor extends YBaseVisitor<String> {
         return ctx.ID(0).getText();
     }
 
-    private String readCell(YParser.Acceso_miembroContext ctx) {
-        String address = accessAddress(ctx);
-        if (address == null) {
-            return null;
-        }
-        Type type = expressionType(ctx);
-        if (type != null && type.isArray() && "]".equals(ctx.getChild(ctx.getChildCount() - 1).getText())) return address;
-        String valor = c3d.newTemp();
-        c3d.emit(QuadrupleOp.HEAP_GET, address, null, valor);
-        return valor;
-    }
-
     @Override
     public String visitSi_sentencia(YParser.Si_sentenciaContext ctx) {
-        List<YParser.CondicionContext> condiciones = new ArrayList<>();
-        List<YParser.BloqueContext> bloques = new ArrayList<>();
-
-        condiciones.add(ctx.condicion());
-        bloques.add(ctx.bloque());
-        for (YParser.Sino_si_bloqueContext elseIf : ctx.sino_si_bloque()) {
-            condiciones.add(elseIf.condicion());
-            bloques.add(elseIf.bloque());
-        }
-
-        YParser.Sino_bloqueContext sinSi = ctx.sino_bloque();
-        if (sinSi != null && sinSi.condicion() != null) {
-            condiciones.add(sinSi.condicion());
-            bloques.add(sinSi.bloque());
-            sinSi = null;
-        }
-        YParser.BloqueContext opposite =
-                ctx.contrario_bloque() == null ? null : ctx.contrario_bloque().bloque();
-
-        String endLabel = c3d.newLabel();
-        for (int i = 0; i < condiciones.size(); i++) {
-            boolean last = i == condiciones.size() - 1;
-            String trueLabel = c3d.newLabel();
-            boolean alFinal = last && sinSi == null && opposite == null;
-            String falseLabel = alFinal ? endLabel : c3d.newLabel();
-
-            emitConditionalJump(condiciones.get(i), trueLabel, falseLabel);
-            c3d.emitLabel(trueLabel);
-            visit(bloques.get(i));
-            c3d.emitGoto(endLabel);
-            if (!alFinal) {
-                c3d.emitLabel(falseLabel);
-            }
-        }
-
-        if (sinSi != null) {
-            visit(sinSi.bloque());
-            c3d.emitGoto(endLabel);
-        }
-        if (opposite != null) {
-            visit(opposite);
-        }
-        c3d.emitLabel(endLabel);
-
+        control.emitIf(this, ctx);
         return null;
-    }
-
-    private void emitConditionalJump(YParser.CondicionContext condition,
-                                        String trueValue, String falseValue) {
-        emitExpressionJump(condition.expresion(), trueValue, falseValue);
-    }
-
-    private void emitExpressionJump(YParser.ExpresionContext expression,
-                                        String trueValue, String falseValue) {
-        if (expression.operador_negacion() != null) {
-            emitExpressionJump(expression.expresion(0), falseValue, trueValue);
-            return;
-        }
-        if (expression.operador_logico() != null && expression.expresion().size() == 2) {
-            boolean esY = "&&".equals(expression.operador_logico().getText());
-            String next = c3d.newLabel();
-            if (esY) {
-                emitExpressionJump(expression.expresion(0), next, falseValue);
-            } else {
-                emitExpressionJump(expression.expresion(0), trueValue, next);
-            }
-            c3d.emitLabel(next);
-            emitExpressionJump(expression.expresion(1), trueValue, falseValue);
-            return;
-        }
-        if (expression.operador_relacional() != null && expression.expresion().size() == 2) {
-            c3d.emit(relacionalDe(expression.operador_relacional().getText()),
-                    visit(expression.expresion(0)), visit(expression.expresion(1)), trueValue);
-        } else {
-            c3d.emit(QuadrupleOp.IF_TRUE, visit(expression), null, trueValue);
-        }
-        if (falseValue != null) {
-            c3d.emitGoto(falseValue);
-        }
-    }
-
-    private QuadrupleOp relacionalDe(String operator) {
-        if ("==".equals(operator)) {
-            return QuadrupleOp.IF_EQ;
-        }
-        if ("!=".equals(operator)) {
-            return QuadrupleOp.IF_NE;
-        }
-        if ("<".equals(operator)) {
-            return QuadrupleOp.IF_LT;
-        }
-        if (">".equals(operator)) {
-            return QuadrupleOp.IF_GT;
-        }
-        if ("<=".equals(operator)) return QuadrupleOp.IF_LE;
-        if (">=".equals(operator)) return QuadrupleOp.IF_GE;
-        return QuadrupleOp.IF_EQ;
     }
 
     @Override
@@ -434,7 +118,7 @@ public class YC3DVisitor extends YBaseVisitor<String> {
         continueLabels.push(condLabel);
 
         c3d.emitLabel(condLabel);
-        emitConditionalJump(ctx.condicion(), bodyLabel, endLabel);
+        control.emitConditionalJump(this, ctx.condicion(), bodyLabel, endLabel);
 
         c3d.emitLabel(bodyLabel);
         visit(ctx.bloque());
@@ -461,7 +145,7 @@ public class YC3DVisitor extends YBaseVisitor<String> {
 
         c3d.emitLabel(condLabel);
         // La condición regresa al cuerpo, no a sí misma.
-        emitConditionalJump(ctx.condicion(), bodyLabel, endLabel);
+        control.emitConditionalJump(this, ctx.condicion(), bodyLabel, endLabel);
 
         c3d.emitLabel(endLabel);
 
@@ -488,7 +172,7 @@ public class YC3DVisitor extends YBaseVisitor<String> {
         }
 
         c3d.emitLabel(condLabel);
-        emitConditionalJump(ctx.condicion(), bodyLabel, endLabel);
+        control.emitConditionalJump(this, ctx.condicion(), bodyLabel, endLabel);
 
         c3d.emitLabel(bodyLabel);
         visit(ctx.bloque());
@@ -516,7 +200,7 @@ public class YC3DVisitor extends YBaseVisitor<String> {
         }
         boolean isArray = access != null;
 
-        String antes = isArray ? readCell(access) : leerVariable(sym);
+        String antes = isArray ? accesses.readCell(this, access) : accesses.loadVariable(sym);
         if (antes == null) {
             return null;
         }
@@ -525,7 +209,7 @@ public class YC3DVisitor extends YBaseVisitor<String> {
                 antes, "1", after);
 
         if (isArray) {
-            writeOnAccess(access, after);
+            accesses.writeOnAccess(this, access, after);
             return null;
         }
         c3d.emitAssign(sym.getStorageName(), after);
@@ -534,56 +218,8 @@ public class YC3DVisitor extends YBaseVisitor<String> {
 
     @Override
     public String visitElegir_sentencia(YParser.Elegir_sentenciaContext ctx) {
-        String endLabel = c3d.newLabel();
-        YParser.Siempre_bloqueContext always = ctx.siempre_bloque();
-        String defaultLabel = always != null ? c3d.newLabel() : endLabel;
-
-        breakLabels.push(endLabel);
-        boolean selectionContinue = continueLabels.isEmpty();
-        if (selectionContinue) continueLabels.push(endLabel);
-
-        String valor = visit(ctx.expresion());
-        List<YParser.Caso_bloqueContext> casos = ctx.caso_bloque();
-        List<String> etiquetas = new ArrayList<>();
-        for (YParser.Caso_bloqueContext caseOf : casos) {
-            String label = c3d.newLabel();
-            etiquetas.add(label);
-            c3d.emit(QuadrupleOp.IF_EQ, valor, visit(caseOf.expresion()), label);
-        }
-        c3d.emitGoto(defaultLabel);
-
-        for (int i = 0; i < casos.size(); i++) {
-            c3d.emitLabel(etiquetas.get(i));
-            YParser.Caso_bloqueContext caseOf = casos.get(i);
-            visit(caseOf.bloque_interno_opcional());
-
-            if (caseOf.ROMPER() == null && !terminaConRomper(caseOf.bloque_interno_opcional())) {
-                c3d.emitGoto(endLabel);
-            }
-        }
-        if (always != null) {
-            c3d.emitLabel(defaultLabel);
-            visit(always.bloque_interno_opcional());
-        }
-        c3d.emitLabel(endLabel);
-
-        breakLabels.pop();
-        if (selectionContinue) continueLabels.pop();
+        control.emitSelection(this, ctx, breakLabels, continueLabels);
         return null;
-    }
-
-    private boolean terminaConRomper(YParser.Bloque_interno_opcionalContext body) {
-        List<YParser.SentenciaContext> sentencias = body.sentencia();
-
-        for (int i = sentencias.size() - 1; i >= 0; i--) {
-            YParser.SentenciaContext statement = sentencias.get(i);
-            if (statement.getChildCount() == 1
-                    && statement.getChild(0) instanceof TerminalNode) {
-                continue;
-            }
-            return statement.romper_sentencia() != null;
-        }
-        return false;
     }
 
     @Override
@@ -622,47 +258,6 @@ public class YC3DVisitor extends YBaseVisitor<String> {
         return null;
     }
 
-    private boolean isString(YParser.ExpresionContext ctx) {
-        if (ctx.leer_funcion() != null) {
-            return true;
-        }
-        if (ctx.sumatoria() == null || ctx.sumatoria().productoria().size() != 1
-                || ctx.sumatoria().productoria(0).termino().size() != 1) {
-            return false;
-        }
-        YParser.TerminoContext term = ctx.sumatoria().productoria(0).termino(0);
-        if (term.CADENA_TEXTO() != null) {
-            return true;
-        }
-        if (term.ID() != null) {
-            Symbol sym = symbolTable.resolve(term.ID().getText());
-            return sym != null && Type.STRING.equals(sym.getType());
-        }
-        if (term.acceso_miembro() != null) {
-            return Type.STRING.equals(accessType(term.acceso_miembro()));
-        }
-        return false;
-    }
-
-    private Type accessType(YParser.Acceso_miembroContext ctx) {
-        Symbol base = symbolTable.resolve(ctx.ID(0).getText());
-        Type type = base == null ? null : base.getType();
-        for (Object step : accessSteps(ctx)) {
-            if (type == null) {
-                return Type.UNKNOWN;
-            }
-            if (step instanceof String fieldName) {
-                Symbol field = fieldOf(type, fieldName);
-                type = field == null ? Type.UNKNOWN : field.getType();
-            } else if (type.isArray() && type.hasSizes()) {
-                type = type.desindexar(1);
-            } else {
-                type = Type.UNKNOWN;
-            }
-        }
-        return type;
-    }
-
     @Override
     public String visitExpresion(YParser.ExpresionContext ctx) {
         if (ctx.operador_negacion() != null) {
@@ -684,7 +279,7 @@ public class YC3DVisitor extends YBaseVisitor<String> {
             String endLabel = c3d.newLabel();
 
             String op = ctx.operador_relacional().getText();
-            QuadrupleOp qOp = relacionalDe(op);
+            QuadrupleOp qOp = control.relationalOp(op);
 
             String falseLabel = c3d.newLabel();
             c3d.emit(qOp, left, right, trueLabel);
@@ -848,14 +443,8 @@ public class YC3DVisitor extends YBaseVisitor<String> {
         return new YSemanticVisitor(symbolTable).visit(tree);
     }
 
-    private String readValue(Type type) {
-        String result = c3d.newTemp();
-        c3d.emit(Type.STRING.equals(type) ? QuadrupleOp.READ_STR : QuadrupleOp.READ, result, null, null);
-        return result;
-    }
-
     @Override
     public String visitLeer_funcion(YParser.Leer_funcionContext ctx) {
-        return readValue(Type.STRING);
+        return declarations.readValue(Type.STRING);
     }
 }

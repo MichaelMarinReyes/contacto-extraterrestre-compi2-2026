@@ -27,6 +27,12 @@ public class TableFilterBar extends JPanel {
 
         field.setFont(UiTheme.sans(12));
         field.putClientProperty("JTextField.placeholderText", placeholder);
+        initFilterListener();
+        initClearActions();
+        initTrailingPanel();
+    }
+
+    private void initFilterListener() {
         field.getDocument().addDocumentListener(new DocumentListener() {
             @Override
             public void insertUpdate(DocumentEvent e) {
@@ -43,7 +49,9 @@ public class TableFilterBar extends JPanel {
                 avisa();
             }
         });
+    }
 
+    private void initClearActions() {
         clearButton.setFont(UiTheme.sansBold(12));
         clearButton.setFocusable(false);
         clearButton.setToolTipText("Quitar el filtro");
@@ -62,7 +70,9 @@ public class TableFilterBar extends JPanel {
                 clear();
             }
         });
+    }
 
+    private void initTrailingPanel() {
         countLabel.setFont(UiTheme.sans(11));
         countLabel.setForeground(UiTheme.dim());
 

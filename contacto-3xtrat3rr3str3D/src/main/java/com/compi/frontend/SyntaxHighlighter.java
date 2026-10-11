@@ -125,6 +125,13 @@ public class SyntaxHighlighter {
 
         running = true;
         try {
+            paintDocument(doc, text);
+        } finally {
+            running = false;
+        }
+    }
+
+    private void paintDocument(StyledDocument doc, String text) {
             int len = text.length();
             if (len > 0) {
                 doc.setCharacterAttributes(0, len, styles.get("default"), true);
@@ -151,9 +158,6 @@ public class SyntaxHighlighter {
             paintWords(doc, text, lang.types(), "type");
             paintWords(doc, text, lang.constants(), "constant");
 
-        } finally {
-            running = false;
-        }
     }
 
     private void paint(StyledDocument doc, String text, String regex, String styleKey) {

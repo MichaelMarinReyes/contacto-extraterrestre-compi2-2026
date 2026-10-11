@@ -62,7 +62,12 @@ public class ErrorTablePanel extends javax.swing.JPanel {
 
     private void initCustomComponents() {
         setLayout(new BorderLayout());
+        initErrorTable();
+        initTypeRenderer();
+        initErrorContent();
+    }
 
+    private void initErrorTable() {
         tableModel = new DefaultTableModel(
                 new Object[]{"#", "Archivo", "Tipo", "Línea", "Col.", "Descripción"}, 0) {
             @Override
@@ -88,7 +93,9 @@ public class ErrorTablePanel extends javax.swing.JPanel {
         for (int i = 0; i < widths.length; i++) {
             errorTable.getColumnModel().getColumn(i).setPreferredWidth(widths[i]);
         }
+    }
 
+    private void initTypeRenderer() {
         DefaultTableCellRenderer typeRenderer = new DefaultTableCellRenderer() {
             @Override
             public Component getTableCellRendererComponent(JTable table, Object value,
@@ -108,7 +115,9 @@ public class ErrorTablePanel extends javax.swing.JPanel {
         rightAlign(0);
         rightAlign(3);
         rightAlign(4);
+    }
 
+    private void initErrorContent() {
         emptyMessageLabel = new JLabel("Sin errores de compilación", SwingConstants.CENTER);
         emptyMessageLabel.setFont(UiTheme.sans(12));
         emptyMessageLabel.setForeground(UiTheme.dim());

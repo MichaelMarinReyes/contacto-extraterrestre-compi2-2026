@@ -1,10 +1,5 @@
 @startuml Diagrama de clases - Contacto 3xtrat3rr3str3D
-' =====================================================================
-'  Diagrama de clases del compilador (backend) + AST propuesto + entrada.
-'  Relaciones:  ..|> implementación | --|> herencia | *-- composición
-'               o-- agregación       | ..> dependencia
-'  Estereotipo <<nuevo>> = propuesto en reestructuracion_ast_propuesta.md
-' =====================================================================
+' Arquitectura implementada al completar la Fase 0 del AST.
 skinparam dpi 120
 skinparam shadowing false
 skinparam classAttributeIconSize 0
@@ -17,326 +12,212 @@ skinparam class {
   ArrowColor #46678A
   FontSize 11
 }
-skinparam interface {
-  BackgroundColor #EDF4FC
-  BorderColor #2F6DA8
-}
-skinparam enum {
-  BackgroundColor #FFF7E6
-  BorderColor #B98B2E
-}
-skinparam stereotypeCBackgroundColor #E7F6E9
-skinparam stereotypeCBorderColor #2E7D32
-
 legend right
-  **Leyenda**
-  ....
-  |<#46678A>| ``..|>`` implementación
-  |<#46678A>| ``--|>`` herencia
-  |<#46678A>| ``*--``  composición
-  |<#46678A>| ``o--``  agregación
-  |<#46678A>| ``..>``  dependencia
-  ....
-  ``<<nuevo>>`` aún no existe en el código
+  **Arquitectura implementada**
+  ..|> implementación · --|> herencia
+  *-- composición · o-- agregación · ..> dependencia
+  El AST propio está disponible como infraestructura (Fase 0).
+  Los compiladores aún recorren ParseTree en sus fases actuales.
 endlegend
 
-' =====================================================================
-'  ENTRADA Y FRONTEND (resumen)
-' =====================================================================
 package "com.compi" {
-  class "com.compi.Main" as Main {
+  class Main {
     {static} +main(String[])
   }
 }
-
 package "com.compi.frontend" {
-  class "com.compi.frontend.MainWindow" as MainWindow {
+  class MainWindow {
+    -workspace : WorkspaceActions
+    -compilation : CompilationActions
+    +compileActive()
+    +openProject(File)
+    +openInEditor(File)
+  }
+  class WorkspaceActions
+  class CompilationActions {
     -compiler : Compiler
     -currentCMode : Mode
-    -currentFile : File
-    -fileTreePanelInstance : FileTreePanel
-    -astPanel : ParserTreePanel
-    -symbolPanel : SymbolTablePanel
-    -stackPanel : StackVisualizerPanel
-    -errorPanel : ErrorTablePanel
+    -lastTargets : List<File>
+    +compile()
   }
-  class "com.compi.frontend.FileTreePanel" as FileTreePanel
-  class "com.compi.frontend.TopToolbar" as TopToolbar
-  class "com.compi.frontend.EditorTabs" as EditorTabs
-  class "com.compi.frontend.EditorPanel" as EditorPanel {
-    -lineNumberComponent : LineNumberComponent
-    -highlighter : SyntaxHighlighter
-  }
-  class "com.compi.frontend.LineNumberComponent" as LineNumberComponent
-  class "com.compi.frontend.SyntaxHighlighter" as SyntaxHighlighter
-  class "com.compi.frontend.TabHeader" as TabHeader
-  class "com.compi.frontend.WelcomePanel" as WelcomePanel
-  class "com.compi.frontend.ConsoleDock" as ConsoleDock
-  class "com.compi.frontend.StatusBar" as StatusBar
-  class "com.compi.frontend.NewFileDialog" as NewFileDialog
-  class "com.compi.frontend.ToolWindow" as ToolWindow {
-    -dock : ToolWindowDock
-  }
-  class "com.compi.frontend.ToolWindowDock" as ToolWindowDock {
-    -astPanel : ParserTreePanel
-    -symbolPanel : SymbolTablePanel
-    -stackPanel : StackVisualizerPanel
-    -errorPanel : ErrorTablePanel
-  }
-  class "com.compi.frontend.ParserTreePanel" as ParserTreePanel {
-    -canvas : TreeCanvas
-  }
-  class "com.compi.frontend.SymbolTablePanel" as SymbolTablePanel {
-    -filterBar : TableFilterBar
-  }
-  class "com.compi.frontend.StackVisualizerPanel" as StackVisualizerPanel
-  class "com.compi.frontend.ErrorTablePanel" as ErrorTablePanel {
-    -filterBar : TableFilterBar
-  }
-  class "com.compi.frontend.TableFilterBar" as TableFilterBar
-  class "com.compi.frontend.JFileChooserLike" as JFileChooserLike
-  class "com.compi.frontend.UiTheme" as UiTheme
-  class "com.compi.frontend.IdeIcons" as IdeIcons
+  class TopToolbar
+  class FileTreePanel
+  class EditorTabs
+  class EditorPanel
+  class SyntaxHighlighter
+  class LineNumberComponent
+  class TabHeader
+  class ConsoleDock
+  class StatusBar
+  class WelcomePanel
+  class NewFileDialog
+  class ToolWindow
+  class ToolWindowDock
+  class ParserTreePanel
+  class SymbolTablePanel
+  class StackVisualizerPanel
+  class ErrorTablePanel
+  class TypeTablePanel
+  class TableFilterBar
+  class UiTheme
+  class IdeIcons
 }
-
 package "com.compi.frontend.dot" {
-  class "com.compi.frontend.dot.TreeCanvas" as TreeCanvas {
-    -model : DotModel
-  }
-  class "com.compi.frontend.dot.DotModel" as DotModel
-  class "com.compi.frontend.dot.TreeLayout" as TreeLayout
+  class TreeCanvas
+  class DotModel
+  class TreeLayout
 }
-
-' =====================================================================
-'  ORQUESTADOR
-' =====================================================================
 package "com.compi.backend" {
-  class "com.compi.backend.Compiler" as Compiler {
-    source : String
-    language : String
-    cMode : Mode
-    symbolTable : SymbolTable
-    c3dGenerator : C3DGenerator
-    errors : List<CompilationError>
-    astDot : String
+  class Compiler {
     +compile(source, language, fileName) : boolean
     +setWorkingDirectory(File)
     +setCMode(Mode)
-    -generateCCode() : String
   }
-
-  class "com.compi.backend.ParseResult" as ParseResult <<nuevo>> {
-    tree : ParseTree
-    ast : ProgramNodeAST
-  }
-
-  enum "com.compi.backend.StackAction" as StackAction {
+  enum StackAction {
     SHIFT
     REDUCE
     NEUTRAL
   }
 }
-
-' =====================================================================
-'  NUCLEO DE AST (compartido)  <<nuevo>>
-' =====================================================================
+package "com.compi.backend.languages" {
+  interface LanguageCompiler {
+    +parse(source, errors) : ParseTree
+    +analyze(ParseTree, SymbolTable, errors)
+    +generateIntermediate(ParseTree, SymbolTable, C3DGenerator)
+    +loadImports(ParseTree, ...)
+  }
+  abstract AbstractLanguageCompiler
+  class LanguageCompilerFactory
+  class PigLatinCompiler
+  class YCompiler
+  class ZetarianoCompiler
+}
+package "com.compi.backend.languages.piglatin" {
+  class PigLatinSemanticVisitor
+  class PigLatinArrayAnalyzer
+  class PigLatinConditionAnalyzer
+  class PigLatinC3DVisitor
+  class PigLatinConditionEmitter
+  class PigLatinObjectEmitter
+}
+package "com.compi.backend.languages.y" {
+  class YIndentLexer
+  class YSemanticVisitor
+  class YC3DVisitor
+  class YDeclarationEmitter
+  class YControlEmitter
+  class YAccessEmitter
+}
+package "com.compi.backend.languages.zetariano" {
+  class ZetarianoSemanticVisitor
+  class ZetarianoC3DVisitor
+  class ZetarianoArrayEmitter
+  class ZetarianoClassEmitter
+  class ZetarianoConditionEmitter
+}
 package "com.compi.backend.ast" {
-  interface "ASTNode" as ASTNode <<nuevo>> {
-    +accept(ASTVisitor)
+  interface ASTNode {
+    +accept(ASTVisitor<?>) : void
     +line() : int
     +column() : int
   }
-  interface "ASTVisitor<R>" as ASTVisitor <<nuevo>> {
+  interface "ASTVisitor<R>" as ASTVisitor {
     +visit(ProgramNodeAST) : R
     +visit(AssignmentNodeAST) : R
-    +visit(AbstractExpressionNodeAST) : R
-    +visit(AbstractStatementNodeAST) : R
+    +visit(LiteralNodeAST) : R
   }
-  abstract "AbstractASTVisitor<R>" as AbstractASTVisitor <<nuevo>> {
-    +visit(ProgramNodeAST) : R
-    +visit(AbstractExpressionNodeAST) : R
-    +visit(AbstractStatementNodeAST) : R
+  abstract "AbstractASTVisitor<R>" as AbstractASTVisitor
+  abstract AbstractNodeAST {
+    -line : int
+    -column : int
+    +children() : List<ASTNode>
   }
-  abstract "AbstractNodeAST" as AbstractNodeAST <<nuevo>> {
-    #line : int
-    #column : int
-  }
-  abstract "AbstractStatementNodeAST" as AbstractStatementNodeAST <<nuevo>>
-  abstract "AbstractExpressionNodeAST" as AbstractExpressionNodeAST <<nuevo>>
-  abstract "AbstractDefinitionNodeAST" as AbstractDefinitionNodeAST <<nuevo>>
+  abstract AbstractStatementNodeAST
+  abstract AbstractExpressionNodeAST
+  abstract AbstractDefinitionNodeAST
 }
-
 package "com.compi.backend.ast.stmt" {
-  class "ProgramNodeAST" as ProgramNodeAST <<nuevo>> {
-    imports : List<ImportNodeAST>
-    definitions : List<AbstractDefinitionNodeAST>
-    globals : List<AbstractStatementNodeAST>
-    statements : List<AbstractStatementNodeAST>
+  class ProgramNodeAST {
+    -imports : List<ImportNodeAST>
+    -definitions : List<AbstractDefinitionNodeAST>
+    -globals : List<AbstractStatementNodeAST>
+    -statements : List<AbstractStatementNodeAST>
   }
-  class "BlockNodeAST" as BlockNodeAST <<nuevo>>
-  class "DeclarationNodeAST" as DeclarationNodeAST <<nuevo>> {
-    type : Type
-    name : String
-    dimensions : List<ExpressionNodeAST>
-    initializer : ExpressionNodeAST
-  }
-  class "AssignmentNodeAST" as AssignmentNodeAST <<nuevo>> {
-    target : ExpressionNodeAST
-    operator : String
-    value : ExpressionNodeAST
-  }
-  class "IfNodeAST" as IfNodeAST <<nuevo>>
-  class "ElseIfNodeAST" as ElseIfNodeAST <<nuevo>>
-  class "WhileNodeAST" as WhileNodeAST <<nuevo>>
-  class "DoWhileNodeAST" as DoWhileNodeAST <<nuevo>>
-  class "ForNodeAST" as ForNodeAST <<nuevo>>
-  class "SwitchNodeAST" as SwitchNodeAST <<nuevo>>
-  class "SwitchCaseNodeAST" as SwitchCaseNodeAST <<nuevo>>
-  class "PrintNodeAST" as PrintNodeAST <<nuevo>>
-  class "ReadStatementNodeAST" as ReadStatementNodeAST <<nuevo>>
-  class "ReturnNodeAST" as ReturnNodeAST <<nuevo>>
-  class "BreakNodeAST" as BreakNodeAST <<nuevo>>
-  class "ContinueNodeAST" as ContinueNodeAST <<nuevo>>
-  class "ExpressionStatementNodeAST" as ExpressionStatementNodeAST <<nuevo>>
-  class "ImportNodeAST" as ImportNodeAST <<nuevo>> {
-    path : String
-  }
+  class BlockNodeAST
+  class DeclarationNodeAST
+  class AssignmentNodeAST
+  class IfNodeAST
+  class ElseIfNodeAST
+  class WhileNodeAST
+  class DoWhileNodeAST
+  class ForNodeAST
+  class SwitchNodeAST
+  class SwitchCaseNodeAST
+  class PrintNodeAST
+  class ReadStatementNodeAST
+  class ReturnNodeAST
+  class BreakNodeAST
+  class ContinueNodeAST
+  class ExpressionStatementNodeAST
+  class ImportNodeAST
 }
-
 package "com.compi.backend.ast.expr" {
-  class "LiteralNodeAST" as LiteralNodeAST <<nuevo>> {
-    value : Object
-    kind : LiteralKind
-  }
-  class "IdentifierNodeAST" as IdentifierNodeAST <<nuevo>> {
-    name : String
-    resolved : Symbol
-  }
-  class "BinaryOperationNodeAST" as BinaryOperationNodeAST <<nuevo>>
-  class "UnaryOperationNodeAST" as UnaryOperationNodeAST <<nuevo>>
-  class "AssignmentExpressionNodeAST" as AssignmentExpressionNodeAST <<nuevo>>
-  class "MemberAccessNodeAST" as MemberAccessNodeAST <<nuevo>>
-  class "IndexNodeAST" as IndexNodeAST <<nuevo>>
-  class "CallNodeAST" as CallNodeAST <<nuevo>>
-  class "NewObjectNodeAST" as NewObjectNodeAST <<nuevo>>
-  class "NewArrayNodeAST" as NewArrayNodeAST <<nuevo>>
-  class "ArrayLiteralNodeAST" as ArrayLiteralNodeAST <<nuevo>>
-  class "TernaryNodeAST" as TernaryNodeAST <<nuevo>>
-  class "IncrementNodeAST" as IncrementNodeAST <<nuevo>>
-  class "ReadExpressionNodeAST" as ReadExpressionNodeAST <<nuevo>>
-  class "InstanceInitNodeAST" as InstanceInitNodeAST <<nuevo>>
+  class LiteralNodeAST
+  class IdentifierNodeAST
+  class BinaryOperationNodeAST
+  class UnaryOperationNodeAST
+  class AssignmentExpressionNodeAST
+  class MemberAccessNodeAST
+  class IndexNodeAST
+  class CallNodeAST
+  class NewObjectNodeAST
+  class NewArrayNodeAST
+  class ArrayLiteralNodeAST
+  class TernaryNodeAST
+  class IncrementNodeAST
+  class ReadExpressionNodeAST
+  class InstanceInitNodeAST
+  enum LiteralKind
+  enum OperationKind
+  enum ReadKind
 }
-
 package "com.compi.backend.ast.decl" {
-  class "FunctionDefinitionNodeAST" as FunctionDefinitionNodeAST <<nuevo>>
-  class "ParameterNodeAST" as ParameterNodeAST <<nuevo>>
-  class "StructDefinitionNodeAST" as StructDefinitionNodeAST <<nuevo>>
-  class "FieldDefinitionNodeAST" as FieldDefinitionNodeAST <<nuevo>>
-  class "ClassDefinitionNodeAST" as ClassDefinitionNodeAST <<nuevo>>
-  class "MethodDefinitionNodeAST" as MethodDefinitionNodeAST <<nuevo>>
-  class "ConstructorDefinitionNodeAST" as ConstructorDefinitionNodeAST <<nuevo>>
-  class "AttributeDefinitionNodeAST" as AttributeDefinitionNodeAST <<nuevo>>
+  class FunctionDefinitionNodeAST
+  class ParameterNodeAST
+  class StructDefinitionNodeAST
+  class FieldDefinitionNodeAST
+  class ClassDefinitionNodeAST
+  class MethodDefinitionNodeAST
+  class ConstructorDefinitionNodeAST
+  class AttributeDefinitionNodeAST
 }
-
-' =====================================================================
-'  MODULOS DE LENGUAJE
-' =====================================================================
-package "com.compi.backend.languages" {
-  interface "LanguageCompiler" as LanguageCompiler {
-    +id() : String
-    +displayName() : String
-    +extensions() : List<String>
-    +parse(source, errors) : ParseResult
-    +analyze(ast, symbols, errors)
-    +generateIntermediate(ast, symbols, generator)
-    +loadImports(ast, ...)
-  }
-  abstract "AbstractLanguageCompiler" as AbstractLanguageCompiler {
-    #workingDirectory : File
-    #projectDirectory : File
-    #vocabulary : Vocabulary
-    #ruleNames : String[]
-  }
-  class "LanguageCompilerFactory" as LanguageCompilerFactory {
-    {static} +getCompiler(name) : LanguageCompiler
-    {static} +all() : List<LanguageCompiler>
-    {static} +allowedExtensions() : List<String>
-  }
-  class "PigLatinCompiler" as PigLatinCompiler
-  class "YCompiler" as YCompiler
-  class "ZetarianoCompiler" as ZetarianoCompiler
-}
-
-package "com.compi.backend.languages.piglatin" {
-  class "PigLatinAstBuilder" as PigLatinAstBuilder <<nuevo>> {
-    +build(ParseTree) : ProgramNodeAST
-  }
-  class "PigLatinSemanticAnalyzer" as PigLatinSemanticAnalyzer <<nuevo>>
-  class "PigLatinCodeGenerator" as PigLatinCodeGenerator <<nuevo>>
-}
-package "com.compi.backend.languages.piglatin.ast" {
-  class "SeriesDeclarationNodeAST" as SeriesDeclarationNodeAST <<nuevo>>
-}
-
-package "com.compi.backend.languages.y" {
-  class "YAstBuilder" as YAstBuilder <<nuevo>>
-  class "YSemanticAnalyzer" as YSemanticAnalyzer <<nuevo>>
-  class "YCodeGenerator" as YCodeGenerator <<nuevo>>
-  class "YIndentLexer" as YIndentLexer
-}
-package "com.compi.backend.languages.y.ast" {
-  class "ElegirNodeAST" as ElegirNodeAST <<nuevo>>
-  class "ReadFunctionNodeAST" as ReadFunctionNodeAST <<nuevo>>
-}
-
-package "com.compi.backend.languages.zetariano" {
-  class "ZetarianoAstBuilder" as ZetarianoAstBuilder <<nuevo>>
-  class "ZetarianoSemanticAnalyzer" as ZetarianoSemanticAnalyzer <<nuevo>>
-  class "ZetarianoCodeGenerator" as ZetarianoCodeGenerator <<nuevo>>
-}
-package "com.compi.backend.languages.zetariano.ast" {
-  class "SwitchZetarianoNodeAST" as SwitchZetarianoNodeAST <<nuevo>>
-}
-
-' =====================================================================
-'  TABLA DE SIMBOLOS
-' =====================================================================
 package "com.compi.backend.symbols" {
-  class "SymbolTable" as SymbolTable {
-    globalScope : Scope
-    currentScope : Scope
-    +enterScope(name, offset)
-    +exitScope()
-    +define(Symbol) : boolean
-    +resolve(String) : Symbol
-    +resolveType(String) : Type
-    +getAllSymbols() : List<Symbol>
+  class SymbolTable
+  class Scope
+  class Symbol
+  class Type
+  class TypeTable {
+    +define(name, Type, Scope) : TypeEntry
+    +resolve(name, Scope) : Type
+    +getEntries() : List<TypeEntry>
+    +clear()
   }
-  class "Scope" as Scope {
-    name : String
-    parent : Scope
-    +define(Symbol) : boolean
-    +resolve(String) : Symbol
-    +allocateOffset(int) : int
-  }
-  class "Symbol" as Symbol {
+  class TypeEntry <<record>> {
+    id : int
     name : String
     type : Type
-    category : SymbolCategory
-    offset : int
-    parameters : List<Symbol>
-    members : List<Symbol>
-    +getStorageName() : String
+    baseTypeId : Integer
+    parentId : Integer
+    dimension : int
+    minimum : List<Integer>
+    maximum : List<Integer>
+    scopeId : int
+    scopeName : String
   }
-  class "Type" as Type {
-    dataType : DataType
-    customTypeName : String
-    elementType : Type
-    dimensions : int
-    +isAssignableTo(Type) : boolean
-    +isNumeric() : boolean
-  }
-  enum "DataType" as DataType {
+  class TypeCompatibility
+  class CallValidator
+  class ArrayLiteral
+  enum DataType {
     INT
     DOUBLE
     CHAR
@@ -349,7 +230,7 @@ package "com.compi.backend.symbols" {
     NULL
     UNKNOWN
   }
-  enum "SymbolCategory" as SymbolCategory {
+  enum SymbolCategory {
     VARIABLE
     PARAMETER
     FUNCTION
@@ -359,165 +240,61 @@ package "com.compi.backend.symbols" {
     CLASS
     FIELD
   }
-  class "TypeTable" as TypeTable {
-    +resolve(name) : Type
-    +define(name, type)
-  }
-  class "TypeCompatibility" as TypeCompatibility {
-    {static} +checkArithmetic(Type,Type,String) : Type
-    {static} +checkRelational(Type,Type,String) : Type
-    {static} +checkEquality(Type,Type) : Type
-    {static} +checkLogical(Type,Type) : Type
-  }
-  class "CallValidator" as CallValidator {
-    {static} +validate(Symbol, List<Type>, ctx, errors)
-  }
-  class "ArrayLiteral" as ArrayLiteral {
-    {static} +validate(...) : CompilationError
-  }
 }
-
-' =====================================================================
-'  CODIGO DE TRES DIRECCIONES Y EMISION C
-' =====================================================================
 package "com.compi.backend.c3d" {
-  class "C3DGenerator" as C3DGenerator {
-    tempCounter : int
-    labelCounter : int
-    quadruples : List<Quadruple>
-    declaredTemps : Set<String>
-    +newTemp() : String
-    +newLabel() : String
-    +emit(Quadruple)
-    +emitReturn(String)
+  class C3DGenerator
+  class Quadruple
+  enum QuadrupleOp
+  class Triplet
+  class IntermediateCodeManager
+  class CCodeEmitter <<delegado>>
+  class FlatEmitter {
+    +build() : String
   }
-  class "Quadruple" as Quadruple {
-    op : QuadrupleOp
-    arg1 : String
-    arg2 : String
-    result : String
-    +toC3D() : String
-    +toString(translator) : String
-  }
-  enum "QuadrupleOp" as QuadrupleOp {
-    ADD
-    SUB
-    MUL
-    DIV
-    MOD
-    ASSIGN
-    ARRAY_GET
-    ARRAY_SET
-    LABEL
-    GOTO
-    IF_EQ
-    CALL
-    PARAM
-    RETURN
-    HEAP_GET
-    PRINT_INT
-    READ
-  }
-  class "Triplet" as Triplet
-  class "IntermediateCodeManager" as IntermediateCodeManager {
-    triplets : List<Triplet>
-    +loadFromQuadruples(List<Quadruple>)
-  }
-  class "CCodeEmitter" as CCodeEmitter {
-    {static} +generateCCode(List<Quadruple>, Set<String>, SymbolTable) : String
-  }
-  class "ArrayRuntime" as ArrayRuntime {
-    {static} +address(...) : String
-    {static} +leer(...) : String
-    {static} +write(...)
-  }
-  class "HeapRuntime" as HeapRuntime {
-    {static} +fieldOffset(Symbol, String) : int
-    {static} +allocateObject(...) : String
-  }
-  class "FunctionRuntime" as FunctionRuntime {
-    {static} +name(owner, method, count) : String
-  }
-  class "ValueRuntime" as ValueRuntime {
-    {static} +asText(generator, value, type) : String
-  }
-  enum "Mode" as Mode {
+  class FlatLayout
+  class ArrayRuntime
+  class HeapRuntime
+  class FunctionRuntime
+  class ValueRuntime
+  enum Mode {
     TRIPLETS
     QUADRUPLES
   }
 }
-
-' =====================================================================
-'  ERRORES, PARSER, PILA Y UTILIDADES
-' =====================================================================
 package "com.compi.backend.errors" {
-  class "CompilationError" as CompilationError {
-    type : ErrorType
-    message : String
-    line : int
-    column : int
-    +inFile(name) : CompilationError
-  }
-  enum "ErrorType" as ErrorType {
+  class CompilationError
+  class Diagnostic
+  enum ErrorType {
     LEXICAL
     SYNTACTIC
     SEMANTIC
   }
-  class "Diagnostic" as Diagnostic {
-    {static} +fromAntlr(...) : String
-    {static} +initializerShape(...)
-  }
 }
-
 package "com.compi.backend.parser" {
-  class "ParseTrace" as ParseTrace {
-    {static} +build(tree, vocab, rules) : List<ParseStep>
-  }
-  class "ParseStep" as ParseStep {
-    number : int
-    type : StackAction
-    symbol : String
-    line : int
-    column : int
-  }
+  class ParseTrace
+  class ParseStep
 }
-
 package "com.compi.backend.runtime" {
-  class "StackSimulator" as StackSimulator {
-    +simulate(List<Quadruple>) : List<StackState>
-  }
-  class "StackState" as StackState {
-    index : int
-    action : StackAction
-    elements : List<String>
-    +depth() : int
-  }
-  class "Stack" as Stack {
-    +push(Object)
-    +pop() : Object
-    +peek() : Object
-  }
+  class StackSimulator
+  class StackState
+  class Stack
 }
-
 package "com.compi.backend.utils" {
-  class "ParseTreeDotGenerator" as ParseTreeDotGenerator {
-    +build(tree, title) : String
-  }
-  class "ASTDotGenerator" as ASTDotGenerator <<nuevo>> {
-    +build(ast, title) : String
+  class ParseTreeDotGenerator
+  class ASTDotGenerator {
+    +build(AbstractNodeAST, String) : String
   }
 }
 
-' =====================================================================
-'  RELACIONES
-' =====================================================================
-
-' --- Entrada / frontend ---
-Main ..> MainWindow : crea
+Main ..> MainWindow
+MainWindow *-- WorkspaceActions
+MainWindow *-- CompilationActions
+CompilationActions *-- Compiler
+WorkspaceActions ..> MainWindow
+CompilationActions ..> MainWindow
 MainWindow *-- TopToolbar
 MainWindow *-- FileTreePanel
 MainWindow *-- EditorTabs
-MainWindow *-- WelcomePanel
 MainWindow *-- ConsoleDock
 MainWindow *-- StatusBar
 MainWindow *-- ToolWindow
@@ -525,89 +302,66 @@ MainWindow *-- ParserTreePanel
 MainWindow *-- SymbolTablePanel
 MainWindow *-- StackVisualizerPanel
 MainWindow *-- ErrorTablePanel
-MainWindow *-- Compiler : usa
-MainWindow ..> NewFileDialog : crea
-MainWindow ..> CompilationError
-MainWindow ..> ErrorType
-MainWindow ..> Symbol
-MainWindow ..> ParseStep
-MainWindow ..> Mode
-MainWindow ..> LanguageCompilerFactory
-MainWindow ..> UiTheme
+MainWindow *-- TypeTablePanel
+WorkspaceActions ..> NewFileDialog
 EditorTabs o-- EditorPanel
-EditorTabs ..> TabHeader : crea
-EditorTabs ..> LanguageCompilerFactory
-EditorPanel *-- LineNumberComponent
+EditorTabs ..> TabHeader
 EditorPanel *-- SyntaxHighlighter
-EditorPanel ..> UiTheme
+EditorPanel *-- LineNumberComponent
 ToolWindow *-- ToolWindowDock
 ToolWindowDock o-- ParserTreePanel
 ToolWindowDock o-- SymbolTablePanel
 ToolWindowDock o-- StackVisualizerPanel
 ToolWindowDock o-- ErrorTablePanel
+ToolWindowDock o-- TypeTablePanel
 ParserTreePanel *-- TreeCanvas
-ParserTreePanel ..> JFileChooserLike
-ParserTreePanel ..> IdeIcons
-TreeCanvas *-- DotModel
-TreeCanvas ..> TreeLayout
+TreeCanvas o-- DotModel
+TreeCanvas o-- TreeLayout
 SymbolTablePanel *-- TableFilterBar
-SymbolTablePanel ..> Symbol
 ErrorTablePanel *-- TableFilterBar
+TypeTablePanel *-- TableFilterBar
+TypeTablePanel ..> TypeEntry
+CompilationActions ..> TypeEntry : instantánea por archivo
+SymbolTablePanel ..> Symbol
 ErrorTablePanel ..> CompilationError
-ErrorTablePanel ..> ErrorType
 StackVisualizerPanel ..> ParseStep
-StackVisualizerPanel ..> StackAction
-TopToolbar ..> LanguageCompilerFactory
-TopToolbar ..> LanguageCompiler
-TopToolbar ..> Mode
-TopToolbar ..> IdeIcons
-FileTreePanel ..> LanguageCompilerFactory
-FileTreePanel ..> IdeIcons
-ConsoleDock ..> IdeIcons
-TabHeader ..> IdeIcons
-WelcomePanel ..> IdeIcons
-NewFileDialog ..> LanguageCompilerFactory
-
-' --- Orquestador ---
 Compiler *-- SymbolTable
-Compiler *-- "1" C3DGenerator
-Compiler o-- "1" IntermediateCodeManager
-Compiler ..> LanguageCompiler : delega fases
+Compiler *-- C3DGenerator
+Compiler *-- IntermediateCodeManager
 Compiler ..> LanguageCompilerFactory
-Compiler ..> ParseResult
+Compiler ..> LanguageCompiler
+Compiler ..> ParseTreeDotGenerator
 Compiler ..> ParseTrace
 Compiler ..> CCodeEmitter
 Compiler ..> StackSimulator
-Compiler ..> ASTDotGenerator
-Compiler ..> CompilationError
-ParseResult *-- ProgramNodeAST : ast
-ParseResult ..> ASTNode
-
-' --- Interfaz de lenguajes ---
 AbstractLanguageCompiler ..|> LanguageCompiler
 PigLatinCompiler --|> AbstractLanguageCompiler
 YCompiler --|> AbstractLanguageCompiler
 ZetarianoCompiler --|> AbstractLanguageCompiler
-LanguageCompilerFactory ..> LanguageCompiler : crea
-PigLatinCompiler ..> PigLatinAstBuilder
-PigLatinCompiler ..> PigLatinSemanticAnalyzer
-PigLatinCompiler ..> PigLatinCodeGenerator
-YCompiler ..> YAstBuilder
-YCompiler ..> YSemanticAnalyzer
-YCompiler ..> YCodeGenerator
+LanguageCompilerFactory ..> LanguageCompiler
+PigLatinCompiler ..> PigLatinSemanticVisitor
+PigLatinCompiler ..> PigLatinC3DVisitor
+YCompiler ..> YSemanticVisitor
+YCompiler ..> YC3DVisitor
 YCompiler ..> YIndentLexer
-ZetarianoCompiler ..> ZetarianoAstBuilder
-ZetarianoCompiler ..> ZetarianoSemanticAnalyzer
-ZetarianoCompiler ..> ZetarianoCodeGenerator
-
-' --- AST: implementación e herencia ---
+ZetarianoCompiler ..> ZetarianoSemanticVisitor
+ZetarianoCompiler ..> ZetarianoC3DVisitor
+PigLatinSemanticVisitor *-- PigLatinArrayAnalyzer
+PigLatinSemanticVisitor *-- PigLatinConditionAnalyzer
+PigLatinC3DVisitor *-- PigLatinConditionEmitter
+PigLatinC3DVisitor *-- PigLatinObjectEmitter
+YC3DVisitor *-- YDeclarationEmitter
+YC3DVisitor *-- YControlEmitter
+YC3DVisitor *-- YAccessEmitter
+ZetarianoC3DVisitor *-- ZetarianoArrayEmitter
+ZetarianoC3DVisitor *-- ZetarianoClassEmitter
+ZetarianoC3DVisitor *-- ZetarianoConditionEmitter
+ZetarianoClassEmitter o-- ZetarianoArrayEmitter
 AbstractNodeAST ..|> ASTNode
+AbstractASTVisitor ..|> ASTVisitor
 AbstractStatementNodeAST --|> AbstractNodeAST
 AbstractExpressionNodeAST --|> AbstractNodeAST
 AbstractDefinitionNodeAST --|> AbstractNodeAST
-AbstractASTVisitor ..|> ASTVisitor
-
-' --- AST: sentencias ---
 ProgramNodeAST --|> AbstractNodeAST
 BlockNodeAST --|> AbstractStatementNodeAST
 DeclarationNodeAST --|> AbstractStatementNodeAST
@@ -626,8 +380,6 @@ BreakNodeAST --|> AbstractStatementNodeAST
 ContinueNodeAST --|> AbstractStatementNodeAST
 ExpressionStatementNodeAST --|> AbstractStatementNodeAST
 ImportNodeAST --|> AbstractNodeAST
-
-' --- AST: expresiones ---
 LiteralNodeAST --|> AbstractExpressionNodeAST
 IdentifierNodeAST --|> AbstractExpressionNodeAST
 BinaryOperationNodeAST --|> AbstractExpressionNodeAST
@@ -643,8 +395,6 @@ TernaryNodeAST --|> AbstractExpressionNodeAST
 IncrementNodeAST --|> AbstractExpressionNodeAST
 ReadExpressionNodeAST --|> AbstractExpressionNodeAST
 InstanceInitNodeAST --|> AbstractExpressionNodeAST
-
-' --- AST: definiciones ---
 FunctionDefinitionNodeAST --|> AbstractDefinitionNodeAST
 StructDefinitionNodeAST --|> AbstractDefinitionNodeAST
 ClassDefinitionNodeAST --|> AbstractDefinitionNodeAST
@@ -653,107 +403,41 @@ ConstructorDefinitionNodeAST --|> AbstractDefinitionNodeAST
 AttributeDefinitionNodeAST --|> AbstractDefinitionNodeAST
 ParameterNodeAST --|> AbstractNodeAST
 FieldDefinitionNodeAST --|> AbstractNodeAST
-
-' --- AST: deltas por lenguaje (herencia del comun) ---
-SeriesDeclarationNodeAST --|> DeclarationNodeAST
-ElegirNodeAST --|> SwitchNodeAST
-ReadFunctionNodeAST --|> ReadExpressionNodeAST
-SwitchZetarianoNodeAST --|> SwitchNodeAST
-
-' --- AST: agregación / composición de hijos ---
+AbstractNodeAST o-- ASTNode : children()
 ProgramNodeAST o-- ImportNodeAST
 ProgramNodeAST o-- AbstractDefinitionNodeAST
 ProgramNodeAST o-- AbstractStatementNodeAST
 BlockNodeAST o-- AbstractStatementNodeAST
-IfNodeAST o-- ElseIfNodeAST
-IfNodeAST o-- AbstractStatementNodeAST
-WhileNodeAST o-- AbstractStatementNodeAST
-DoWhileNodeAST o-- AbstractStatementNodeAST
-ForNodeAST o-- AbstractStatementNodeAST
-SwitchNodeAST o-- SwitchCaseNodeAST
-SwitchCaseNodeAST o-- AbstractStatementNodeAST
-PrintNodeAST o-- AbstractExpressionNodeAST
-ExpressionStatementNodeAST o-- AbstractExpressionNodeAST
-DeclarationNodeAST o-- AbstractExpressionNodeAST
-AssignmentNodeAST o-- AbstractExpressionNodeAST
-ReturnNodeAST o-- AbstractExpressionNodeAST
-BinaryOperationNodeAST o-- AbstractExpressionNodeAST
-UnaryOperationNodeAST o-- AbstractExpressionNodeAST
-MemberAccessNodeAST o-- AbstractExpressionNodeAST
-IndexNodeAST o-- AbstractExpressionNodeAST
-CallNodeAST o-- AbstractExpressionNodeAST
-NewObjectNodeAST o-- AbstractExpressionNodeAST
-NewArrayNodeAST o-- AbstractExpressionNodeAST
-ArrayLiteralNodeAST o-- AbstractExpressionNodeAST
-TernaryNodeAST o-- AbstractExpressionNodeAST
-InstanceInitNodeAST o-- AbstractExpressionNodeAST
-FunctionDefinitionNodeAST o-- ParameterNodeAST
-FunctionDefinitionNodeAST o-- AbstractStatementNodeAST
-StructDefinitionNodeAST o-- FieldDefinitionNodeAST
-ClassDefinitionNodeAST o-- AbstractNodeAST
-
-' --- Visitantes sobre el AST ---
-PigLatinSemanticAnalyzer --|> AbstractASTVisitor
-PigLatinCodeGenerator --|> AbstractASTVisitor
-YSemanticAnalyzer --|> AbstractASTVisitor
-YCodeGenerator --|> AbstractASTVisitor
-ZetarianoSemanticAnalyzer --|> AbstractASTVisitor
-ZetarianoCodeGenerator --|> AbstractASTVisitor
-
-' --- Dependencias de los visitantes ---
-PigLatinAstBuilder ..> ASTNode : construye
-PigLatinAstBuilder ..> ProgramNodeAST
-YSemanticAnalyzer ..> SymbolTable
-PigLatinSemanticAnalyzer ..> SymbolTable
-ZetarianoSemanticAnalyzer ..> SymbolTable
-PigLatinSemanticAnalyzer ..> TypeCompatibility
-PigLatinSemanticAnalyzer ..> CallValidator
-PigLatinCodeGenerator ..> C3DGenerator
-YCodeGenerator ..> C3DGenerator
-ZetarianoCodeGenerator ..> C3DGenerator
-PigLatinCodeGenerator ..> Quadruple
-YCodeGenerator ..> Quadruple
-ZetarianoCodeGenerator ..> Quadruple
-PigLatinSemanticAnalyzer ..> CompilationError
-YCodeGenerator ..> ArrayRuntime
-ZetarianoCodeGenerator ..> HeapRuntime
-IdentifierNodeAST ..> Symbol : resuelto en semántica
-TypeCompatibility ..> Type
-ArrayLiteral ..> Type
-CallValidator ..> Symbol
-
-' --- Tabla de símbolos ---
-SymbolTable *-- "1" Scope : global
+LiteralNodeAST ..> LiteralKind
+BinaryOperationNodeAST ..> OperationKind
+UnaryOperationNodeAST ..> OperationKind
+ReadExpressionNodeAST ..> ReadKind
+IdentifierNodeAST ..> Symbol
+ASTNode ..> ASTVisitor : accept()
+ASTDotGenerator ..> AbstractNodeAST
+SymbolTable *-- Scope
+SymbolTable *-- TypeTable
+TypeTable o-- TypeEntry
+TypeTable ..> Scope
+TypeEntry o-- Type
+TypeEntry ..> TypeEntry : tipo base / padre por ID
 Scope o-- Symbol
-Symbol *-- Type
-Symbol o-- Symbol : parametros / miembros
-TypeTable ..> Type
-SymbolTable ..> TypeTable
-
-' --- C3D / emisión ---
+Symbol o-- Type
+Type ..> DataType
+Symbol ..> SymbolCategory
 C3DGenerator o-- Quadruple
 Quadruple ..> QuadrupleOp
 IntermediateCodeManager o-- Triplet
-Triplet ..> QuadrupleOp
-CCodeEmitter ..> Quadruple
-CCodeEmitter ..> SymbolTable
-CCodeEmitter ..> FunctionRuntime
+CCodeEmitter ..> FlatEmitter : delega
+FlatEmitter *-- FlatLayout
+FlatEmitter ..> Quadruple
+FlatLayout ..> SymbolTable
 ArrayRuntime ..> C3DGenerator
 HeapRuntime ..> C3DGenerator
-HeapRuntime ..> Symbol
 ValueRuntime ..> C3DGenerator
-ValueRuntime ..> Type
-
-' --- Errores / parser / pila ---
 CompilationError ..> ErrorType
-Diagnostic ..> CompilationError
-Compiler ..> ErrorType
 ParseTrace ..> ParseStep
 ParseStep ..> StackAction
 StackSimulator ..> Quadruple
-StackSimulator o-- StackState
-StackState ..> StackAction
-ParseTreeDotGenerator ..> ParseResult
-ASTDotGenerator ..> ProgramNodeAST
-
+StackSimulator ..> StackState
 @enduml

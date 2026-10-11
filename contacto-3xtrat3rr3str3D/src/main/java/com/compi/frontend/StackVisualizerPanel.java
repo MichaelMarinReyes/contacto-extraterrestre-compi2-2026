@@ -83,7 +83,18 @@ public class StackVisualizerPanel extends JPanel {
 
     private void initCustomComponents() {
         setLayout(new BorderLayout());
+        JPanel topContainer = createStackContainer();
+        JPanel bottomContainer = createLogContainer();
+        splitPane = new JSplitPane(JSplitPane.VERTICAL_SPLIT, topContainer, bottomContainer);
+        splitPane.setResizeWeight(0.75);
+        splitPane.setDividerLocation(360);
+        splitPane.setBorder(BorderFactory.createEmptyBorder());
+        splitPane.setContinuousLayout(true);
+        splitPane.setOneTouchExpandable(true);
+        add(splitPane, BorderLayout.CENTER);
+    }
 
+    private JPanel createStackContainer() {
         stackDrawPanel = new StackCanvas();
         stackDrawPanel.setBackground(UiTheme.toolWindowBg());
         stackDrawPanel.setPreferredSize(new Dimension(900, 400));
@@ -110,7 +121,10 @@ public class StackVisualizerPanel extends JPanel {
         topContainer.setOpaque(false);
         topContainer.add(stackBar, BorderLayout.NORTH);
         topContainer.add(stackScroll, BorderLayout.CENTER);
+        return topContainer;
+    }
 
+    private JPanel createLogContainer() {
         logTextArea = new JTextArea();
         logTextArea.setEditable(false);
         logTextArea.setLineWrap(false);
@@ -133,15 +147,7 @@ public class StackVisualizerPanel extends JPanel {
         bottomContainer.setOpaque(false);
         bottomContainer.add(logBar, BorderLayout.NORTH);
         bottomContainer.add(logScroll, BorderLayout.CENTER);
-
-        splitPane = new JSplitPane(JSplitPane.VERTICAL_SPLIT, topContainer, bottomContainer);
-        splitPane.setResizeWeight(0.75);
-        splitPane.setDividerLocation(360);
-        splitPane.setBorder(BorderFactory.createEmptyBorder());
-        splitPane.setContinuousLayout(true);
-        splitPane.setOneTouchExpandable(true);
-
-        add(splitPane, BorderLayout.CENTER);
+        return bottomContainer;
     }
 
     private JLabel title(String text, int size) {
@@ -233,8 +239,12 @@ public class StackVisualizerPanel extends JPanel {
 
     private void drawStep(Graphics2D g2, ParseStep state, int i, int cardH, int badgeY) {
         int x = START_X + i * COL_WIDTH;
-        List<String> elementos = state.getStack();
+        drawStepHeader(g2, state, x);
+        drawStackCard(g2, state.getStack(), x, cardH);
+        drawStepBadge(g2, state, x, badgeY);
+    }
 
+    private void drawStepHeader(Graphics2D g2, ParseStep state, int x) {
         g2.setFont(UiTheme.sansBold(12));
         g2.setColor(colorDe(state.getType()));
         String number = String.valueOf(state.getNumber());
@@ -245,7 +255,9 @@ public class StackVisualizerPanel extends JPanel {
         String label = state.getType().getTag();
         g2.drawString(label, x + (CARD_WIDTH - g2.getFontMetrics().stringWidth(label)) / 2,
                 STEP_ACTION_Y);
+    }
 
+    private void drawStackCard(Graphics2D g2, List<String> elementos, int x, int cardH) {
         g2.setColor(CARD_BG);
         g2.fillRoundRect(x, CARD_TOP, CARD_WIDTH, cardH, 10, 10);
         g2.setColor(CARD_BORDER);
@@ -279,7 +291,9 @@ public class StackVisualizerPanel extends JPanel {
                 y += BOX_HEIGHT + BOX_GAP;
             }
         }
+    }
 
+    private void drawStepBadge(Graphics2D g2, ParseStep state, int x, int badgeY) {
         g2.setFont(UiTheme.sans(9));
         FontMetrics fmBadge = g2.getFontMetrics();
         String detail = trim(badge(state), fmBadge, CARD_WIDTH - 12);
