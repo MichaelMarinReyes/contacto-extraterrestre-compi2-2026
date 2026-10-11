@@ -4,6 +4,7 @@ import com.compi.ZetarianoBaseVisitor;
 import com.compi.ZetarianoParser;
 import com.compi.backend.errors.CompilationError;
 import com.compi.backend.errors.Diagnostic;
+import com.compi.backend.c3d.FunctionRuntime;
 import com.compi.backend.symbols.*;
 import org.antlr.v4.runtime.ParserRuleContext;
 import org.antlr.v4.runtime.tree.ParseTree;
@@ -19,6 +20,8 @@ public class ZetarianoSemanticVisitor extends ZetarianoBaseVisitor<Type> {
 
     public ZetarianoSemanticVisitor(SymbolTable symbolTable) {
         this.symbolTable = symbolTable;
+        Symbol receiver = symbolTable.resolve("this");
+        if (receiver != null) currentClass = symbolTable.getClass(receiver.getType().getCustomTypeName());
     }
 
     private static int widthOf(int[] shape) {
@@ -56,7 +59,7 @@ public class ZetarianoSemanticVisitor extends ZetarianoBaseVisitor<Type> {
                 .at(ctx);
         symbolTable.addClass(currentClass);
 
-        symbolTable.enterScope("class_" + className, 0);
+        symbolTable.enterScope("class_" + className, 0, ctx);
 
         int fieldOffset = 0;
         for (ZetarianoParser.MiembroClaseContext mc : ctx.miembroClase()) {
@@ -75,6 +78,18 @@ public class ZetarianoSemanticVisitor extends ZetarianoBaseVisitor<Type> {
             }
         }
 
+        // Registra las firmas antes de comprobar cuerpos: permite llamadas hacia adelante y recursión.
+        for (ZetarianoParser.MiembroClaseContext member : ctx.miembroClase()) {
+            if (member.metodoDef() != null) {
+                var method = member.metodoDef();
+                registerCallable(method.ID().getText(), resolveType(method.tipoDato().getText()),
+                        SymbolCategory.METHOD, method.parametros(), method);
+            } else if (member.constructorDef() != null) {
+                var constructor = member.constructorDef();
+                registerCallable(constructor.ID().getText(), Type.VOID, SymbolCategory.CONSTRUCTOR,
+                        constructor.parametros(), constructor);
+            }
+        }
         for (ZetarianoParser.MiembroClaseContext mc : ctx.miembroClase()) {
             if (mc.constructorDef() != null) {
                 visit(mc.constructorDef());
@@ -96,24 +111,20 @@ public class ZetarianoSemanticVisitor extends ZetarianoBaseVisitor<Type> {
                     name, currentClass.getName(), ctx));
         }
 
-        Symbol ctorSymbol = new Symbol(name, Type.VOID, SymbolCategory.CONSTRUCTOR).at(ctx);
+        int count = ctx.parametros() == null ? 0 : ctx.parametros().parametro().size();
+        Symbol ctorSymbol = currentClass.getCallable(name, count);
 
-        symbolTable.enterScope("constructor_" + name, 1);
+        currentMethodReturnType = Type.VOID;
+        symbolTable.enterScope("constructor_" + FunctionRuntime.name(currentClass.getName(), name, count), 1, ctx);
         defineThis(ctx);
         if (ctx.parametros() != null) {
             for (ZetarianoParser.ParametroContext pCtx : ctx.parametros().parametro()) {
                 String pName = pCtx.ID().getText();
                 Type pType = resolveType(pCtx.tipoDato().getText());
                 int offset = symbolTable.getCurrentScope().allocateOffset(1);
-                Symbol pSym = new Symbol(pName, pType, SymbolCategory.PARAMETER, offset, false)
-                        .at(pCtx);
-                ctorSymbol.addParameter(pSym);
+                Symbol pSym = ctorSymbol.getParameters().stream().filter(parameter -> parameter.getName().equals(pName)).findFirst().orElseThrow();
                 symbolTable.define(pSym);
             }
-        }
-
-        if (currentClass != null) {
-            currentClass.addMember(ctorSymbol);
         }
 
         visit(ctx.bloque());
@@ -127,10 +138,10 @@ public class ZetarianoSemanticVisitor extends ZetarianoBaseVisitor<Type> {
         Type returnType = resolveType(ctx.tipoDato().getText());
         currentMethodReturnType = returnType;
 
-        Symbol methodSymbol = new Symbol(methodName, returnType, SymbolCategory.METHOD).at(ctx);
-        methodSymbol.setReturnType(returnType);
+        int count = ctx.parametros() == null ? 0 : ctx.parametros().parametro().size();
+        Symbol methodSymbol = currentClass.getCallable(methodName, count);
 
-        symbolTable.enterScope("method_" + methodName, 1);
+        symbolTable.enterScope("method_" + FunctionRuntime.name(currentClass.getName(), methodName, count), 1, ctx);
         defineThis(ctx);
 
         if (ctx.parametros() != null) {
@@ -138,15 +149,9 @@ public class ZetarianoSemanticVisitor extends ZetarianoBaseVisitor<Type> {
                 String pName = pCtx.ID().getText();
                 Type pType = resolveType(pCtx.tipoDato().getText());
                 int offset = symbolTable.getCurrentScope().allocateOffset(1);
-                Symbol pSym = new Symbol(pName, pType, SymbolCategory.PARAMETER, offset, false)
-                        .at(pCtx);
-                methodSymbol.addParameter(pSym);
+                Symbol pSym = methodSymbol.getParameters().stream().filter(parameter -> parameter.getName().equals(pName)).findFirst().orElseThrow();
                 symbolTable.define(pSym);
             }
-        }
-
-        if (currentClass != null) {
-            currentClass.addMember(methodSymbol);
         }
 
         visit(ctx.bloque());
@@ -185,7 +190,7 @@ public class ZetarianoSemanticVisitor extends ZetarianoBaseVisitor<Type> {
             }
         }
 
-        if (dimensiones > 0 && !varType.hasSizes()) {
+        if (dimensiones > 0 && !varType.hasSizes() && ctx.expresion() == null) {
             errors.add(Diagnostic.sizelessArray(varName, ctx));
         }
 
@@ -215,6 +220,14 @@ public class ZetarianoSemanticVisitor extends ZetarianoBaseVisitor<Type> {
             Type type = valueType(name, elementos.get(f), where);
             if (type == null) {
                 type = Type.UNKNOWN;
+            }
+            Type element = type.isArray() ? type.getElementType() : type;
+            if (f > 0 && Type.isKnown(rowType) && Type.isKnown(element)) {
+                if (rowType.isNumeric() && element.isNumeric()) {
+                    if (Type.DOUBLE.equals(element)) rowType = Type.DOUBLE;
+                } else if (!element.equals(rowType)) {
+                    CallValidator.report("El arreglo «" + name + "» contiene elementos de tipos incompatibles", where, errors);
+                }
             }
 
             int[] shape = type.isArray() ? type.getSizes() : new int[0];
@@ -386,10 +399,77 @@ public class ZetarianoSemanticVisitor extends ZetarianoBaseVisitor<Type> {
         String className = ctx.ID().getText();
         Symbol cls = symbolTable.getClass(className);
         if (cls == null) {
-
-            return Type.classType(className);
+            errors.add(Diagnostic.undefinedType(className, ctx));
+            return Type.UNKNOWN;
         }
+        List<Type> arguments = ctx.argumentos() == null ? List.of() : ctx.argumentos().expresion().stream().map(this::visit).toList();
+        Symbol constructor = cls.getCallable(className, arguments.size());
+        if (constructor == null) CallValidator.report("No existe un constructor de «" + className + "» con " + arguments.size() + " argumentos", ctx, errors);
+        else CallValidator.validate(constructor, arguments, ctx, errors);
         return cls.getType();
+    }
+
+    @Override
+    public Type visitNewArrayExpr(ZetarianoParser.NewArrayExprContext ctx) {
+        int[] sizes = new int[ctx.expresion().size()];
+        for (int i = 0; i < sizes.length; i++) {
+            visit(ctx.expresion(i));
+            String size = ctx.expresion(i).getText();
+            sizes[i] = size.matches("[0-9]+") ? Integer.parseInt(size) : Type.UNKNOWN_SIZE;
+        }
+        return Type.arrayOf(resolveType(ctx.tipoDato().getText()), sizes);
+    }
+
+    @Override
+    public Type visitLlamadaFuncionSemilla(ZetarianoParser.LlamadaFuncionSemillaContext ctx) {
+        if (ctx.PRINT() != null || ctx.PRINTLN() != null) {
+            if (ctx.argumentos() != null) ctx.argumentos().expresion().forEach(this::visit);
+            return Type.VOID;
+        }
+        if (ctx.READLN() != null) return Type.UNKNOWN;
+        Symbol method = null;
+        int count = ctx.argumentos() == null ? 0 : ctx.argumentos().expresion().size();
+        String name;
+        if (ctx.accesoMiembro() != null) {
+            var access = ctx.accesoMiembro();
+            Symbol base = symbolTable.resolve(access.ID().getText());
+            if (base == null) {
+                errors.add(Diagnostic.undeclaredVariable(access.ID().getText(), ctx));
+                return Type.UNKNOWN;
+            }
+            Type type = base.getType();
+            for (int i = 0; i < access.miembroAcceso().size() - 1; i++) {
+                var step = access.miembroAcceso(i);
+                if (step.DOT() != null) {
+                    Symbol owner = symbolTable.getClass(type.getCustomTypeName());
+                    Symbol field = owner == null ? null : owner.getMember(step.ID().getText());
+                    if (field == null) return Type.UNKNOWN;
+                    type = field.getType();
+                }
+                if (!step.expresion().isEmpty()) type = type.desindexar(step.expresion().size());
+            }
+            name = access.miembroAcceso().getLast().ID().getText();
+            Symbol owner = symbolTable.getClass(type.getCustomTypeName());
+            method = owner == null ? null : owner.getCallable(name, count);
+        } else {
+            name = ctx.ID().getText();
+            if (currentClass != null) method = currentClass.getCallable(name, count);
+            if (method == null) method = symbolTable.getFunction(name);
+        }
+        if (method == null) {
+            errors.add(Diagnostic.undefinedFunction(name, ctx));
+            return Type.UNKNOWN;
+        }
+        CallValidator.validate(method, ctx.argumentos() == null ? List.of()
+                : ctx.argumentos().expresion().stream().map(this::visit).toList(), ctx, errors);
+        return method.getReturnType() == null ? method.getType() : method.getReturnType();
+    }
+
+    @Override
+    public Type visitSentenciaFor(ZetarianoParser.SentenciaForContext ctx) {
+        symbolTable.enterScope("for_" + ctx.getStart().getStartIndex(), 0, ctx);
+        try { return visitChildren(ctx); }
+        finally { symbolTable.exitScope(); }
     }
 
     @Override
@@ -424,12 +504,17 @@ public class ZetarianoSemanticVisitor extends ZetarianoBaseVisitor<Type> {
                         if (member != null) {
 
                             current = member.getType();
+                        } else {
+                            return Type.UNKNOWN;
                         }
-                    }
+                    } else return Type.UNKNOWN;
                 }
-            } else {
+            }
+            {
                 for (ZetarianoParser.ExpresionContext index : mac.expresion()) {
-                    visit(index);
+                    Type indexType = visit(index);
+                    if (Type.isKnown(indexType) && !Type.INT.equals(indexType))
+                        CallValidator.report("El índice de «" + baseName + "» debe ser entero", index, errors);
                     if (!current.isArray()) {
                         errors.add(Diagnostic.notAnArray(baseName, current, ctx));
                         return Type.UNKNOWN;
@@ -446,12 +531,12 @@ public class ZetarianoSemanticVisitor extends ZetarianoBaseVisitor<Type> {
                                  String name) {
 
         String text = index.getText();
-        if (!text.matches("\\d+")) {
+        if (!text.matches("-?\\d+")) {
             return;
         }
         int[] sizes = array.getSizes();
         int valor = Integer.parseInt(text);
-        if (sizes.length > 0 && sizes[0] > 0 && valor >= sizes[0]) {
+        if (sizes.length > 0 && sizes[0] > 0 && (valor < 0 || valor >= sizes[0])) {
             errors.add(Diagnostic.indexOutOfRange(name, valor, sizes[0], index));
         }
     }
@@ -461,6 +546,22 @@ public class ZetarianoSemanticVisitor extends ZetarianoBaseVisitor<Type> {
             symbolTable.define(new Symbol("this", currentClass.getType(),
                     SymbolCategory.VARIABLE, 0, false).at(owner));
         }
+    }
+
+    private void registerCallable(String name, Type type, SymbolCategory category,
+                                  ZetarianoParser.ParametrosContext parameters, ParserRuleContext context) {
+        int count = parameters == null ? 0 : parameters.parametro().size();
+        Symbol method = new Symbol(name, type, category).at(context);
+        method.setReturnType(type);
+        int index = 1;
+        if (parameters != null) for (var parameter : parameters.parametro()) {
+            Symbol symbol = new Symbol(parameter.ID().getText(), resolveType(parameter.tipoDato().getText()),
+                    SymbolCategory.PARAMETER, index++, false).at(parameter);
+            symbol.setScope((category == SymbolCategory.CONSTRUCTOR ? "constructor_" : "method_")
+                    + FunctionRuntime.name(currentClass.getName(), name, count));
+            method.addParameter(symbol);
+        }
+        currentClass.addMember(method);
     }
 
     private Type resolveType(String text) {

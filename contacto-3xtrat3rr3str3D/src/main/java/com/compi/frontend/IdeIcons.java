@@ -48,6 +48,23 @@ public final class IdeIcons {
         });
     }
 
+    public static Icon newProject() {
+        return glyph(SIZE, (g, s, c) -> {
+            g.setColor(c);
+            g.setStroke(sf(1.6f, s));
+            Path2D folder = new Path2D.Double();
+            folder.moveTo(s * .10, s * .76);
+            folder.lineTo(s * .10, s * .26);
+            folder.lineTo(s * .40, s * .26);
+            folder.lineTo(s * .50, s * .40);
+            folder.lineTo(s * .74, s * .40);
+            folder.lineTo(s * .74, s * .56);
+            g.draw(folder);
+            g.draw(new Line2D.Double(s * .76, s * .52, s * .76, s * .84));
+            g.draw(new Line2D.Double(s * .60, s * .68, s * .92, s * .68));
+        });
+    }
+
     public static Icon saveFile() {
         return glyph(SIZE, (g, s, c) -> {
             g.setColor(c);

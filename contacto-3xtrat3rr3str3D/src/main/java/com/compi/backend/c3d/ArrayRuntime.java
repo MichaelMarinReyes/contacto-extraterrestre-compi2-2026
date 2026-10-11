@@ -23,6 +23,18 @@ public final class ArrayRuntime {
 
             int step = productFrom(sizes, d + 1);
             String addend = indices.get(d);
+            boolean dynamic = false;
+            for (int next = d + 1; next < sizes.length; next++) if (sizes[next] <= 0) dynamic = true;
+            if (dynamic) {
+                for (int next = d + 1; next < sizes.length; next++) {
+                    String header = add(c3d, base, next - sizes.length);
+                    String size = HeapRuntime.read(c3d, header);
+                    String scaled = c3d.newTemp();
+                    c3d.emit(QuadrupleOp.MUL, addend, size, scaled);
+                    addend = scaled;
+                }
+                step = 1;
+            }
             if (step != 1) {
                 String scaled = c3d.newTemp();
                 c3d.emit(QuadrupleOp.MUL, addend, String.valueOf(step), scaled);
@@ -40,6 +52,35 @@ public final class ArrayRuntime {
         String valor = c3d.newTemp();
         c3d.emit(QuadrupleOp.HEAP_GET, address(c3d, base, indices, sizes), null, valor);
         return valor;
+    }
+
+    /** Guarda las dimensiones antes de los datos; la referencia apunta al primer elemento. */
+    public static String allocateArray(C3DGenerator generator, int[] sizes) {
+        return allocateArray(generator, java.util.Arrays.stream(sizes).mapToObj(String::valueOf).toList());
+    }
+
+    public static String allocateArray(C3DGenerator generator, List<String> sizes) {
+        String count = "1";
+        for (String size : sizes) {
+            generator.emit(QuadrupleOp.HEAP_SET, "H", size, null);
+            generator.emit(QuadrupleOp.ADD, "H", "1", "H");
+            String product = generator.newTemp();
+            generator.emit(QuadrupleOp.MUL, count, size, product);
+            count = product;
+        }
+        String base = generator.newTemp();
+        generator.emit(QuadrupleOp.GET_H, null, null, base);
+        String end = generator.newTemp();
+        generator.emit(QuadrupleOp.ADD, base, count, end);
+        String test = generator.newLabel();
+        String done = generator.newLabel();
+        generator.emitLabel(test);
+        generator.emit(QuadrupleOp.IF_GE, "H", end, done);
+        generator.emit(QuadrupleOp.HEAP_SET, "H", "0", null);
+        generator.emit(QuadrupleOp.ADD, "H", "1", "H");
+        generator.emitGoto(test);
+        generator.emitLabel(done);
+        return base;
     }
 
     public static void write(C3DGenerator c3d, String base, List<String> indices,

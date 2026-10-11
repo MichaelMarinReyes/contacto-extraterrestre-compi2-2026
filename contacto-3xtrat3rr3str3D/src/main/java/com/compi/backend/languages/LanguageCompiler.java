@@ -44,6 +44,9 @@ public interface LanguageCompiler {
     default void setWorkingDirectory(java.io.File directory) {
     }
 
+    default void setProjectDirectory(java.io.File directory) {
+    }
+
     default void setSourceFileName(String fileName) {
     }
 }

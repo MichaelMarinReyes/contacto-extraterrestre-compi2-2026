@@ -3,7 +3,6 @@ package com.compi.backend.c3d;
 import com.compi.backend.symbols.Symbol;
 import com.compi.backend.symbols.SymbolCategory;
 import com.compi.backend.symbols.SymbolTable;
-import com.compi.backend.symbols.Type;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -12,305 +11,200 @@ import java.util.Map;
 import java.util.Set;
 
 public final class CCodeEmitter {
+    private CCodeEmitter() { }
 
-    private CCodeEmitter() {
-    }
-
+    /** Emite funciones con parámetros y temporales locales para preservar la recursividad. */
     public static String generateCCode(List<Quadruple> quadruples, Set<String> declaredTemps,
-                                       SymbolTable symbolTable) {
-        StringBuilder sb = new StringBuilder();
-        Map<String, String> operandos = operandosDe(symbolTable);
-        Set<String> enHeap = arreglosEnHeap(quadruples, symbolTable);
-
-        sb.append(prologue(declaredTemps, declaracionesDe(symbolTable, enHeap)));
-
-        StringBuilder declaracionesFunciones = new StringBuilder();
-        for (Quadruple q : quadruples) {
-            if (q.getOp() == QuadrupleOp.FUNCTION_START && !"main".equals(q.getResult())) {
-                declaracionesFunciones.append("double ").append(q.getResult()).append("();\n");
-            }
-        }
-        if (declaracionesFunciones.length() > 0) {
-            sb.append("/* Funciones del programa */\n").append(declaracionesFunciones).append('\n');
-        }
-
-        StringBuilder main = new StringBuilder();
-        StringBuilder funciones = new StringBuilder();
-        boolean inFunction = false;
-        boolean mainOpen = false;
-
-        Map<String, List<String>> parametersByFunction = parametersByFunction(symbolTable);
-        List<String> parametrosPendientes = new ArrayList<>();
-
-        String returnValue = null;
-        boolean functionAlreadyReturns = false;
-
-        for (Quadruple q : quadruples) {
-            if (q.getOp() == QuadrupleOp.FUNCTION_START) {
-                if ("main".equals(q.getResult())) {
-                    if (!mainOpen) {
-                        main.append("int main() {\n");
-                        mainOpen = true;
-                    }
-                } else {
-                    inFunction = true;
-                    funciones.append("\ndouble ").append(q.getResult()).append("() {\n");
-                }
-                continue;
-            }
-            if (q.getOp() == QuadrupleOp.FUNCTION_END) {
-                if (inFunction) {
-
-                    if (!functionAlreadyReturns) {
-                        funciones.append("    return 0;\n");
-                    }
-                    funciones.append("}\n\n");
-                    inFunction = false;
-                    functionAlreadyReturns = false;
-                }
-                continue;
-            }
-
-            StringBuilder target = inFunction ? funciones : main;
-
-            if (!inFunction && !mainOpen) {
-                main.append("int main() {\n");
-                mainOpen = true;
-            }
-
-            if (q.getOp() == QuadrupleOp.PARAM) {
-                parametrosPendientes.add(operandoDe(operandos, q.getArg1()));
-                continue;
-            }
-            if (q.getOp() == QuadrupleOp.CALL) {
-                List<String> shape = parametersByFunction.getOrDefault(q.getArg1(), List.of());
-                int cuantos = Math.min(parametrosPendientes.size(), shape.size());
-                for (int i = 0; i < cuantos; i++) {
-                    target.append("    ").append(operandoDe(operandos, shape.get(i)))
-                            .append(" = ").append(parametrosPendientes.get(i)).append(";\n");
-                }
-                parametrosPendientes.clear();
-            }
-
-            if (q.getOp() == QuadrupleOp.STACK_SET && "P".equals(q.getArg1())) {
-                returnValue = operandoDe(operandos, q.getArg2());
-                continue;
-            }
-            if (q.getOp() == QuadrupleOp.RETURN) {
-                if (returnValue != null) {
-                    target.append("    return ").append(returnValue).append(";\n");
-                    returnValue = null;
-                    functionAlreadyReturns = true;
-                } else if (q.getArg1() != null) {
-                    target.append("    return ").append(operandoDe(operandos, q.getArg1()))
-                            .append(";\n");
-                    functionAlreadyReturns = true;
-                }
-                continue;
-            }
-
-            if (q.getOp() == QuadrupleOp.ASSIGN && q.getArg1() != null
-                    && q.getArg1().startsWith("\"") && q.getArg1().endsWith("\"")) {
-                writeString(target, q.getResult(), q.getArg1());
-                continue;
-            }
-
-            String line = q.toString(name -> operandos.getOrDefault(name, name));
-
-            if (q.getOp() == QuadrupleOp.LABEL) {
-                target.append(line).append("\n");
+                                      SymbolTable symbolTable) {
+        Map<String, List<Quadruple>> bodies = new LinkedHashMap<>();
+        bodies.put("main", new ArrayList<>());
+        String currentFunction = "main";
+        for (Quadruple quadruple : quadruples) {
+            if (quadruple.getOp() == QuadrupleOp.FUNCTION_START) {
+                currentFunction = quadruple.getResult();
+                bodies.computeIfAbsent(currentFunction, key -> new ArrayList<>());
+            } else if (quadruple.getOp() == QuadrupleOp.FUNCTION_END) {
+                currentFunction = "main";
             } else {
-                target.append("    ").append(line).append("\n");
+                bodies.get(currentFunction).add(quadruple);
             }
         }
-
-        sb.append(funciones);
-        if (mainOpen) {
-            main.append("    return 0;\n}\n\n");
-            sb.append(main);
+        Map<String, List<String>> signatures = parametersByFunction(symbolTable);
+        Map<String, String> operands = globalOperands(symbolTable);
+        StringBuilder output = new StringBuilder(runtimePrologue());
+        for (String name : bodies.keySet()) {
+            if (!"main".equals(name)) output.append(signature(name, signatures)).append(";\n");
         }
-
-        return sb.toString();
+        for (Map.Entry<String, List<Quadruple>> function : bodies.entrySet()) {
+            String name = function.getKey();
+            List<String> parameters = signatures.getOrDefault(name, List.of());
+            output.append('\n').append("main".equals(name) ? "int main(void)" : signature(name, signatures))
+                    .append(" {\n");
+            Set<String> locals = new LinkedHashSet<>();
+            for (Quadruple instruction : function.getValue()) {
+                for (String operand : new String[]{instruction.getArg1(), instruction.getArg2(), instruction.getResult()}) {
+                    if (operand != null && operand.matches("(?:t[0-9]+|v_[A-Za-z0-9_]+)")) locals.add(operand);
+                }
+            }
+            locals.removeAll(parameters);
+            for (String local : locals) output.append("    double ").append(local).append(" = 0;\n");
+            List<String> pendingArguments = new ArrayList<>();
+            String returnValue = null;
+            int argumentIndex = 0;
+            for (Quadruple instruction : function.getValue()) {
+                String first = operand(operands, instruction.getArg1());
+                String result = operand(operands, instruction.getResult());
+                switch (instruction.getOp()) {
+                    case PARAM -> {
+                        String argument = "argument_" + argumentIndex++;
+                        output.append("    double ").append(argument).append(" = ").append(first).append(";\n");
+                        pendingArguments.add(argument);
+                    }
+                    case CALL -> {
+                        int count = Integer.parseInt(instruction.getArg2() == null ? "0" : instruction.getArg2());
+                        int start = pendingArguments.size() - count;
+                        if (start < 0) throw new IllegalStateException("Faltan argumentos para «" + instruction.getArg1() + "»");
+                        output.append("    ");
+                        if (instruction.getResult() != null) output.append(result).append(" = ");
+                        output.append(instruction.getArg1()).append('(')
+                                .append(String.join(", ", pendingArguments.subList(start, pendingArguments.size())))
+                                .append(");\n");
+                        pendingArguments.subList(start, pendingArguments.size()).clear();
+                    }
+                    case STACK_SET -> {
+                        if ("P".equals(instruction.getArg1())) returnValue = operand(operands, instruction.getArg2());
+                        else output.append("    ").append(instruction.toString(value -> operand(operands, value))).append('\n');
+                    }
+                    case RETURN -> {
+                        output.append("    return ").append(returnValue != null ? returnValue
+                                : instruction.getArg1() == null ? "0" : first).append(";\n");
+                        returnValue = null;
+                    }
+                    case ASSIGN -> {
+                        if (instruction.getArg1() != null && instruction.getArg1().startsWith("\""))
+                            writeString(output, result, instruction.getArg1());
+                        else output.append("    ").append(result).append(" = ").append(first).append(";\n");
+                    }
+                    case LABEL -> output.append(instruction.getResult()).append(":;\n");
+                    default -> output.append("    ").append(instruction.toString(value -> operand(operands, value))).append('\n');
+                }
+            }
+            if (!pendingArguments.isEmpty()) throw new IllegalStateException("Quedaron argumentos sin una llamada");
+            output.append("    return 0;\n}\n");
+        }
+        return output.toString();
     }
 
-    public static Map<String, String> operandosDe(SymbolTable symbolTable) {
-        Map<String, String> operandos = new LinkedHashMap<>();
-        if (symbolTable == null) {
-            return operandos;
-        }
-        Map<String, Symbol> unicas = new LinkedHashMap<>();
-        for (Symbol sym : symbolTable.getAllSymbols()) {
-            if (sym.getCategory() != SymbolCategory.VARIABLE
-                    && sym.getCategory() != SymbolCategory.PARAMETER
-                    && sym.getCategory() != SymbolCategory.FIELD) {
-                continue;
-            }
-            unicas.putIfAbsent(sym.getName(), sym);
-        }
+    private static String signature(String name, Map<String, List<String>> signatures) {
+        List<String> parameters = signatures.getOrDefault(name, List.of());
+        return "double " + name + "(" + (parameters.isEmpty() ? "void"
+                : String.join(", ", parameters.stream().map(parameter -> "double " + parameter).toList())) + ")";
+    }
+
+    private static String operand(Map<String, String> operands, String value) {
+        return value == null ? "0" : operands.getOrDefault(value, value);
+    }
+
+    private static Map<String, String> globalOperands(SymbolTable symbolTable) {
+        Map<String, String> operands = new LinkedHashMap<>();
+        if (symbolTable == null) return operands;
         int cell = 0;
-        for (Symbol sym : unicas.values()) {
-            Type type = sym.getType();
-            if (type != null && type.isArray() && type.totalSize() > 0) {
-                operandos.put(sym.getName(), sym.getName());
-            } else {
-                operandos.put(sym.getName(), "stack[(int)" + cell + "]");
-                cell++;
+        for (Symbol symbol : symbolTable.getAllSymbols()) {
+            if (symbol.isGlobal() && symbol.getCategory() == SymbolCategory.VARIABLE) {
+                operands.put(symbol.getStorageName(), "stack[" + cell++ + "]");
             }
         }
-        return operandos;
-    }
-
-    private static String operandoDe(Map<String, String> operandos, String name) {
-        if (name == null) {
-            return "0";
-        }
-        return operandos.getOrDefault(name, name);
+        return operands;
     }
 
     public static Map<String, List<String>> parametersByFunction(SymbolTable symbolTable) {
-        Map<String, List<String>> byFunction = new LinkedHashMap<>();
-        if (symbolTable == null) {
-            return byFunction;
-        }
-        for (Symbol sym : symbolTable.getAllSymbols()) {
-            if (sym.getCategory() == SymbolCategory.FUNCTION) {
-                List<String> nombres = new ArrayList<>();
-                for (Symbol param : sym.getParameters()) {
-                    nombres.add(param.getName());
+        Map<String, List<String>> signatures = new LinkedHashMap<>();
+        if (symbolTable == null) return signatures;
+        for (Symbol symbol : symbolTable.getAllSymbols()) {
+            if (symbol.getCategory() == SymbolCategory.FUNCTION) {
+                signatures.put(symbol.getName(), symbol.getParameters().stream().map(Symbol::getStorageName).toList());
+            }
+            if (symbol.getCategory() == SymbolCategory.CLASS) {
+                for (Symbol method : symbol.getMembers()) {
+                    if (method.getCategory() != SymbolCategory.METHOD && method.getCategory() != SymbolCategory.CONSTRUCTOR) continue;
+                    String name = FunctionRuntime.name(symbol.getName(), method.getName(), method.getParameters().size());
+                    String scope = (method.getCategory() == SymbolCategory.CONSTRUCTOR ? "constructor_" : "method_") + name;
+                    List<String> parameters = new ArrayList<>();
+                    symbolTable.getAllSymbols().stream().filter(value -> "this".equals(value.getName()) && scope.equals(value.getScope()))
+                            .findFirst().ifPresent(value -> parameters.add(value.getStorageName()));
+                    method.getParameters().forEach(value -> parameters.add(value.getStorageName()));
+                    signatures.put(name, parameters);
                 }
-                byFunction.put(sym.getName(), nombres);
             }
         }
-        return byFunction;
+        return signatures;
     }
 
-    public static Set<String> arreglosEnHeap(List<Quadruple> quadruples,
-                                             SymbolTable symbolTable) {
-        Set<String> candidatos = new LinkedHashSet<>();
-        if (quadruples == null) {
-            return candidatos;
-        }
-        for (Quadruple q : quadruples) {
-            if (q.getOp() != QuadrupleOp.ASSIGN) {
-                continue;
-            }
-            String res = q.getResult();
-            if (res != null && res.matches("[A-Za-z_][A-Za-z0-9_]*")) {
-                candidatos.add(res);
-            }
-        }
-        if (symbolTable == null) {
-            return candidatos;
-        }
-        Set<String> enHeap = new LinkedHashSet<>();
-        for (Symbol sym : symbolTable.getAllSymbols()) {
-            String name = sym.getName();
-            if (candidatos.contains(name) && sym.getType() != null && sym.getType().isArray()
-                    && sym.getType().totalSize() > 0) {
-                enHeap.add(name);
-            }
-        }
-        return enHeap;
+    private static String runtimePrologue() {
+        return """
+                /* Código de tres direcciones: variables globales y referencias a memoria. */
+                #include <stdio.h>
+                #include <stdlib.h>
+                #include <string.h>
+                #include <math.h>
+                double stack[100000];
+                double heap[100000];
+                /* P identifica la base de pila; H señala la siguiente celda libre del heap. */
+                double P = 0;
+                double H = 0;
+                void print_string(int index) {
+                    while (heap[index] != 0 && heap[index] != -1) putchar((char)heap[index++]);
+                }
+                double concat_cadenas(double left, double right) {
+                    int start = (int)H;
+                    for (int i = (int)left; heap[i] != 0 && heap[i] != -1; i++) heap[(int)H++] = heap[i];
+                    for (int i = (int)right; heap[i] != 0 && heap[i] != -1; i++) heap[(int)H++] = heap[i];
+                    heap[(int)H++] = 0;
+                    return start;
+                }
+                double number_to_text(double value) {
+                    char buffer[64];
+                    snprintf(buffer, sizeof(buffer), "%.15g", value);
+                    int start = (int)H;
+                    for (int i = 0; buffer[i]; i++) heap[(int)H++] = buffer[i];
+                    heap[(int)H++] = 0;
+                    return start;
+                }
+                double read_text(void) {
+                    char buffer[4096];
+                    int start = (int)H;
+                    if (scanf(" %4095[^\\n]", buffer) != 1) buffer[0] = 0;
+                    for (int i = 0; buffer[i]; i++) heap[(int)H++] = buffer[i];
+                    heap[(int)H++] = 0;
+                    return start;
+                }
+                double char_to_text(double value) {
+                    int start = (int)H;
+                    heap[(int)H++] = value;
+                    heap[(int)H++] = 0;
+                    return start;
+                }
+                double read_character(void) {
+                    char value = 0;
+                    scanf(" %c", &value);
+                    return (unsigned char)value;
+                }
+                """;
     }
 
-    public static String declaracionesDe(SymbolTable symbolTable) {
-        return declaracionesDe(symbolTable, Set.of());
-    }
-
-    public static String declaracionesDe(SymbolTable symbolTable, Set<String> enHeap) {
-        StringBuilder declaraciones = new StringBuilder();
-        if (symbolTable == null) {
-            return "";
-        }
-        Map<String, Symbol> unicas = new LinkedHashMap<>();
-        for (Symbol sym : symbolTable.getAllSymbols()) {
-            if ((sym.getCategory() == SymbolCategory.VARIABLE
-                    || sym.getCategory() == SymbolCategory.PARAMETER
-                    || sym.getCategory() == SymbolCategory.FIELD)
-                    && sym.getType() != null && sym.getType().isArray()
-                    && sym.getType().totalSize() > 0) {
-                unicas.putIfAbsent(sym.getName(), sym);
-            }
-        }
-        for (Symbol sym : unicas.values()) {
-            if (enHeap != null && enHeap.contains(sym.getName())) {
-                declaraciones.append("double ").append(sym.getName()).append(";\n");
-            } else {
-                declaraciones.append("double ").append(sym.getName())
-                        .append("[").append(sym.getType().totalSize()).append("];\n");
-            }
-        }
-        return declaraciones.toString();
-    }
-
-    public static String prologue(Set<String> declaredTemps, String declaraciones) {
-        StringBuilder sb = new StringBuilder();
-        sb.append("/* Codigo de Tres Direcciones generado para C */\n");
-        sb.append("#include <stdio.h>\n");
-        sb.append("#include <stdlib.h>\n");
-        sb.append("#include <string.h>\n\n");
-
-        sb.append("/* Memoria Stack y Heap */\n");
-        sb.append("double stack[100000];\n");
-        sb.append("double heap[100000];\n");
-        sb.append("double P = 0;\n");
-        sb.append("double H = 0;\n\n");
-
-        if (declaredTemps != null && !declaredTemps.isEmpty()) {
-            sb.append("/* Variables temporales */\n");
-            sb.append("double ");
-            int count = 0;
-            for (String t : declaredTemps) {
-                if (count > 0) sb.append(", ");
-                sb.append(t);
-                count++;
-                if (count % 15 == 0) sb.append("\n       ");
-            }
-            sb.append(";\n\n");
-        }
-
-        if (!declaraciones.isEmpty()) {
-            sb.append("/* Arreglos del programa (aplanados) */\n");
-            sb.append(declaraciones).append('\n');
-        }
-
-        sb.append("/* Funciones de soporte runtime */\n");
-        sb.append("void print_string(int heap_idx) {\n");
-        sb.append("    int i = heap_idx;\n");
-        sb.append("    while (heap[i] != 0 && heap[i] != -1) {\n");
-        sb.append("        printf(\"%c\", (char)heap[i]);\n");
-        sb.append("        i++;\n");
-        sb.append("    }\n");
-        sb.append("}\n\n");
-        sb.append("double concat_cadenas(double a, double b) {\n");
-        sb.append("    int inicio = (int)H;\n");
-        sb.append("    int i = (int)a;\n");
-        sb.append("    while (heap[i] != 0 && heap[i] != -1) { heap[(int)H] = heap[i]; H++; i++; }\n");
-        sb.append("    i = (int)b;\n");
-        sb.append("    while (heap[i] != 0 && heap[i] != -1) { heap[(int)H] = heap[i]; H++; i++; }\n");
-        sb.append("    heap[(int)H] = 0; H++;\n");
-        sb.append("    return inicio;\n");
-        sb.append("}\n\n");
-        sb.append("double read_text(void) {\n");
-        sb.append("    char buffer[4096];\n");
-        sb.append("    int inicio = (int)H;\n");
-        sb.append("    int i = 0;\n");
-        sb.append("    if (fgets(buffer, sizeof(buffer), stdin) == NULL) { buffer[0] = 0; }\n");
-        sb.append("    while (buffer[i] != 0 && buffer[i] != '\\n') { heap[(int)H] = buffer[i]; H++; i++; }\n");
-        sb.append("    heap[(int)H] = 0; H++;\n");
-        sb.append("    return inicio;\n");
-        sb.append("}\n\n");
-        return sb.toString();
-    }
-
-    public static void writeString(StringBuilder target, String res, String literal) {
+    public static void writeString(StringBuilder target, String result, String literal) {
         String content = literal.substring(1, literal.length() - 1);
-        target.append("    ").append(res).append(" = H;\n");
+        target.append("    ").append(result).append(" = H;\n");
         for (int i = 0; i < content.length(); i++) {
-            target.append("    heap[(int)H] = ").append((int) content.charAt(i)).append(";\n");
-            target.append("    H = H + 1;\n");
+            char character = content.charAt(i);
+            if (character == '\\' && i + 1 < content.length()) {
+                character = switch (content.charAt(++i)) {
+                    case 'n' -> '\n'; case 't' -> '\t'; case 'r' -> '\r'; case '0' -> '\0';
+                    default -> content.charAt(i);
+                };
+            }
+            target.append("    heap[(int)H++] = ").append((int)character).append(";\n");
         }
-        target.append("    heap[(int)H] = 0;\n");
-        target.append("    H = H + 1;\n");
+        target.append("    heap[(int)H++] = 0;\n");
     }
 }

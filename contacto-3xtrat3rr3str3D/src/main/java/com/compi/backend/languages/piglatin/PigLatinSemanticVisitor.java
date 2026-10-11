@@ -69,19 +69,44 @@ public class PigLatinSemanticVisitor extends PigLatinBaseVisitor<Type> {
         }
         if (!ctx.VARIABLE().isEmpty()) {
             String varName = ctx.VARIABLE(0).getText();
-            Type varType = Type.UNKNOWN;
 
+            // Tipo anotado explícitamente: tipo_dato (numerus, textum,
+            // decimalis, littera, bool), texto/caracter literal, «novus Clase»
+            // o un nombre de estructura/clase definido en un archivo importado.
+            boolean hasDeclaredType = true;
+            Type declaredType;
             if (ctx.tipo_dato() != null) {
-                varType = resolveType(ctx.tipo_dato().getText());
+                declaredType = resolveType(ctx.tipo_dato().getText());
             } else if (ctx.TEXTUM() != null) {
-                varType = Type.STRING;
+                declaredType = Type.STRING;
             } else if (ctx.LITTERA() != null) {
-                varType = Type.CHAR;
+                declaredType = Type.CHAR;
             } else if (ctx.NOVUS() != null && ctx.VARIABLE().size() > 1) {
-                varType = Type.classType(ctx.VARIABLE(1).getText());
+                declaredType = Type.classType(ctx.VARIABLE(1).getText());
             } else if (ctx.VARIABLE().size() > 1) {
-                varType = resolveType(ctx.VARIABLE(1).getText());
+                declaredType = resolveType(ctx.VARIABLE(1).getText());
+            } else {
+                declaredType = Type.UNKNOWN;
+                hasDeclaredType = false;
             }
+
+            // Tipo del valor inicializador. Una condición lógica (por ejemplo
+            // «verum || 1 == 1») también produce un booleano.
+            Type valueType = null;
+            if (ctx.expresion() != null) {
+                valueType = visit(ctx.expresion());
+            } else if (ctx.condicion() != null) {
+                visit(ctx.condicion());
+                valueType = Type.BOOLEAN;
+            }
+
+            // «esto x : falsus» / «esto x : verum»: sin tipo anotado (o con un
+            // tipo no reconocido) se infiere el tipo a partir del valor.
+            Type varType = hasDeclaredType && Type.isKnown(declaredType)
+                    ? declaredType
+                    : (valueType != null && Type.isKnown(valueType)
+                            ? valueType
+                            : (hasDeclaredType ? declaredType : Type.UNKNOWN));
 
             int offset = symbolTable.getGlobalScope().allocateOffset(1);
             Symbol sym = new Symbol(varName, varType, SymbolCategory.VARIABLE, offset, true)
@@ -91,14 +116,13 @@ public class PigLatinSemanticVisitor extends PigLatinBaseVisitor<Type> {
                 errors.add(Diagnostic.globalAlreadyDeclared(varName, ctx));
             }
 
-            if (ctx.expresion() != null) {
-                Type exprType = visit(ctx.expresion());
-                if (Type.isKnown(exprType) && Type.isKnown(varType)
-                        && !exprType.isAssignableTo(varType)) {
-                    errors.add(Diagnostic.inicializacionIncompatible(
-                            varName, varType, exprType, ctx));
-                }
+            if (hasDeclaredType && valueType != null && Type.isKnown(declaredType)
+                    && Type.isKnown(valueType) && !valueType.isAssignableTo(declaredType)) {
+                errors.add(Diagnostic.inicializacionIncompatible(
+                        varName, declaredType, valueType, ctx));
             }
+            if (ctx.NOVUS() != null) validateConstructor(ctx.VARIABLE(1).getText(), ctx.argumentos(), ctx);
+            if (ctx.structura_instanciacion() != null) validateStruct(varType, ctx.structura_instanciacion());
         }
         return Type.VOID;
     }
@@ -110,12 +134,14 @@ public class PigLatinSemanticVisitor extends PigLatinBaseVisitor<Type> {
         if (ctx.tipo_dato() != null) {
             elemType = resolveType(ctx.tipo_dato().getText());
         } else if (ctx.VARIABLE().size() > 1) {
-            elemType = Type.structType(ctx.VARIABLE(1).getText());
+            elemType = resolveType(ctx.VARIABLE(1).getText());
+            if (!Type.isKnown(elemType)) errors.add(Diagnostic.undefinedType(ctx.VARIABLE(1).getText(), ctx));
         }
 
         int[] sizes = new int[ctx.NUMERO_ENTERO().size()];
         for (int i = 0; i < sizes.length; i++) {
             sizes[i] = Integer.parseInt(ctx.NUMERO_ENTERO(i).getText());
+            if (sizes[i] <= 0) CallValidator.report("Las dimensiones del arreglo deben ser positivas", ctx, errors);
         }
         Type arrayType = Type.arrayOf(elemType, sizes);
 
@@ -125,6 +151,12 @@ public class PigLatinSemanticVisitor extends PigLatinBaseVisitor<Type> {
             if (error != null) {
                 errors.add(error);
             }
+        }
+        if (ctx.elemento_arreglo_struct() != null) {
+            var elements = ctx.elemento_arreglo_struct().structura_instanciacion();
+            if (elements.size() != arrayType.totalSize())
+                CallValidator.report("La cantidad de objetos no coincide con el tamaño del arreglo «" + arrayName + "»", ctx, errors);
+            for (var element : elements) validateStruct(elemType, element);
         }
 
         int offset = symbolTable.getGlobalScope().allocateOffset(1);
@@ -142,6 +174,14 @@ public class PigLatinSemanticVisitor extends PigLatinBaseVisitor<Type> {
         int[] rowShape = new int[0];
         for (int f = 0; f < filas; f++) {
             Type type = arrayValueType(name, valores.get(f));
+            Type element = type.isArray() ? type.getElementType() : type;
+            if (f > 0 && Type.isKnown(rowType) && Type.isKnown(element)) {
+                if (rowType.isNumeric() && element.isNumeric()) {
+                    if (Type.DOUBLE.equals(element)) rowType = Type.DOUBLE;
+                } else if (!element.equals(rowType)) {
+                    CallValidator.report("El arreglo «" + name + "» contiene elementos de tipos incompatibles", valores.get(f), errors);
+                }
+            }
             int[] shape = type.isArray() ? type.getSizes() : new int[0];
             if (f == 0) {
                 rowType = type.isArray() ? type.getElementType() : type;
@@ -181,7 +221,7 @@ public class PigLatinSemanticVisitor extends PigLatinBaseVisitor<Type> {
 
     @Override
     public Type visitMaior(PigLatinParser.MaiorContext ctx) {
-        symbolTable.enterScope("maior", 0);
+        symbolTable.enterScope("maior", 0, ctx);
 
         for (PigLatinParser.SentenciaContext sCtx : ctx.sentencia()) {
             visit(sCtx);
@@ -213,6 +253,8 @@ public class PigLatinSemanticVisitor extends PigLatinBaseVisitor<Type> {
                 errors.add(Diagnostic.incompatibleAssignment(targetType, exprType, ctx));
             }
         }
+        if (ctx.NOVUS() != null) validateConstructor(ctx.VARIABLE(1).getText(), ctx.argumentos(), ctx);
+        if (ctx.structura_instanciacion() != null) validateStruct(targetType, ctx.structura_instanciacion());
         return targetType;
     }
 
@@ -246,6 +288,12 @@ public class PigLatinSemanticVisitor extends PigLatinBaseVisitor<Type> {
 
     @Override
     public Type visitTermino(PigLatinParser.TerminoContext ctx) {
+        if (ctx.NOVUS() != null) {
+            validateConstructor(ctx.VARIABLE().getText(), ctx.argumentos(), ctx);
+            return Type.classType(ctx.VARIABLE().getText());
+        }
+        if (ctx.expresion() != null) return visit(ctx.expresion());
+        if (ctx.acceso_miembro() != null) return visit(ctx.acceso_miembro());
         if (ctx.NUMERO_ENTERO() != null) return Type.INT;
         if (ctx.NUMERO_DECIMAL() != null) return Type.DOUBLE;
         if (ctx.CADENA_TEXTO() != null) return Type.STRING;
@@ -317,7 +365,9 @@ public class PigLatinSemanticVisitor extends PigLatinBaseVisitor<Type> {
                 }
                 actual = member.getType();
             } else if (child instanceof PigLatinParser.ExpresionContext) {
-                visit(child);
+                Type indexType = visit(child);
+                if (Type.isKnown(indexType) && !Type.INT.equals(indexType))
+                    CallValidator.report("El índice de «" + baseName + "» debe ser entero", (PigLatinParser.ExpresionContext) child, errors);
                 if (!actual.isArray()) {
                     errors.add(Diagnostic.notAnArray(baseName, actual, ctx));
                     return Type.UNKNOWN;
@@ -333,11 +383,11 @@ public class PigLatinSemanticVisitor extends PigLatinBaseVisitor<Type> {
     private void checkIndex(ParseTree index, Type array, String name) {
         int[] sizes = array.getSizes();
         String text = index.getText();
-        if (sizes.length == 0 || sizes[0] <= 0 || !text.matches("\\d+")) {
+        if (sizes.length == 0 || sizes[0] <= 0 || !text.matches("-?\\d+")) {
             return;
         }
         int valor = Integer.parseInt(text);
-        if (valor >= sizes[0]) {
+        if (valor < 0 || valor >= sizes[0]) {
             errors.add(Diagnostic.indexOutOfRange(name, valor, sizes[0],
                     (PigLatinParser.ExpresionContext) index));
         }
@@ -363,16 +413,88 @@ public class PigLatinSemanticVisitor extends PigLatinBaseVisitor<Type> {
 
     @Override
     public Type visitLlamada_funcion(PigLatinParser.Llamada_funcionContext ctx) {
+        List<Type> arguments = ctx.argumentos() == null ? List.of()
+                : ctx.argumentos().expresion().stream().map(this::visit).toList();
+        Symbol function;
         if (ctx.acceso_miembro() != null) {
-            visit(ctx.acceso_miembro());
-            return Type.INT;
+            var access = ctx.acceso_miembro();
+            Symbol base = symbolTable.resolve(access.VARIABLE(0).getText());
+            if (base == null) {
+                errors.add(Diagnostic.undeclaredVariable(access.VARIABLE(0).getText(), ctx));
+                return Type.UNKNOWN;
+            }
+            Type type = base.getType();
+            for (int i = 1; i < access.getChildCount() - 2;) {
+                if (".".equals(access.getChild(i).getText())) {
+                    Symbol member = findMember(type, access.getChild(i + 1).getText());
+                    if (member == null) return Type.UNKNOWN;
+                    type = member.getType();
+                    i += 2;
+                } else {
+                    visit(access.getChild(i + 1));
+                    if (!type.isArray()) return Type.UNKNOWN;
+                    type = type.desindexar(1);
+                    i += 3;
+                }
+            }
+            Symbol owner = declaredType(type);
+            String method = access.VARIABLE(access.VARIABLE().size() - 1).getText();
+            function = owner == null ? null : owner.getCallable(method, arguments.size());
+        } else {
+            function = symbolTable.getFunction(ctx.VARIABLE().getText());
         }
-        String funcName = ctx.VARIABLE().getText();
-        Symbol func = symbolTable.getFunction(funcName);
-        if (func == null) {
-            return Type.INT;
+        if (function == null) {
+            errors.add(Diagnostic.undefinedFunction(ctx.getChild(0).getText(), ctx));
+            return Type.UNKNOWN;
         }
-        return func.getReturnType() != null ? func.getReturnType() : Type.VOID;
+        CallValidator.validate(function, arguments, ctx, errors);
+        return function.getReturnType() != null ? function.getReturnType() : function.getType();
+    }
+
+    private void validateConstructor(String name, PigLatinParser.ArgumentosContext arguments,
+                                     org.antlr.v4.runtime.ParserRuleContext context) {
+        Symbol owner = symbolTable.getClass(name);
+        List<Type> types = arguments == null ? List.of() : arguments.expresion().stream().map(this::visit).toList();
+        if (owner == null) {
+            errors.add(Diagnostic.undefinedType(name, context));
+            return;
+        }
+        Symbol constructor = owner.getCallable(name, types.size());
+        if (constructor == null) CallValidator.report("No existe un constructor de «" + name + "» con " + types.size() + " argumentos", context, errors);
+        else CallValidator.validate(constructor, types, context, errors);
+    }
+
+    private void validateStruct(Type type, PigLatinParser.Structura_instanciacionContext initializer) {
+        Symbol definition = declaredType(type);
+        if (definition == null) {
+            CallValidator.report("No se encontró la estructura «" + type + "»", initializer, errors);
+            return;
+        }
+        if (!initializer.expresion().isEmpty()) {
+            if (initializer.expresion().size() != definition.getMembers().size()) {
+                CallValidator.report("La estructura «" + definition.getName() + "» requiere "
+                        + definition.getMembers().size() + " campos", initializer, errors);
+            }
+            for (int i = 0; i < Math.min(initializer.expresion().size(), definition.getMembers().size()); i++) {
+                Type actual = visit(initializer.expresion(i));
+                Type expected = definition.getMembers().get(i).getType();
+                if (Type.isKnown(actual) && !actual.isAssignableTo(expected))
+                    errors.add(Diagnostic.incompatibleAssignment(expected, actual, initializer.expresion(i)));
+            }
+        } else {
+            java.util.Set<String> assigned = new java.util.HashSet<>();
+            for (var field : initializer.atributo_asignacion()) {
+                String name = field.VARIABLE(0).getText();
+                Symbol member = definition.getMember(name);
+                if (member == null || !assigned.add(name)) {
+                    CallValidator.report("Campo desconocido o repetido «" + name + "» en «" + definition.getName() + "»", field, errors);
+                } else if (field.expresion() != null) {
+                    Type actual = visit(field.expresion());
+                    if (Type.isKnown(actual) && !actual.isAssignableTo(member.getType()))
+                        errors.add(Diagnostic.incompatibleAssignment(member.getType(), actual, field));
+                } else if (field.structura_instanciacion() != null) validateStruct(member.getType(), field.structura_instanciacion());
+            }
+        }
     }
 
     @Override
@@ -380,11 +502,11 @@ public class PigLatinSemanticVisitor extends PigLatinBaseVisitor<Type> {
         if (ctx.ESTO() != null && ctx.VARIABLE() != null) {
             String name = ctx.VARIABLE().getText();
             Type type = ctx.tipo_dato() != null ? resolveType(ctx.tipo_dato().getText()) : Type.INT;
-            if (symbolTable.resolve(name) == null) {
-                int offset = symbolTable.getGlobalScope().allocateOffset(1);
-                symbolTable.defineGlobal(
-                        new Symbol(name, type, SymbolCategory.VARIABLE, offset, true)
-                                .at(ctx));
+            {
+                int offset = symbolTable.getCurrentScope().allocateOffset(1);
+                if (!symbolTable.define(
+                        new Symbol(name, type, SymbolCategory.VARIABLE, offset, false)
+                                 .at(ctx))) errors.add(Diagnostic.alreadyDeclaredVariable(name, ctx));
             }
             if (ctx.expresion() != null) {
                 visit(ctx.expresion());
@@ -412,6 +534,7 @@ public class PigLatinSemanticVisitor extends PigLatinBaseVisitor<Type> {
 
     @Override
     public Type visitCiclo_per(PigLatinParser.Ciclo_perContext ctx) {
+        symbolTable.enterScope("for_" + ctx.getStart().getStartIndex(), 0, ctx);
         visit(ctx.inicializacion_per());
         visit(ctx.condiciones_per());
         visit(ctx.incremento_per());
@@ -422,8 +545,55 @@ public class PigLatinSemanticVisitor extends PigLatinBaseVisitor<Type> {
             }
         } finally {
             inLoop--;
+            symbolTable.exitScope();
         }
         return Type.VOID;
+    }
+
+    @Override
+    public Type visitCondicion(PigLatinParser.CondicionContext ctx) {
+        if (ctx.condicion() != null) visit(ctx.condicion());
+        Type type = visit(ctx.conjuncion());
+        if (Type.isKnown(type) && !Type.BOOLEAN.equals(type)) errors.add(Diagnostic.nonBooleanCondition("del bloque", ctx));
+        return Type.BOOLEAN;
+    }
+
+    @Override
+    public Type visitConjuncion(PigLatinParser.ConjuncionContext ctx) {
+        if (ctx.conjuncion() != null) visit(ctx.conjuncion());
+        return visit(ctx.negacion_logica());
+    }
+
+    @Override
+    public Type visitNegacion_logica(PigLatinParser.Negacion_logicaContext ctx) {
+        Type type = ctx.primaria_logica() != null ? visit(ctx.primaria_logica()) : visit(ctx.negacion_logica());
+        if (ctx.NEGACION() != null && Type.isKnown(type) && !Type.BOOLEAN.equals(type))
+            errors.add(Diagnostic.nonBooleanNegationOperator(ctx));
+        return type;
+    }
+
+    @Override
+    public Type visitPrimaria_logica(PigLatinParser.Primaria_logicaContext ctx) {
+        if (ctx.condicion() != null) return visit(ctx.condicion());
+        if (ctx.operador_relacional() != null) {
+            Type left = visit(ctx.expresion(0)), right = visit(ctx.expresion(1));
+            String operator = ctx.operador_relacional().getText();
+            Type result = "==".equals(operator) || "!=".equals(operator)
+                    ? TypeCompatibility.checkEquality(left, right) : TypeCompatibility.checkRelational(left, right, operator);
+            if (Type.isKnown(left) && Type.isKnown(right) && !Type.isKnown(result))
+                CallValidator.report("No se pueden comparar «" + left.label() + "» y «" + right.label() + "»", ctx, errors);
+            return Type.BOOLEAN;
+        }
+        if (ctx.llamada_funcion() != null) return visit(ctx.llamada_funcion());
+        if (ctx.VARIABLE() != null) {
+            Symbol symbol = symbolTable.resolve(ctx.VARIABLE().getText());
+            if (symbol == null) {
+                errors.add(Diagnostic.undeclaredVariable(ctx.VARIABLE().getText(), ctx));
+                return Type.UNKNOWN;
+            }
+            return symbol.getType();
+        }
+        return Type.BOOLEAN;
     }
 
     @Override
@@ -445,6 +615,7 @@ public class PigLatinSemanticVisitor extends PigLatinBaseVisitor<Type> {
             case "decimalis": return Type.DOUBLE;
             case "textum": return Type.STRING;
             case "littera": return Type.CHAR;
+            case "bool": return Type.BOOLEAN;
             case "verum":
             case "falsus": return Type.BOOLEAN;
             default:

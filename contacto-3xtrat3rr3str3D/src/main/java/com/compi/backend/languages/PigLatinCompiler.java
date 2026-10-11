@@ -78,10 +78,13 @@ public class PigLatinCompiler extends AbstractLanguageCompiler {
             return;
         }
         try {
+            symbolTable.beginCodeGeneration();
             PigLatinC3DVisitor c3d = new PigLatinC3DVisitor(symbolTable, generator);
             c3d.visit(tree);
-        } catch (Exception ignored) {
-
+        } catch (Exception exception) {
+            throw new IllegalStateException("No se pudo generar el código intermedio de PigLatin", exception);
+        } finally {
+            symbolTable.endCodeGeneration();
         }
     }
 
@@ -115,12 +118,12 @@ public class PigLatinCompiler extends AbstractLanguageCompiler {
             return nuevos;
         }
 
-        String key = relativeToProject(found);
+        String key = found.toPath().toAbsolutePath().normalize().toString();
         if (cargados.contains(key)) {
             return nuevos;
         }
         cargados.add(key);
-        nuevos.add(key);
+        nuevos.add(relativeToProject(found));
 
         String content;
         try {
@@ -139,7 +142,8 @@ public class PigLatinCompiler extends AbstractLanguageCompiler {
                     impCtx.getStart().getLine(), impCtx.getStart().getCharPositionInLine()));
             return nuevos;
         }
-        target.setWorkingDirectory(getWorkingDirectory());
+        target.setWorkingDirectory(found.getAbsoluteFile().getParentFile());
+        target.setProjectDirectory(getProjectDirectory());
         target.setSourceFileName(found.getName());
         List<CompilationError> sink = new ArrayList<>();
         ParseTree importedTree = target.parse(content, sink);
@@ -149,9 +153,11 @@ public class PigLatinCompiler extends AbstractLanguageCompiler {
             target.analyze(importedTree, symbolTable, sink);
             markSource(symbolTable, antes, key);
         }
-        target.generateIntermediate(importedTree, symbolTable, generator);
+        if (sink.isEmpty()) {
+            target.generateIntermediate(importedTree, symbolTable, generator);
+        }
         for (CompilationError e : sink) {
-            errors.add(e.inFile(key));
+            errors.add(e.inFile(found.getPath()));
         }
         return nuevos;
     }
@@ -178,22 +184,25 @@ public class PigLatinCompiler extends AbstractLanguageCompiler {
     }
 
     private File resolveImportFile(String path) {
+        File local = resolveInDirectory(getWorkingDirectory(), path);
+        return local != null ? local : resolveInDirectory(getProjectDirectory(), path);
+    }
+
+    private File resolveInDirectory(File directory, String path) {
         if (LanguageCompilerFactory.hasAllowedExtension(path)) {
-            File suchFile = new File(getWorkingDirectory(), path);
+            File suchFile = new File(directory, path);
             if (suchFile.isFile()) {
                 return suchFile;
             }
         }
         for (String ext : LanguageCompilerFactory.allowedExtensions()) {
-            File conExtension = new File(getWorkingDirectory(), path + "." + ext);
+            File conExtension = new File(directory, path + "." + ext);
             if (conExtension.isFile()) {
                 return conExtension;
             }
         }
 
-        List<File> byPathSuffix = new ArrayList<>();
-        findByPathSuffix(getWorkingDirectory(), path, byPathSuffix);
-        return byPathSuffix.isEmpty() ? null : byPathSuffix.get(0);
+        return null;
     }
 
     private void findByPathSuffix(File dir, String path, List<File> out) {
@@ -231,7 +240,7 @@ public class PigLatinCompiler extends AbstractLanguageCompiler {
     }
 
     private String relativeToProject(File file) {
-        String base = getWorkingDirectory().getAbsolutePath();
+        String base = getProjectDirectory().getAbsolutePath();
         String full = file.getAbsolutePath();
         if (full.startsWith(base)) {
             String relative = full.substring(base.length());

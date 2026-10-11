@@ -16,6 +16,8 @@ public class YSemanticVisitor extends YBaseVisitor<Type> {
     private final SymbolTable symbolTable;
     private final List<CompilationError> errors = new ArrayList<>();
     private Type currentFunctionReturnType = Type.VOID;
+    private int loopDepth;
+    private int switchDepth;
 
     public YSemanticVisitor(SymbolTable symbolTable) {
         this.symbolTable = symbolTable;
@@ -108,10 +110,13 @@ public class YSemanticVisitor extends YBaseVisitor<Type> {
         }
         currentFunctionReturnType = returnType;
 
-        Symbol funcSymbol = new Symbol(funcName, returnType, SymbolCategory.FUNCTION).at(ctx);
-        funcSymbol.setReturnType(returnType);
+        Symbol funcSymbol = symbolTable.getFunction(funcName);
+        if (funcSymbol == null) {
+            registerFunction(ctx);
+            funcSymbol = symbolTable.getFunction(funcName);
+        }
 
-        symbolTable.enterScope("func_" + funcName, 0);
+        symbolTable.enterScope("func_" + funcName, 0, ctx);
 
         if (ctx.parametros() != null) {
             for (YParser.ParametroContext paramCtx : ctx.parametros().parametro()) {
@@ -134,18 +139,14 @@ public class YSemanticVisitor extends YBaseVisitor<Type> {
                 }
 
                 int offset = symbolTable.getCurrentScope().allocateOffset(1);
-                Symbol paramSymbol = new Symbol(paramName, paramType, SymbolCategory.PARAMETER,
-                        offset, false).at(paramCtx);
-                paramSymbol.setByReference(isByRef);
-                funcSymbol.addParameter(paramSymbol);
+                Symbol paramSymbol = funcSymbol.getParameters().stream()
+                        .filter(parameter -> parameter.getName().equals(paramName)).findFirst().orElseThrow();
 
                 if (!symbolTable.define(paramSymbol)) {
                     errors.add(Diagnostic.duplicateParameter(paramName, paramCtx));
                 }
             }
         }
-
-        symbolTable.addFunction(funcSymbol);
 
         visit(ctx.bloque());
 
@@ -208,6 +209,14 @@ public class YSemanticVisitor extends YBaseVisitor<Type> {
             Type type = element.LLAVE_IZQ() == null
                     ? visit(element.expresion())
                     : listType(name, element.elemento_lista(), element);
+            Type scalarType = type.isArray() ? type.getElementType() : type;
+            if (f > 0 && Type.isKnown(rowType) && Type.isKnown(scalarType)) {
+                if (rowType.isNumeric() && scalarType.isNumeric()) {
+                    if (Type.DOUBLE.equals(scalarType)) rowType = Type.DOUBLE;
+                } else if (!scalarType.equals(rowType)) {
+                    CallValidator.report("El arreglo «" + name + "» contiene elementos de tipos incompatibles", element, errors);
+                }
+            }
             int[] shape = type.isArray() ? type.getSizes() : new int[0];
             if (f == 0) {
                 rowType = type.isArray() ? type.getElementType() : type;
@@ -289,7 +298,9 @@ public class YSemanticVisitor extends YBaseVisitor<Type> {
         if (ctx.operador_relacional() != null) {
             Type t1 = visit(ctx.expresion(0));
             Type t2 = visit(ctx.expresion(1));
-            return TypeCompatibility.checkRelational(t1, t2, ctx.operador_relacional().getText());
+            String operator = ctx.operador_relacional().getText();
+            return "==".equals(operator) || "!=".equals(operator)
+                    ? TypeCompatibility.checkEquality(t1, t2) : TypeCompatibility.checkRelational(t1, t2, operator);
         }
 
         if (ctx.sumatoria() != null) {
@@ -329,6 +340,8 @@ public class YSemanticVisitor extends YBaseVisitor<Type> {
 
     @Override
     public Type visitTermino(YParser.TerminoContext ctx) {
+        if (ctx.llamada_funcion() != null) return visit(ctx.llamada_funcion());
+        if (ctx.leer_funcion() != null) return Type.UNKNOWN;
         if (ctx.NUMERO_ENTERO() != null) return Type.INT;
         if (ctx.NUMERO_DECIMAL() != null) return Type.DOUBLE;
         if (ctx.CADENA_TEXTO() != null) return Type.STRING;
@@ -373,6 +386,8 @@ public class YSemanticVisitor extends YBaseVisitor<Type> {
             errors.add(Diagnostic.undefinedFunction(funcName, ctx));
             return Type.UNKNOWN;
         }
+        CallValidator.validate(func, ctx.argumentos() == null ? List.of()
+                : ctx.argumentos().expresion().stream().map(this::visit).toList(), ctx, errors);
         return func.getReturnType() != null ? func.getReturnType() : Type.VOID;
     }
 
@@ -417,7 +432,9 @@ public class YSemanticVisitor extends YBaseVisitor<Type> {
                 }
                 currentType = member.getType();
             } else if (child instanceof YParser.ExpresionContext) {
-                visit(child);
+                Type indexType = visit(child);
+                if (Type.isKnown(indexType) && !Type.INT.equals(indexType))
+                    CallValidator.report("El índice de «" + baseName + "» debe ser entero", (YParser.ExpresionContext) child, errors);
                 if (!currentType.isArray()) {
                     errors.add(Diagnostic.notAnArray(baseName, currentType, ctx));
                     return Type.UNKNOWN;
@@ -432,11 +449,11 @@ public class YSemanticVisitor extends YBaseVisitor<Type> {
     private void checkIndex(ParseTree index, Type array, String name) {
         int[] sizes = array.getSizes();
         String text = index.getText();
-        if (sizes.length == 0 || sizes[0] <= 0 || !text.matches("\\d+")) {
+        if (sizes.length == 0 || sizes[0] <= 0 || !text.matches("-?\\d+")) {
             return;
         }
         int valor = Integer.parseInt(text);
-        if (valor >= sizes[0]) {
+        if (valor < 0 || valor >= sizes[0]) {
             errors.add(Diagnostic.indexOutOfRange(name, valor, sizes[0],
                     (YParser.ExpresionContext) index));
         }
@@ -453,6 +470,74 @@ public class YSemanticVisitor extends YBaseVisitor<Type> {
                 return symbolTable.getStruct(name) != null
                         || symbolTable.getClass(name) != null;
         }
+    }
+
+    @Override
+    public Type visitFunciones_seccion(YParser.Funciones_seccionContext ctx) {
+        ctx.funcion_def().forEach(this::registerFunction);
+        ctx.funcion_def().forEach(this::visit);
+        return Type.VOID;
+    }
+
+    private void registerFunction(YParser.Funcion_defContext context) {
+        String name = context.ID().getText();
+        if (symbolTable.getFunction(name) != null) {
+            CallValidator.report("La función «" + name + "» ya está declarada", context, errors);
+            return;
+        }
+        Type type = context.tipo_dato() == null ? Type.VOID : resolveType(context.tipo_dato().getText());
+        Symbol function = new Symbol(name, type, SymbolCategory.FUNCTION).at(context);
+        function.setReturnType(type);
+        int offset = 0;
+        if (context.parametros() != null) for (var parameter : context.parametros().parametro()) {
+            Type parameterType = resolveType(parameter.tipo_dato().getText());
+            if (parameter.CORCHETE_IZQ() != null) parameterType = Type.array(parameterType, 1);
+            if (parameter.LLAVE_IZQ() != null && !parameterType.isStruct())
+                CallValidator.report("El parámetro con {} debe tener un tipo estructura", parameter, errors);
+            Symbol symbol = new Symbol(parameter.ID().getText(), parameterType, SymbolCategory.PARAMETER, offset++, false).at(parameter);
+            symbol.setScope("func_" + name);
+            symbol.setByReference(parameter.CORCHETE_IZQ() != null || parameter.LLAVE_IZQ() != null);
+            function.addParameter(symbol);
+        }
+        symbolTable.addFunction(function);
+    }
+
+    @Override
+    public Type visitPara_sentencia(YParser.Para_sentenciaContext ctx) {
+        symbolTable.enterScope("for_" + ctx.getStart().getStartIndex(), 0, ctx);
+        loopDepth++;
+        try { return visitChildren(ctx); }
+        finally { loopDepth--; symbolTable.exitScope(); }
+    }
+
+    @Override
+    public Type visitMientras_sentencia(YParser.Mientras_sentenciaContext ctx) {
+        loopDepth++;
+        try { return visitChildren(ctx); } finally { loopDepth--; }
+    }
+
+    @Override
+    public Type visitHacer_mientras_sentencia(YParser.Hacer_mientras_sentenciaContext ctx) {
+        loopDepth++;
+        try { return visitChildren(ctx); } finally { loopDepth--; }
+    }
+
+    @Override
+    public Type visitElegir_sentencia(YParser.Elegir_sentenciaContext ctx) {
+        switchDepth++;
+        try { return visitChildren(ctx); } finally { switchDepth--; }
+    }
+
+    @Override
+    public Type visitRomper_sentencia(YParser.Romper_sentenciaContext ctx) {
+        if (loopDepth == 0 && switchDepth == 0) CallValidator.report("«romper» requiere un ciclo o elegir", ctx, errors);
+        return Type.VOID;
+    }
+
+    @Override
+    public Type visitContinuar_sentencia(YParser.Continuar_sentenciaContext ctx) {
+        if (loopDepth == 0 && switchDepth == 0) CallValidator.report("«continuar» requiere un ciclo o elegir", ctx, errors);
+        return Type.VOID;
     }
 
     private Type resolveType(String name) {

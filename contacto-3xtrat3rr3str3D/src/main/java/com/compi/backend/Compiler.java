@@ -61,11 +61,13 @@ public class Compiler {
     private String cCode = "";
 
     private File workingDirectory = new File(".");
+    private boolean workingDirectoryConfigured;
 
     private List<String> importedFiles = List.of();
 
     public void setWorkingDirectory(File directory) {
         this.workingDirectory = directory == null ? new File(".") : directory;
+        this.workingDirectoryConfigured = directory != null;
     }
 
     public boolean compile(String source, String language) {
@@ -85,7 +87,15 @@ public class Compiler {
             return false;
         }
         this.language = compiler.id();
-        compiler.setWorkingDirectory(workingDirectory);
+        File sourceDirectory = workingDirectory;
+        if (fileName != null && !fileName.isBlank()) {
+            File sourceFile = new File(fileName);
+            if (sourceFile.isAbsolute() || sourceFile.getParent() != null) {
+                sourceDirectory = sourceFile.getAbsoluteFile().getParentFile();
+            }
+        }
+        compiler.setWorkingDirectory(sourceDirectory);
+        compiler.setProjectDirectory(workingDirectoryConfigured ? workingDirectory : sourceDirectory);
         compiler.setSourceFileName(fileName);
         importedFiles = List.of();
 
@@ -103,33 +113,24 @@ public class Compiler {
             }
 
             if (tree != null && errors.isEmpty()) {
-                importedFiles = compiler.loadImports(tree, symbolTable, c3dGenerator, errors);
+                List<String> loadedFiles = new ArrayList<>();
+                if (fileName != null && !fileName.isBlank()) {
+                    File rootFile = new File(fileName);
+                    if (!rootFile.isAbsolute() && rootFile.getParent() == null) rootFile = new File(sourceDirectory, fileName);
+                    loadedFiles.add(rootFile.toPath().toAbsolutePath().normalize().toString());
+                }
+                importedFiles = compiler.loadImports(tree, symbolTable, c3dGenerator, errors, loadedFiles);
             }
 
             if (tree != null) {
                 if (errors.isEmpty()) {
                     compiler.analyze(tree, symbolTable, errors);
-                } else {
-
-                    List<CompilationError> descartados = new ArrayList<>();
-                    try {
-                        compiler.analyze(tree, symbolTable, descartados);
-                    } catch (Exception ex) {
-
-                    }
                 }
             }
 
             if (tree != null) {
                 if (errors.isEmpty()) {
                     compiler.generateIntermediate(tree, symbolTable, c3dGenerator);
-                } else {
-
-                    try {
-                        compiler.generateIntermediate(tree, symbolTable, c3dGenerator);
-                    } catch (Exception ex) {
-
-                    }
                 }
             }
 
@@ -142,7 +143,9 @@ public class Compiler {
 
             translatedCode = buildTranslatedCode(compiler, quadruples);
 
-            cCode = generateCCode();
+            if (errors.isEmpty()) {
+                cCode = generateCCode();
+            }
 
             stackStates.addAll(new StackSimulator().simulate(quadruples));
 
@@ -183,104 +186,14 @@ public class Compiler {
     }
 
     private String tripletsToC() {
-        List<com.compi.backend.c3d.Triplet> triplets = icm.getTriplets();
-        StringBuilder sb = new StringBuilder();
-        sb.append("/* Traduccion C generada a partir de los TRIPLETES.\n");
-        sb.append(" * El triplete es la cuarteta sin destino visible; el destino que\n");
-        sb.append(" * necesita el codigo se lee del campo interno del triplete.\n");
-        sb.append(" */\n");
-        sb.append("#include <stdio.h>\n#include <stdlib.h>\n#include <string.h>\n\n");
-        sb.append("/* Memoria Stack y Heap */\n");
-        sb.append("double stack[100000];\n");
-        sb.append("double heap[100000];\n");
-        sb.append("double P = 0;\n");
-        sb.append("double H = 0;\n\n");
-        sb.append("void print_string(int heap_idx) {\n");
-        sb.append("    int i = heap_idx;\n");
-        sb.append("    while (heap[i] != 0 && heap[i] != -1) {\n");
-        sb.append("        printf(\"%c\", (char)heap[i]);\n");
-        sb.append("        i++;\n");
-        sb.append("    }\n");
-        sb.append("}\n\n");
-
-        operandosC = CCodeEmitter.operandosDe(symbolTable);
-        sb.append(CCodeEmitter.declaracionesDe(symbolTable));
-
-        if (triplets.isEmpty()) {
-            sb.append("/* Sin tripletes: la compilacion no llego a la fase de generacion. */\n");
-            return sb.toString();
+        List<Quadruple> instructions = new ArrayList<>();
+        for (com.compi.backend.c3d.Triplet triplet : icm.getTriplets()) {
+            boolean label = triplet.getOp() == QuadrupleOp.LABEL || triplet.getOp() == QuadrupleOp.GOTO;
+            instructions.add(new Quadruple(triplet.getOp(), triplet.getArg1(),
+                    label ? null : triplet.getArg2(), label ? triplet.getArg2() : triplet.getResult()));
         }
-
-        for (com.compi.backend.c3d.Triplet t : triplets) {
-            String code = tripletToCStatement(t);
-            if (code == null) {
-                continue;
-            }
-            switch (t.getOp()) {
-                case LABEL, FUNCTION_START, FUNCTION_END -> sb.append(code);
-                default -> sb.append("    ").append(code);
-            }
-        }
-        return sb.toString();
-    }
-
-    private java.util.Map<String, String> operandosC = java.util.Map.of();
-
-    private String c(String operando) {
-        String mapeado = operandosC.get(operando);
-        return mapeado == null ? operando : mapeado;
-    }
-
-    private String tripletToCStatement(com.compi.backend.c3d.Triplet t) {
-        String a1 = t.getArg1() == null ? "" : t.getArg1();
-        String a2 = t.getArg2() == null ? "" : t.getArg2();
-        String res = t.getResult() == null ? "" : t.getResult();
-        QuadrupleOp op = t.getOp();
-        return switch (op) {
-
-            case LABEL -> a2 + ":\n";
-            case GOTO -> "goto " + a2 + ";\n";
-            case IF_TRUE -> "if (" + a1 + ") goto " + res + ";\n";
-            case IF_FALSE -> "if (!(" + a1 + ")) goto " + res + ";\n";
-            case IF_EQ, IF_NE, IF_LT, IF_LE, IF_GT, IF_GE ->
-                    "if (" + a1 + " " + op.getSymbol() + " " + a2 + ") goto " + res + ";\n";
-            case ASSIGN -> {
-
-                if (!a1.isEmpty() && a1.startsWith("\"") && a1.endsWith("\"")) {
-                    StringBuilder literal = new StringBuilder();
-                    CCodeEmitter.writeString(literal, c(res), a1);
-                    yield literal.toString();
-                }
-                yield c(res) + " = " + c(a1) + ";\n";
-            }
-            case ADD, SUB, MUL, DIV, MOD, AND, OR ->
-                    c(res) + " = " + c(a1) + " " + op.getSymbol() + " " + c(a2) + ";\n";
-            case CONCAT -> c(res) + " = concat_cadenas(" + c(a1) + ", " + c(a2) + ");\n";
-            case NOT -> c(res) + " = !" + c(a1) + ";\n";
-            case NEG -> c(res) + " = -(" + c(a1) + ");\n";
-            case ARRAY_GET -> c(res) + " = " + a1 + "[(int)" + c(a2) + "];\n";
-            case ARRAY_SET -> a1 + "[(int)" + c(a2) + "] = " + c(res) + ";\n";
-            case CALL -> (res.isEmpty() ? "" : c(res) + " = ") + a1 + "();\n";
-            case PARAM -> "/* parametro */ " + c(a1) + ";\n";
-            case RETURN -> a1.isEmpty() ? "return 0;\n" : "return " + c(a1) + ";\n";
-            case FUNCTION_START -> "\ndouble " + res + "() {\n";
-            case FUNCTION_END -> "    return 0;\n}\n";
-            case STACK_SET -> "stack[(int)" + a1 + "] = " + a2 + ";\n";
-            case STACK_GET -> res + " = stack[(int)" + a1 + "];\n";
-            case HEAP_SET -> "heap[(int)" + a1 + "] = " + a2 + ";\n";
-            case HEAP_GET -> res + " = heap[(int)" + a1 + "];\n";
-            case SET_P -> "P = " + a1 + ";\n";
-            case GET_P -> res + " = P;\n";
-            case SET_H -> "H = " + a1 + ";\n";
-            case GET_H -> res + " = H;\n";
-            case PRINT_INT -> "printf(\"%d\", (int)" + c(a1) + ");\n";
-            case PRINT_FLOAT -> "printf(\"%f\", " + c(a1) + ");\n";
-            case PRINT_CHAR -> "printf(\"%c\", (char)" + c(a1) + ");\n";
-            case PRINT_STR -> "print_string((int)" + c(a1) + ");\n";
-            case PRINTLN -> "printf(\"\\n\");\n";
-            case READ -> "scanf(\"%d\", &" + c(a1) + ");\n";
-            default -> null;
-        };
+        // Ambos modos comparten las mismas convenciones de memoria y llamadas.
+        return CCodeEmitter.generateCCode(instructions, c3dGenerator.getDeclaredTemps(), symbolTable);
     }
 
     private String buildTranslatedCode(LanguageCompiler compiler, List<Quadruple> quadruples) {
@@ -322,7 +235,7 @@ public class Compiler {
 
     public void setCMode(Mode mode) {
         this.cMode = mode == null ? Mode.QUADRUPLES : mode;
-        this.cCode = generateCCode();
+        this.cCode = errors.isEmpty() ? generateCCode() : "";
     }
 
 }

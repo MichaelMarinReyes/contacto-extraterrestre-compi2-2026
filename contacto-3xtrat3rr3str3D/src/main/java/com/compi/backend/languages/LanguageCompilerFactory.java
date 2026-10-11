@@ -102,10 +102,20 @@ public final class LanguageCompilerFactory {
         String key = languageOrFileName.trim().toLowerCase(Locale.ROOT);
         LanguageCompiler direct = BY_ID.get(key);
         if (direct != null) {
-            return direct;
+            return createCompiler(direct.id());
         }
         String ext = extensionOf(key);
-        return ext == null ? null : BY_ID.get(BY_EXTENSION.get(ext));
+        return ext == null ? null : createCompiler(BY_EXTENSION.get(ext));
+    }
+
+    /** Cada módulo necesita su propio directorio y metadatos del parser. */
+    private static LanguageCompiler createCompiler(String id) {
+        return switch (id) {
+            case "pig" -> new PigLatinCompiler();
+            case "y" -> new YCompiler();
+            case "zet" -> new ZetarianoCompiler();
+            default -> null;
+        };
     }
 
     public static String detectLanguageId(String fileName) {

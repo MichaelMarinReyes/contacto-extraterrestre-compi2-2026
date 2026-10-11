@@ -47,6 +47,8 @@ public class Quadruple {
                 return result + " = " + arg1 + " " + op.getSymbol() + " " + arg2;
             case CONCAT:
                 return result + " = concat " + arg1 + " " + arg2;
+            case INT_DIV:
+                return result + " = trunc(" + arg1 + " / " + arg2 + ")";
             case NOT:
                 return result + " = !" + arg1;
             case NEG:
@@ -93,6 +95,8 @@ public class Quadruple {
                 return "scan " + arg1;
             case READ_STR:
                 return "read_text " + arg1;
+            case READ_CHAR:
+                return "read_char " + arg1;
             default:
                 return (op + " " + (arg1 == null ? "" : arg1) + " "
                         + (arg2 == null ? "" : arg2) + " "
@@ -113,6 +117,7 @@ public class Quadruple {
         String a1 = arg1 == null ? null : translator.apply(arg1);
         String a2 = arg2 == null ? null : translator.apply(arg2);
         String res = result == null ? null : translator.apply(result);
+        if (op == QuadrupleOp.MOD) return res + " = fmod(" + a1 + ", " + a2 + ");";
         switch (op) {
             case LABEL:
                 return result + ":";
@@ -141,6 +146,8 @@ public class Quadruple {
                 return res + " = " + a1 + " " + op.getSymbol() + " " + a2 + ";";
             case CONCAT:
                 return res + " = concat_cadenas(" + a1 + ", " + a2 + ");";
+            case INT_DIV:
+                return res + " = trunc(" + a1 + " / " + a2 + ");";
             case NOT:
                 return res + " = !" + a1 + ";";
             case NEG:
@@ -186,9 +193,11 @@ public class Quadruple {
             case PRINTLN:
                 return "printf(\"\\n\");";
             case READ:
-                return "scanf(\"%d\", &" + a1 + ");";
+                return "scanf(\"%lf\", &" + a1 + ");";
             case READ_STR:
                 return a1 + " = read_text();";
+            case READ_CHAR:
+                return a1 + " = read_character();";
             default:
                 return op + " " + (a1 == null ? "" : a1) + " " + (a2 == null ? "" : a2) + " " + (res == null ? "" : res);
         }

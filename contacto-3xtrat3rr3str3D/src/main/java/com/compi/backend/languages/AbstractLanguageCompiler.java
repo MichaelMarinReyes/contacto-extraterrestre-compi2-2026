@@ -13,11 +13,19 @@ import java.util.List;
 
 public abstract class AbstractLanguageCompiler implements LanguageCompiler {
     private File workingDirectory = new File(".");
+    private File projectDirectory = new File(".");
     private Vocabulary vocabulary;
     private String[] ruleNames;
 
     protected File getWorkingDirectory() {
         return workingDirectory;
+    }
+
+    protected File getProjectDirectory() { return projectDirectory; }
+
+    @Override
+    public void setProjectDirectory(File directory) {
+        projectDirectory = directory == null ? workingDirectory : directory;
     }
 
     @Override

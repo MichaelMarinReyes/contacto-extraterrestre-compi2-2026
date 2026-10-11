@@ -114,10 +114,13 @@ public class ZetarianoCompiler extends AbstractLanguageCompiler {
             return;
         }
         try {
+            symbolTable.beginCodeGeneration();
             ZetarianoC3DVisitor c3d = new ZetarianoC3DVisitor(symbolTable, generator);
             c3d.visit(tree);
-        } catch (Exception ignored) {
-
+        } catch (Exception exception) {
+            throw new IllegalStateException("No se pudo generar el código intermedio de Zetariano", exception);
+        } finally {
+            symbolTable.endCodeGeneration();
         }
     }
 }

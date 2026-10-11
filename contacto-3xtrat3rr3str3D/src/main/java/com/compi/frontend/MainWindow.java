@@ -18,7 +18,9 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import javax.swing.AbstractAction;
 import javax.swing.Action;
 import javax.swing.JButton;
@@ -67,6 +69,7 @@ public class MainWindow extends JFrame {
     private final JComboBox<String> cModeCombo = new JComboBox<>();
     private final JToggleButton toolsToggle = new JToggleButton();
     private final JButton compileButton = new JButton();
+    private final JButton newProjectButton = new JButton();
 
     private final Compiler compiler = new Compiler();
     private Mode currentCMode = Mode.QUADRUPLES;
@@ -211,7 +214,16 @@ public class MainWindow extends JFrame {
         topToolbar.applyIcons(newFileButton, openFileButton, saveFileButton,
                 astButton, symbolTableButton, stackButton, lexerErrorButton);
 
+        newProjectButton.setIcon(IdeIcons.newProject());
+        newProjectButton.addMouseListener(new java.awt.event.MouseAdapter() {
+            public void mouseEntered(java.awt.event.MouseEvent evt) {
+                optionSelectedLabel.setText("Abrir proyecto");
+            }
+        });
+        newProjectButton.addActionListener(e -> openProject());
+
         topToolbar.addFileAction(newFileButton, "Archivo nuevo (Ctrl+N)");
+        topToolbar.addFileAction(newProjectButton, "Abrir proyecto (Ctrl+Shift+N)");
         topToolbar.addFileAction(openFileButton, "Abrir archivo (Ctrl+O)");
         topToolbar.addFileAction(saveFileButton, "Guardar (Ctrl+S)");
 
@@ -265,6 +277,7 @@ public class MainWindow extends JFrame {
 
     private void initShortcuts() {
         bind("control N", this::actionNewFile);
+        bind("control shift N", this::openProject);
         bind("control O", this::actionOpenFile);
         bind("control S", () -> actionSave());
         bind("control B", this::actionCompile);
@@ -463,35 +476,8 @@ public class MainWindow extends JFrame {
     }
 
     boolean loadProject(File dir, boolean announce) {
-        if (dir == null) {
-            return false;
-        }
-        File abs;
-        try {
-            abs = dir.getCanonicalFile();
-        } catch (IOException e) {
-            promptInfo("No se pudo resolver la ruta:\n" + dir + "\n\n" + e.getMessage(),
-                    "Ruta no válida", JOptionPane.ERROR_MESSAGE);
-            return false;
-        }
-
-        if (!abs.exists()) {
-            promptInfo("La carpeta no existe:\n\n" + abs.getAbsolutePath()
-                    + "\n\nRevisa la ruta e inténtalo de nuevo.",
-                    "No se pudo abrir el proyecto", JOptionPane.ERROR_MESSAGE);
-            return false;
-        }
-        if (!abs.isDirectory()) {
-            promptInfo("Eso no es una carpeta, es un archivo:\n\n"
-                    + abs.getAbsolutePath()
-                    + "\n\nElige una carpeta que contenga tus archivos de código.",
-                    "No se pudo abrir el proyecto", JOptionPane.ERROR_MESSAGE);
-            return false;
-        }
-        if (!abs.canRead()) {
-            promptInfo("No hay permiso para leer la carpeta:\n\n"
-                    + abs.getAbsolutePath(),
-                    "No se pudo abrir el proyecto", JOptionPane.ERROR_MESSAGE);
+        File abs = resolveProjectDirectory(dir);
+        if (abs == null) {
             return false;
         }
 
@@ -502,6 +488,45 @@ public class MainWindow extends JFrame {
         }
         announceProject(abs);
         return true;
+    }
+
+    /**
+     * Comprueba que la carpeta exista, sea un directorio legible y devuelve su ruta
+     * canónica. Devuelve null (con el aviso correspondiente) si no se puede abrir.
+     */
+    private File resolveProjectDirectory(File dir) {
+        if (dir == null) {
+            return null;
+        }
+        File abs;
+        try {
+            abs = dir.getCanonicalFile();
+        } catch (IOException e) {
+            promptInfo("No se pudo resolver la ruta:\n" + dir + "\n\n" + e.getMessage(),
+                    "Ruta no válida", JOptionPane.ERROR_MESSAGE);
+            return null;
+        }
+
+        if (!abs.exists()) {
+            promptInfo("La carpeta no existe:\n\n" + abs.getAbsolutePath()
+                    + "\n\nRevisa la ruta e inténtalo de nuevo.",
+                    "No se pudo abrir el proyecto", JOptionPane.ERROR_MESSAGE);
+            return null;
+        }
+        if (!abs.isDirectory()) {
+            promptInfo("Eso no es una carpeta, es un archivo:\n\n"
+                    + abs.getAbsolutePath()
+                    + "\n\nElige una carpeta que contenga tus archivos de código.",
+                    "No se pudo abrir el proyecto", JOptionPane.ERROR_MESSAGE);
+            return null;
+        }
+        if (!abs.canRead()) {
+            promptInfo("No hay permiso para leer la carpeta:\n\n"
+                    + abs.getAbsolutePath(),
+                    "No se pudo abrir el proyecto", JOptionPane.ERROR_MESSAGE);
+            return null;
+        }
+        return abs;
     }
 
     private void announceProject(File abs) {
@@ -543,7 +568,69 @@ public class MainWindow extends JFrame {
         if (dir == null) {
             return;
         }
-        loadProject(dir, true);
+        File abs = resolveProjectDirectory(dir);
+        if (abs == null) {
+            return;
+        }
+        if (!confirmReplaceWorkspace()) {
+            return;
+        }
+        resetWorkspace();
+        loadProject(abs, true);
+    }
+
+    /**
+     * Pregunta qué hacer con los archivos modificados antes de cambiar de proyecto.
+     * Devuelve true si se puede continuar (guardando o descartando) y false si el
+     * usuario cancela la apertura.
+     */
+    private boolean confirmReplaceWorkspace() {
+        List<EditorPanel> modified = new ArrayList<>();
+        for (EditorPanel editor : editorTabs.getAllEditors()) {
+            if (editor.isModified()) {
+                modified.add(editor);
+            }
+        }
+        if (modified.isEmpty()) {
+            return true;
+        }
+        String message = modified.size() == 1
+                ? "El archivo \"" + modified.get(0).getDisplayName()
+                    + "\" tiene cambios sin guardar.\n\n"
+                    + "¿Quieres guardarlos antes de abrir el nuevo proyecto?\n"
+                    + "Si eliges «No», los cambios se descartarán."
+                : "Hay " + modified.size() + " archivos con cambios sin guardar.\n\n"
+                    + "¿Quieres guardarlos antes de abrir el nuevo proyecto?\n"
+                    + "Si eliges «No», los cambios se descartarán.";
+        int answer = JOptionPane.showConfirmDialog(this, message, "Cambios sin guardar",
+                JOptionPane.YES_NO_CANCEL_OPTION, JOptionPane.WARNING_MESSAGE);
+        if (answer == JOptionPane.CANCEL_OPTION || answer == JOptionPane.CLOSED_OPTION) {
+            return false;
+        }
+        if (answer == JOptionPane.YES_OPTION) {
+            return editorTabs.saveAll();
+        }
+        return true;
+    }
+
+    /**
+     * Deja el área de trabajo en blanco antes de cargar otro proyecto: cierra las
+     * pestañas y vacía la consola, la tabla de símbolos, el AST, la pila y los errores.
+     */
+    private void resetWorkspace() {
+        for (EditorPanel editor : new ArrayList<>(editorTabs.getAllEditors())) {
+            editorTabs.doClose(editor);
+        }
+        lastErrors = List.of();
+        lastTargets = List.of();
+        lastFocusFile = null;
+        currentFile = null;
+        clearToolViews();
+        symbolPanel.clearFilter();
+        statusBar.setCounts(0, 0);
+        statusBar.setIdle();
+        showWelcome();
+        navText("");
     }
 
     private File lastContainerDir;
@@ -780,7 +867,7 @@ public class MainWindow extends JFrame {
             }
         }
 
-        boolean ok = compiler.compile(source, language, file.getName());
+        boolean ok = compiler.compile(source, language, file.getAbsolutePath());
         List<CompilationError> errors = new ArrayList<>();
         for (CompilationError e : compiler.getErrors()) {
             errors.add(e.inFile(file.getName()));
@@ -817,13 +904,14 @@ public class MainWindow extends JFrame {
             allErrors.addAll(r.errors());
         }
         FileResult focus = focusedResult(results);
+        List<Symbol> symbols = aggregatedSymbols(results);
         lastErrors = List.copyOf(allErrors);
         lastTargets = results.stream().map(FileResult::file).toList();
         lastFocusFile = focus == null ? null : focus.file();
 
         toolWindow.postResults(() -> {
             astPanel.renderGraph(focus == null ? "" : focus.astDot());
-            symbolPanel.loadSymbols(focus == null ? List.of() : focus.symbols());
+            symbolPanel.loadSymbols(symbols);
             stackPanel.loadSteps(focus == null ? List.of() : focus.steps());
             errorPanel.loadErrors(allErrors);
             toolWindowDock.setErrorCount(allErrors.size());
@@ -904,16 +992,21 @@ public class MainWindow extends JFrame {
         lastTargets = List.of();
         lastFocusFile = null;
 
+        clearToolViews();
+
+        statusBar.setCounts(0, 0);
+        statusBar.setIdle();
+        navText("Compilando...");
+    }
+
+    /** Vacía consola, tabla de símbolos, AST, pila y errores sin tocar las pestañas. */
+    private void clearToolViews() {
         astPanel.clear();
         symbolPanel.clear();
         errorPanel.clear();
         stackPanel.clear();
         toolWindowDock.setErrorCount(0);
         consoleDock.clearAll();
-
-        statusBar.setCounts(0, 0);
-        statusBar.setIdle();
-        navText("Compilando...");
     }
 
     private File fileNamed(String name) {
@@ -985,16 +1078,24 @@ public class MainWindow extends JFrame {
 
     private File symbolFile(Symbol symbol) {
         String origin = symbol.getSourceFile();
+        if (origin == null || origin.isBlank()) {
+            return lastFocusFile;
+        }
+        File direct = new File(origin);
+        if (direct.isAbsolute()) {
+            return direct.isFile() ? direct : lastFocusFile;
+        }
         File container = currentContainer();
-        if (origin == null || lastFocusFile == null
-                || origin.equals(lastFocusFile.getName())) {
+        if (container != null) {
+            File resolved = new File(container, origin);
+            if (resolved.isFile()) {
+                return resolved;
+            }
+        }
+        if (lastFocusFile != null && origin.equals(lastFocusFile.getName())) {
             return lastFocusFile;
         }
-        if (container == null) {
-            return lastFocusFile;
-        }
-        File importado = new File(container, origin);
-        return importado.isFile() ? importado : lastFocusFile;
+        return lastFocusFile;
     }
 
     private FileResult focusedResult(List<FileResult> results) {
@@ -1017,6 +1118,35 @@ public class MainWindow extends JFrame {
             }
         }
         return results.isEmpty() ? null : results.get(0);
+    }
+
+    /**
+     * Reúne los símbolos de todos los archivos compilados para que la tabla muestre
+     * los tres lenguajes (PigLatin, Y y Zetariano) sin importar en qué pestaña se
+     * compile. Se descartan los duplicados que aparecen tanto en la compilación del
+     * archivo principal como en la compilación individual de cada módulo importado.
+     */
+    private List<Symbol> aggregatedSymbols(List<FileResult> results) {
+        List<Symbol> symbols = new ArrayList<>();
+        Set<String> seen = new HashSet<>();
+        for (FileResult result : results) {
+            for (Symbol symbol : result.symbols()) {
+                if (seen.add(symbolKey(symbol))) {
+                    symbols.add(symbol);
+                }
+            }
+        }
+        return symbols;
+    }
+
+    /** Clave que identifica una declaración aunque provenga de compilaciones distintas. */
+    private static String symbolKey(Symbol symbol) {
+        return (symbol.getLanguage() == null ? "?" : symbol.getLanguage()) + "|"
+                + (symbol.getCategory() == null ? "?" : symbol.getCategory().name()) + "|"
+                + (symbol.getScope() == null ? "" : symbol.getScope()) + "|"
+                + symbol.getName() + "|"
+                + (symbol.getType() == null ? "" : symbol.getType().label()) + "|"
+                + symbol.getLine() + "|" + symbol.getColumn();
     }
 
     private String focusReason(FileResult focus) {

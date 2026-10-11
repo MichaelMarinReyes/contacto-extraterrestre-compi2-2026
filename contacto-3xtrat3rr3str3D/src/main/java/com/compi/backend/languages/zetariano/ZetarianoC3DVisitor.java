@@ -3,6 +3,9 @@ package com.compi.backend.languages.zetariano;
 import com.compi.ZetarianoBaseVisitor;
 import com.compi.ZetarianoParser;
 import com.compi.backend.c3d.ArrayRuntime;
+import com.compi.backend.c3d.HeapRuntime;
+import com.compi.backend.c3d.FunctionRuntime;
+import com.compi.backend.c3d.ValueRuntime;
 import com.compi.backend.c3d.C3DGenerator;
 import com.compi.backend.c3d.QuadrupleOp;
 import com.compi.backend.symbols.Symbol;
@@ -20,6 +23,7 @@ public class ZetarianoC3DVisitor extends ZetarianoBaseVisitor<String> {
     private final SymbolTable symbolTable;
     private final C3DGenerator c3d;
     private String currentClassName = "";
+    private ZetarianoParser.ClaseDefContext currentClass;
     private final Deque<String> breakLabels = new ArrayDeque<>();
     private final Deque<String> continueLabels = new ArrayDeque<>();
 
@@ -31,7 +35,8 @@ public class ZetarianoC3DVisitor extends ZetarianoBaseVisitor<String> {
     @Override
     public String visitClaseDef(ZetarianoParser.ClaseDefContext ctx) {
         currentClassName = ctx.ID().getText();
-        symbolTable.enterScope("class_" + currentClassName, 0);
+        currentClass = ctx;
+        symbolTable.enterScope("class_" + currentClassName, 0, ctx);
         int offset = 0;
         for (ZetarianoParser.MiembroClaseContext mc : ctx.miembroClase()) {
             if (mc.atributoDef() == null) {
@@ -42,7 +47,7 @@ public class ZetarianoC3DVisitor extends ZetarianoBaseVisitor<String> {
         }
 
         for (ZetarianoParser.MiembroClaseContext mc : ctx.miembroClase()) {
-            visit(mc);
+            if (mc.atributoDef() == null) visit(mc);
         }
 
         symbolTable.exitScope();
@@ -51,11 +56,18 @@ public class ZetarianoC3DVisitor extends ZetarianoBaseVisitor<String> {
     }
 
     private void store(Symbol s, String value) {
-        c3d.emitAssign(s.getName(), value);
+        if (s.getCategory() == SymbolCategory.FIELD) {
+            c3d.emit(QuadrupleOp.HEAP_SET, fieldAddress(s), value, null);
+        } else c3d.emitAssign(s.getStorageName(), value);
     }
 
     private String load(Symbol s) {
-        return s.getName();
+        return s.getCategory() == SymbolCategory.FIELD ? HeapRuntime.read(c3d, fieldAddress(s)) : s.getStorageName();
+    }
+
+    private String fieldAddress(Symbol field) {
+        return ArrayRuntime.add(c3d, symbolTable.resolve("this").getStorageName(),
+                HeapRuntime.fieldOffset(symbolTable.getClass(currentClassName), field.getName()));
     }
 
     private void defineParameter(ZetarianoParser.ParametroContext pCtx) {
@@ -103,9 +115,9 @@ public class ZetarianoC3DVisitor extends ZetarianoBaseVisitor<String> {
 
     @Override
     public String visitConstructorDef(ZetarianoParser.ConstructorDefContext ctx) {
-        String funcName = currentClassName + "_" + ctx.ID().getText();
+        String funcName = FunctionRuntime.name(currentClassName, ctx.ID().getText(), ctx.parametros() == null ? 0 : ctx.parametros().parametro().size());
         c3d.emit(QuadrupleOp.FUNCTION_START, null, null, funcName);
-        symbolTable.enterScope("constructor_" + funcName, 1);
+        symbolTable.enterScope("constructor_" + funcName, 1, ctx);
         defineThis(ctx);
         if (ctx.parametros() != null) {
             for (ZetarianoParser.ParametroContext pCtx : ctx.parametros().parametro()) {
@@ -113,6 +125,9 @@ public class ZetarianoC3DVisitor extends ZetarianoBaseVisitor<String> {
             }
         }
 
+        for (var member : currentClass.miembroClase()) {
+            if (member.atributoDef() != null) visit(member.atributoDef());
+        }
         visit(ctx.bloque());
 
         c3d.emit(QuadrupleOp.FUNCTION_END, null, null, funcName);
@@ -122,9 +137,9 @@ public class ZetarianoC3DVisitor extends ZetarianoBaseVisitor<String> {
 
     @Override
     public String visitMetodoDef(ZetarianoParser.MetodoDefContext ctx) {
-        String methodName = currentClassName + "_" + ctx.ID().getText();
+        String methodName = FunctionRuntime.name(currentClassName, ctx.ID().getText(), ctx.parametros() == null ? 0 : ctx.parametros().parametro().size());
         c3d.emit(QuadrupleOp.FUNCTION_START, null, null, methodName);
-        symbolTable.enterScope("method_" + methodName, 1);
+        symbolTable.enterScope("method_" + methodName, 1, ctx);
         defineThis(ctx);
         if (ctx.parametros() != null) {
             for (ZetarianoParser.ParametroContext pCtx : ctx.parametros().parametro()) {
@@ -187,7 +202,7 @@ public class ZetarianoC3DVisitor extends ZetarianoBaseVisitor<String> {
         if (celdas <= 0) {
             return "0";
         }
-        String base = ArrayRuntime.allocate(c3d, celdas);
+        String base = ArrayRuntime.allocateArray(c3d, sizes);
         fill(base, ctx.literalArreglo(), sizes, new int[sizes.length], 0);
         return base;
     }
@@ -246,16 +261,7 @@ public class ZetarianoC3DVisitor extends ZetarianoBaseVisitor<String> {
     }
 
     private String readCell(ZetarianoParser.AccesoMiembroContext ctx) {
-        Symbol base = symbolTable.resolve(ctx.ID().getText());
-        if (base == null || base.getType() == null || !base.getType().isArray()) {
-            return null;
-        }
-        int[] sizes = base.getType().getSizes();
-        List<String> indices = indicesDe(ctx);
-        if (!base.getType().hasSizes() || indices == null || indices.size() != sizes.length) {
-            return null;
-        }
-        return ArrayRuntime.leer(c3d, load(base), indices, sizes);
+        return HeapRuntime.read(c3d, accessAddress(ctx, ctx.miembroAcceso().size()));
     }
 
     private List<String> indicesDe(ZetarianoParser.AccesoMiembroContext ctx) {
@@ -272,16 +278,7 @@ public class ZetarianoC3DVisitor extends ZetarianoBaseVisitor<String> {
     }
 
     private boolean writeCell(ZetarianoParser.AccesoMiembroContext ctx, String valor) {
-        Symbol base = symbolTable.resolve(ctx.ID().getText());
-        if (base == null || base.getType() == null || !base.getType().isArray()) {
-            return false;
-        }
-        int[] sizes = base.getType().getSizes();
-        List<String> indices = indicesDe(ctx);
-        if (!base.getType().hasSizes() || indices == null || indices.size() != sizes.length) {
-            return false;
-        }
-        ArrayRuntime.write(c3d, load(base), indices, sizes, valor);
+        c3d.emit(QuadrupleOp.HEAP_SET, accessAddress(ctx, ctx.miembroAcceso().size()), valor, null);
         return true;
     }
 
@@ -295,13 +292,10 @@ public class ZetarianoC3DVisitor extends ZetarianoBaseVisitor<String> {
                 store(target, applyCompound(ctx, target, val));
             }
         } else if (ctx.accesoMiembro() != null) {
-            if (writeCell(ctx.accesoMiembro(), val)) {
-                return null;
-            }
-            Symbol field = resolveMember(ctx.accesoMiembro());
-            if (field != null) {
-                store(field, applyCompound(ctx, field, val));
-            }
+            String address = accessAddress(ctx.accesoMiembro(), ctx.accesoMiembro().miembroAcceso().size());
+            String operator = ctx.getChild(1).getText();
+            String value = "=".equals(operator) ? val : applyCompound(operator, HeapRuntime.read(c3d, address), val);
+            c3d.emit(QuadrupleOp.HEAP_SET, address, value, null);
         }
         return null;
     }
@@ -333,19 +327,18 @@ public class ZetarianoC3DVisitor extends ZetarianoBaseVisitor<String> {
                 store(target, applyCompound(operator, target, val));
             }
         } else if (ctx.accesoMiembro() != null) {
-
-            if (writeCell(ctx.accesoMiembro(), val)) {
-                return null;
-            }
-            Symbol field = resolveMember(ctx.accesoMiembro());
-            if (field != null) {
-                store(field, applyCompound(operator, field, val));
-            }
+            String address = accessAddress(ctx.accesoMiembro(), ctx.accesoMiembro().miembroAcceso().size());
+            String value = "=".equals(operator) ? val : applyCompound(operator, HeapRuntime.read(c3d, address), val);
+            c3d.emit(QuadrupleOp.HEAP_SET, address, value, null);
         }
         return null;
     }
 
     private String applyCompound(String operator, Symbol target, String val) {
+        return applyCompound(operator, load(target), val);
+    }
+
+    private String applyCompound(String operator, String current, String val) {
         QuadrupleOp op = switch (operator) {
             case "+=" -> QuadrupleOp.ADD;
             case "-=" -> QuadrupleOp.SUB;
@@ -355,7 +348,6 @@ public class ZetarianoC3DVisitor extends ZetarianoBaseVisitor<String> {
         if (op == null) {
             return val;
         }
-        String current = load(target);
         String temp = c3d.newTemp();
         c3d.emit(op, current, val, temp);
         return temp;
@@ -459,17 +451,13 @@ public class ZetarianoC3DVisitor extends ZetarianoBaseVisitor<String> {
     }
 
     private boolean isText(ZetarianoParser.ExpresionContext ctx) {
-        if (ctx instanceof ZetarianoParser.StringLiteralExprContext) {
-            return true;
-        }
-        if (ctx instanceof ZetarianoParser.IdExprContext id) {
-            Symbol s = symbolTable.resolve(id.ID().getText());
-            return s != null && s.getType() != null && Type.STRING.equals(s.getType());
-        }
-        return false;
+        return Type.STRING.equals(expressionType(ctx));
     }
 
     private QuadrupleOp printOf(ZetarianoParser.ExpresionContext ctx) {
+        Type type = expressionType(ctx);
+        if (Type.DOUBLE.equals(type)) return QuadrupleOp.PRINT_FLOAT;
+        if (Type.CHAR.equals(type)) return QuadrupleOp.PRINT_CHAR;
         if (isText(ctx)) {
             return QuadrupleOp.PRINT_STR;
         }
@@ -495,6 +483,14 @@ public class ZetarianoC3DVisitor extends ZetarianoBaseVisitor<String> {
 
     @Override
     public String visitIncrementoDecremento(ZetarianoParser.IncrementoDecrementoContext ctx) {
+        if (ctx.accesoMiembro() != null) {
+            String address = accessAddress(ctx.accesoMiembro(), ctx.accesoMiembro().miembroAcceso().size());
+            String updated = c3d.newTemp();
+            c3d.emit(ctx.INCREMENT() != null ? QuadrupleOp.ADD : QuadrupleOp.SUB,
+                    HeapRuntime.read(c3d, address), "1", updated);
+            c3d.emit(QuadrupleOp.HEAP_SET, address, updated, null);
+            return null;
+        }
         Symbol target = symbolTable.resolve(ctx.ID().getText());
         if (target == null) {
             return null;
@@ -508,6 +504,7 @@ public class ZetarianoC3DVisitor extends ZetarianoBaseVisitor<String> {
 
     @Override
     public String visitSentenciaFor(ZetarianoParser.SentenciaForContext ctx) {
+        symbolTable.enterScope("for_" + ctx.getStart().getStartIndex(), 0, ctx);
         if (ctx.forInit() != null) {
             visit(ctx.forInit());
         }
@@ -540,6 +537,7 @@ public class ZetarianoC3DVisitor extends ZetarianoBaseVisitor<String> {
         c3d.emitLabel(endLabel);
         breakLabels.pop();
         continueLabels.pop();
+        symbolTable.exitScope();
         return null;
     }
 
@@ -556,7 +554,7 @@ public class ZetarianoC3DVisitor extends ZetarianoBaseVisitor<String> {
         visit(ctx.bloque());
 
         c3d.emitLabel(condLabel);
-        emitConditionalJump(ctx.expresion(), bodyLabel, null);
+        emitConditionalJump(ctx.expresion(), bodyLabel, endLabel);
 
         c3d.emitLabel(endLabel);
         breakLabels.pop();
@@ -627,6 +625,17 @@ public class ZetarianoC3DVisitor extends ZetarianoBaseVisitor<String> {
 
         String name = callName(ctx);
         int count = 0;
+        if (ctx.accesoMiembro() != null) {
+            var access = ctx.accesoMiembro();
+            Symbol base = symbolTable.resolve(access.ID().getText());
+            String receiver = access.miembroAcceso().size() == 1 ? load(base)
+                    : HeapRuntime.read(c3d, accessAddress(access, access.miembroAcceso().size() - 1));
+            c3d.emit(QuadrupleOp.PARAM, receiver, null, null);
+            count++;
+        } else if (name.startsWith(currentClassName + "_")) {
+            c3d.emit(QuadrupleOp.PARAM, symbolTable.resolve("this").getStorageName(), null, null);
+            count++;
+        }
         if (ctx.argumentos() != null) {
             for (ZetarianoParser.ExpresionContext arg : ctx.argumentos().expresion()) {
                 c3d.emit(QuadrupleOp.PARAM, visit(arg), null, null);
@@ -639,18 +648,26 @@ public class ZetarianoC3DVisitor extends ZetarianoBaseVisitor<String> {
     }
 
     private String callName(ZetarianoParser.LlamadaFuncionSemillaContext ctx) {
+        int count = ctx.argumentos() == null ? 0 : ctx.argumentos().expresion().size();
         String base;
         if (ctx.accesoMiembro() != null) {
             Symbol receptor = symbolTable.resolve(ctx.accesoMiembro().ID().getText());
             String clazz = receptor != null && receptor.getType() != null
                     && receptor.getType().getCustomTypeName() != null
                     ? receptor.getType().getCustomTypeName() : currentClassName;
-            base = clazz + "_" + ctx.accesoMiembro().miembroAcceso(0).ID().getText();
+            Type type = receptor.getType();
+            for (int i = 0; i < ctx.accesoMiembro().miembroAcceso().size() - 1; i++) {
+                var step = ctx.accesoMiembro().miembroAcceso(i);
+                if (step.DOT() != null) type = HeapRuntime.definition(symbolTable, type).getMember(step.ID().getText()).getType();
+                if (!step.expresion().isEmpty()) type = type.desindexar(step.expresion().size());
+            }
+            var steps = ctx.accesoMiembro().miembroAcceso();
+            base = FunctionRuntime.name(type.getCustomTypeName(), steps.getLast().ID().getText(), count);
         } else {
             base = currentClassName != null
                     && symbolTable.getClass(currentClassName) != null
                     && symbolTable.getClass(currentClassName).getMember(ctx.ID().getText()) != null
-                    ? currentClassName + "_" + ctx.ID().getText()
+                     ? FunctionRuntime.name(currentClassName, ctx.ID().getText(), count)
                     : ctx.ID().getText();
         }
         return base;
@@ -669,11 +686,9 @@ public class ZetarianoC3DVisitor extends ZetarianoBaseVisitor<String> {
             }
         }
 
-        String heapStart = c3d.newTemp();
-        c3d.emitAssign(heapStart, "H");
-        c3d.emit(QuadrupleOp.ADD, "H", String.valueOf(fieldCount), "H");
+        String heapStart = HeapRuntime.allocateObject(c3d, cls);
 
-        String constructorName = className + "_" + className;
+        String constructorName = FunctionRuntime.name(className, className, ctx.argumentos() == null ? 0 : ctx.argumentos().expresion().size());
         c3d.emit(QuadrupleOp.PARAM, heapStart, null, null);
         if (ctx.argumentos() != null) {
             for (ZetarianoParser.ExpresionContext argCtx : ctx.argumentos().expresion()) {
@@ -690,7 +705,9 @@ public class ZetarianoC3DVisitor extends ZetarianoBaseVisitor<String> {
     public String visitAddSubExpr(ZetarianoParser.AddSubExprContext ctx) {
         if (ctx.PLUS() != null && (isText(ctx.expresion(0)) || isText(ctx.expresion(1)))) {
             String temp = c3d.newTemp();
-            c3d.emit(QuadrupleOp.CONCAT, visit(ctx.expresion(0)), visit(ctx.expresion(1)), temp);
+            String left = ValueRuntime.asText(c3d, visit(ctx.expresion(0)), expressionType(ctx.expresion(0)));
+            String right = ValueRuntime.asText(c3d, visit(ctx.expresion(1)), expressionType(ctx.expresion(1)));
+            c3d.emit(QuadrupleOp.CONCAT, left, right, temp);
             return temp;
         }
         String left = visit(ctx.expresion(0));
@@ -705,7 +722,9 @@ public class ZetarianoC3DVisitor extends ZetarianoBaseVisitor<String> {
         String left = visit(ctx.expresion(0));
         String right = visit(ctx.expresion(1));
         String temp = c3d.newTemp();
-        QuadrupleOp op = ctx.MUL() != null ? QuadrupleOp.MUL : (ctx.DIV() != null ? QuadrupleOp.DIV : QuadrupleOp.MOD);
+        boolean integerDivision = Type.INT.equals(expressionType(ctx.expresion(0))) && Type.INT.equals(expressionType(ctx.expresion(1)));
+        QuadrupleOp op = ctx.MUL() != null ? QuadrupleOp.MUL : (ctx.DIV() != null
+                ? integerDivision ? QuadrupleOp.INT_DIV : QuadrupleOp.DIV : QuadrupleOp.MOD);
         c3d.emit(op, left, right, temp);
         return temp;
     }
@@ -778,16 +797,12 @@ public class ZetarianoC3DVisitor extends ZetarianoBaseVisitor<String> {
 
     @Override
     public String visitAndExpr(ZetarianoParser.AndExprContext ctx) {
-        String temp = c3d.newTemp();
-        c3d.emit(QuadrupleOp.AND, visit(ctx.expresion(0)), visit(ctx.expresion(1)), temp);
-        return temp;
+        return booleanValue(ctx);
     }
 
     @Override
     public String visitOrExpr(ZetarianoParser.OrExprContext ctx) {
-        String temp = c3d.newTemp();
-        c3d.emit(QuadrupleOp.OR, visit(ctx.expresion(0)), visit(ctx.expresion(1)), temp);
-        return temp;
+        return booleanValue(ctx);
     }
 
     @Override
@@ -817,5 +832,97 @@ public class ZetarianoC3DVisitor extends ZetarianoBaseVisitor<String> {
     @Override
     public String visitNullExpr(ZetarianoParser.NullExprContext ctx) {
         return "-1";
+    }
+
+    private Type expressionType(ParseTree expression) {
+        return new ZetarianoSemanticVisitor(symbolTable).visit(expression);
+    }
+
+    private String accessAddress(ZetarianoParser.AccesoMiembroContext access, int limit) {
+        Symbol base = symbolTable.resolve(access.ID().getText());
+        Type type = base.getType();
+        String value = load(base);
+        String address = value;
+        for (int i = 0; i < limit; i++) {
+            var step = access.miembroAcceso(i);
+            if (step.DOT() != null) {
+                Symbol owner = HeapRuntime.definition(symbolTable, type);
+                address = ArrayRuntime.add(c3d, value, HeapRuntime.fieldOffset(owner, step.ID().getText()));
+                type = owner.getMember(step.ID().getText()).getType();
+                if (!step.expresion().isEmpty() || i + 1 < limit) value = HeapRuntime.read(c3d, address);
+            }
+            if (!step.expresion().isEmpty()) {
+                List<String> indices = step.expresion().stream().map(this::visit).toList();
+                address = ArrayRuntime.address(c3d, value, indices, type.getSizes());
+                type = type.desindexar(indices.size());
+                if (i + 1 < limit) value = type.isArray() ? address : HeapRuntime.read(c3d, address);
+            }
+        }
+        return address;
+    }
+
+    @Override
+    public String visitNewArrayExpr(ZetarianoParser.NewArrayExprContext ctx) {
+        return ArrayRuntime.allocateArray(c3d, ctx.expresion().stream().map(this::visit).toList());
+    }
+
+    @Override
+    public String visitCharLiteralExpr(ZetarianoParser.CharLiteralExprContext ctx) {
+        return String.valueOf((int)ctx.CARACTER().getText().charAt(1));
+    }
+
+    @Override
+    public String visitTernaryExpr(ZetarianoParser.TernaryExprContext ctx) {
+        String result = c3d.newTemp();
+        String yes = c3d.newLabel(), no = c3d.newLabel(), end = c3d.newLabel();
+        emitConditionalJump(ctx.expresion(0), yes, no);
+        c3d.emitLabel(yes);
+        c3d.emitAssign(result, visit(ctx.expresion(1)));
+        c3d.emitGoto(end);
+        c3d.emitLabel(no);
+        c3d.emitAssign(result, visit(ctx.expresion(2)));
+        c3d.emitLabel(end);
+        return result;
+    }
+
+    private String booleanValue(ZetarianoParser.ExpresionContext ctx) {
+        String result = c3d.newTemp();
+        String yes = c3d.newLabel(), no = c3d.newLabel(), end = c3d.newLabel();
+        emitConditionalJump(ctx, yes, no);
+        c3d.emitLabel(yes);
+        c3d.emitAssign(result, "1");
+        c3d.emitGoto(end);
+        c3d.emitLabel(no);
+        c3d.emitAssign(result, "0");
+        c3d.emitLabel(end);
+        return result;
+    }
+
+    @Override
+    public String visitSentenciaSwitch(ZetarianoParser.SentenciaSwitchContext ctx) {
+        String end = c3d.newLabel();
+        String fallback = ctx.defectoSwitch() == null ? end : c3d.newLabel();
+        String value = visit(ctx.expresion());
+        List<String> labels = new ArrayList<>();
+        for (var branch : ctx.casoSwitch()) {
+            String label = c3d.newLabel();
+            labels.add(label);
+            c3d.emit(QuadrupleOp.IF_EQ, value, visit(branch.expresion()), label);
+        }
+        c3d.emitGoto(fallback);
+        breakLabels.push(end);
+        for (int i = 0; i < ctx.casoSwitch().size(); i++) {
+            var branch = ctx.casoSwitch(i);
+            c3d.emitLabel(labels.get(i));
+            branch.sentencia().forEach(this::visit);
+            if (branch.BREAK() != null) c3d.emitGoto(end);
+        }
+        if (ctx.defectoSwitch() != null) {
+            c3d.emitLabel(fallback);
+            ctx.defectoSwitch().sentencia().forEach(this::visit);
+        }
+        breakLabels.pop();
+        c3d.emitLabel(end);
+        return null;
     }
 }

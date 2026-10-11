@@ -6,7 +6,7 @@ tokens {
 }
 
 // GRAMÁTICA
-init: archivo EOF;
+init: NUEVA_LINEA* archivo NUEVA_LINEA* EOF;
 
 archivo: estructuras_seccion saltos? funciones_seccion
        | funciones_seccion
@@ -148,6 +148,8 @@ operador_aditivo: MAS | MENOS;
 operador_multiplicativo: MULTIPLICACION | DIVISION;
 
 termino: ID
+       | llamada_funcion
+       | leer_funcion
        | acceso_miembro
        | NUMERO_ENTERO
        | NUMERO_DECIMAL
@@ -173,7 +175,7 @@ tipo_dato: ENTERO_TIPO
          ;
 
 operador_aritmetico: MAS | MENOS | MULTIPLICACION | DIVISION;
-operador_relacional: IGUAL | NO_IGUAL | MENOR_QUE | MAYOR_QUE;
+operador_relacional: IGUAL | NO_IGUAL | MENOR_IGUAL | MAYOR_IGUAL | MENOR_QUE | MAYOR_QUE;
 operador_logico: AND | OR;
 operador_negacion: NEGACION;
 
@@ -228,6 +230,8 @@ DIVISION: '/';
 
 IGUAL: '==';
 NO_IGUAL: '!=';
+MENOR_IGUAL: '<=';
+MAYOR_IGUAL: '>=';
 MENOR_QUE: '<';
 MAYOR_QUE: '>';
 

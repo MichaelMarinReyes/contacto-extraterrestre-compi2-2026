@@ -6,6 +6,7 @@ public enum QuadrupleOp {
     SUB("-"),
     MUL("*"),
     DIV("/"),
+    INT_DIV("/"),
     MOD("%"),
     NEG("-"),
     CONCAT("concat"),
@@ -53,6 +54,7 @@ public enum QuadrupleOp {
     PRINT_STR("print_str"),
     PRINTLN("println"),
     READ("read"),
+    READ_CHAR("read_char"),
     READ_STR("read_str");
 
     private final String symbol;

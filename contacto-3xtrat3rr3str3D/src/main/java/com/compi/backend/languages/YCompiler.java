@@ -71,10 +71,13 @@ public class YCompiler extends AbstractLanguageCompiler {
             return;
         }
         try {
+            symbolTable.beginCodeGeneration();
             YC3DVisitor c3d = new YC3DVisitor(symbolTable, generator);
             c3d.visit(tree);
-        } catch (Exception ignored) {
-
+        } catch (Exception exception) {
+            throw new IllegalStateException("No se pudo generar el código intermedio de Y", exception);
+        } finally {
+            symbolTable.endCodeGeneration();
         }
     }
 }

@@ -57,8 +57,8 @@ sentenciaSwitch: SWITCH LPAREN expresion RPAREN LBRACE casoSwitch* defectoSwitch
 casoSwitch: CASE expresion COLON sentencia* (BREAK SEMICOLON)?;
 defectoSwitch: DEFAULT COLON sentencia* (BREAK SEMICOLON)?;
 
-sentenciaFor: FOR LPAREN forInit? SEMICOLON expresion? SEMICOLON forUpdate? RPAREN bloque;
-forInit: declaracionVariable | asignacionExpresion;
+sentenciaFor: FOR LPAREN (forInit | SEMICOLON) expresion? SEMICOLON forUpdate? RPAREN bloque;
+forInit: declaracionVariable | asignacionExpresion SEMICOLON;
 asignacionExpresion: (ID | accesoMiembro) (ASSIGN | PLUS_ASSIGN | MINUS_ASSIGN | MUL_ASSIGN) expresion;
 forUpdate: incrementoDecremento | asignacionExpresion;
 

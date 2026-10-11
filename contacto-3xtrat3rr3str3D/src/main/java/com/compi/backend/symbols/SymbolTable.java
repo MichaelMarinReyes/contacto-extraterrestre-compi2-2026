@@ -27,6 +27,8 @@ public class SymbolTable {
 
     @Getter(AccessLevel.NONE)
     private final List<Scope> closedScopes = new ArrayList<>();
+    private boolean generatingCode;
+    private final Map<org.antlr.v4.runtime.ParserRuleContext, Scope> syntaxScopes = new IdentityHashMap<>();
 
     public SymbolTable() {
         this.globalScope = new Scope("global", null);
@@ -35,16 +37,36 @@ public class SymbolTable {
     }
 
     public void enterScope(String name) {
-        currentScope = new Scope(name, currentScope);
+        enterScope(name, currentScope.getCurrentOffset());
     }
 
     public void enterScope(String name, int initialOffset) {
+        if (generatingCode) {
+            for (Scope scope : closedScopes) {
+                if (scope.getName().equals(name) && scope.getParent() == currentScope) {
+                    currentScope = scope;
+                    return;
+                }
+            }
+        }
         currentScope = new Scope(name, currentScope, initialOffset);
+    }
+
+    /** Asocia cada bloque a su ámbito; evita confundir módulos o bloques con el mismo nombre. */
+    public void enterScope(String name, int initialOffset, org.antlr.v4.runtime.ParserRuleContext context) {
+        if (generatingCode) {
+            Scope scope = syntaxScopes.get(context);
+            if (scope == null) throw new IllegalStateException("El bloque no tiene un ámbito semántico comprobado");
+            currentScope = scope;
+        } else {
+            currentScope = new Scope(name, currentScope, initialOffset);
+            syntaxScopes.put(context, currentScope);
+        }
     }
 
     public void exitScope() {
         if (currentScope.getParent() != null) {
-            closedScopes.add(currentScope);
+            if (!generatingCode) closedScopes.add(currentScope);
             currentScope = currentScope.getParent();
         }
     }
@@ -56,7 +78,14 @@ public class SymbolTable {
         classes.clear();
         functions.clear();
         closedScopes.clear();
+        generatingCode = false;
+        syntaxScopes.clear();
     }
+
+    /** Reutiliza los símbolos comprobados, sin volver a declararlos durante C3D. */
+    public void beginCodeGeneration() { generatingCode = true; }
+
+    public void endCodeGeneration() { generatingCode = false; currentScope = globalScope; }
 
     public boolean define(Symbol symbol) {
 

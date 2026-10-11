@@ -3,6 +3,8 @@ package com.compi.backend.languages.y;
 import com.compi.YBaseVisitor;
 import com.compi.YParser;
 import com.compi.backend.c3d.ArrayRuntime;
+import com.compi.backend.c3d.HeapRuntime;
+import com.compi.backend.c3d.ValueRuntime;
 import com.compi.backend.c3d.C3DGenerator;
 import com.compi.backend.c3d.QuadrupleOp;
 import com.compi.backend.symbols.DataType;
@@ -34,7 +36,7 @@ public class YC3DVisitor extends YBaseVisitor<String> {
         String funcName = ctx.ID().getText();
         c3d.emit(QuadrupleOp.FUNCTION_START, null, null, funcName);
 
-        symbolTable.enterScope("func_" + funcName, 0);
+        symbolTable.enterScope("func_" + funcName, 0, ctx);
 
         if (ctx.parametros() != null) {
             for (YParser.ParametroContext paramCtx : ctx.parametros().parametro()) {
@@ -90,7 +92,9 @@ public class YC3DVisitor extends YBaseVisitor<String> {
         }
 
         if (ctx.expresion_inicializacion() != null && ctx.expresion_inicializacion().expresion() != null) {
-            c3d.emitAssign(sym.getName(), visit(ctx.expresion_inicializacion().expresion()));
+            String value = ctx.expresion_inicializacion().expresion().getText().equals("leer()")
+                    ? readValue(type) : visit(ctx.expresion_inicializacion().expresion());
+            c3d.emitAssign(sym.getStorageName(), value);
         }
         return null;
     }
@@ -109,20 +113,17 @@ public class YC3DVisitor extends YBaseVisitor<String> {
     private String declareStruct(Symbol sym, Symbol struct,
                                       YParser.Expresion_inicializacionContext inicializador) {
         String base = ArrayRuntime.allocate(c3d, celdasDe(struct));
-        c3d.emitAssign(sym.getName(), base);
+        c3d.emitAssign(sym.getStorageName(), base);
 
         if (inicializador != null && !inicializador.elemento_lista().isEmpty()) {
             fillFields(base, inicializador.elemento_lista(), struct, 0);
         } else if (inicializador != null && inicializador.expresion() != null) {
-            c3d.emitAssign(sym.getName(), visit(inicializador.expresion()));
+            c3d.emitAssign(sym.getStorageName(), visit(inicializador.expresion()));
         }
         return null;
     }
 
     private int celdasDe(Type type) {
-        if (type != null && type.isArray()) {
-            return Math.max(type.totalSize(), 1);
-        }
         return 1;
     }
 
@@ -147,12 +148,16 @@ public class YC3DVisitor extends YBaseVisitor<String> {
 
             if (element.LLAVE_IZQ() != null && fieldType != null && fieldType.isArray()) {
                 int[] sizes = fieldType.getSizes();
-                fill(start, element.elemento_lista(), sizes, new int[sizes.length], 0);
+                String array = ArrayRuntime.allocateArray(c3d, fieldType.getSizes());
+                fill(array, element.elemento_lista(), sizes, new int[sizes.length], 0);
+                c3d.emit(QuadrupleOp.HEAP_SET, start, array, null);
             } else if (element.LLAVE_IZQ() != null && fieldType != null && fieldType.isStruct()) {
 
                 Symbol anidada = symbolTable.getStruct(fieldType.getCustomTypeName());
                 if (anidada != null) {
-                    fillFields(start, element.elemento_lista(), anidada, 0);
+                    String nested = HeapRuntime.allocateObject(c3d, anidada);
+                    fillFields(nested, element.elemento_lista(), anidada, 0);
+                    c3d.emit(QuadrupleOp.HEAP_SET, start, nested, null);
                 }
             } else {
                 c3d.emit(QuadrupleOp.HEAP_SET, start, visit(element.expresion()), null);
@@ -169,8 +174,8 @@ public class YC3DVisitor extends YBaseVisitor<String> {
         if (celdas <= 0) {
             return null;
         }
-        String base = ArrayRuntime.allocate(c3d, celdas);
-        c3d.emitAssign(sym.getName(), base);
+        String base = ArrayRuntime.allocateArray(c3d, type.getSizes());
+        c3d.emitAssign(sym.getStorageName(), base);
 
         if (inicializador != null && !inicializador.elemento_lista().isEmpty()) {
             int[] sizes = type.getSizes();
@@ -208,7 +213,7 @@ public class YC3DVisitor extends YBaseVisitor<String> {
             if (sym == null) {
                 return null;
             }
-            c3d.emitAssign(sym.getName(), val);
+            c3d.emitAssign(sym.getStorageName(), val);
         }
         return null;
     }
@@ -230,25 +235,26 @@ public class YC3DVisitor extends YBaseVisitor<String> {
         String address = leerVariable(base);
         Type type = base.getType();
 
-        for (Object step : accessSteps(ctx)) {
+        List<Object> steps = accessSteps(ctx);
+        for (int index = 0; index < steps.size(); index++) {
+            Object step = steps.get(index);
             if (step instanceof String fieldName) {
                 Symbol field = fieldOf(type, fieldName);
                 if (field == null) {
                     return null;
                 }
-                address = ArrayRuntime.add(c3d, address, fieldPosition(field)[0]);
+                Symbol owner = HeapRuntime.definition(symbolTable, type);
+                address = ArrayRuntime.add(c3d, address, HeapRuntime.fieldOffset(owner, fieldName));
                 type = field.getType();
+                if (index + 1 < steps.size() && (type.isArray() || type.isStruct())) address = HeapRuntime.read(c3d, address);
             } else {
-                if (type == null || !type.isArray() || !type.hasSizes()) {
+                if (type == null || !type.isArray()) {
                     return null;
                 }
                 address = ArrayRuntime.address(c3d, address,
                         List.of(visit((YParser.ExpresionContext) step)), type.getSizes());
                 type = type.desindexar(1);
             }
-        }
-        if (type == null || type.isArray() || type.isStruct()) {
-            return null;
         }
         return address;
     }
@@ -292,7 +298,7 @@ public class YC3DVisitor extends YBaseVisitor<String> {
     }
 
     private String leerVariable(Symbol sym) {
-        return sym.getName();
+        return sym.getStorageName();
     }
 
     @Override
@@ -310,6 +316,8 @@ public class YC3DVisitor extends YBaseVisitor<String> {
         if (address == null) {
             return null;
         }
+        Type type = expressionType(ctx);
+        if (type != null && type.isArray() && "]".equals(ctx.getChild(ctx.getChildCount() - 1).getText())) return address;
         String valor = c3d.newTemp();
         c3d.emit(QuadrupleOp.HEAP_GET, address, null, valor);
         return valor;
@@ -411,6 +419,8 @@ public class YC3DVisitor extends YBaseVisitor<String> {
         if (">".equals(operator)) {
             return QuadrupleOp.IF_GT;
         }
+        if ("<=".equals(operator)) return QuadrupleOp.IF_LE;
+        if (">=".equals(operator)) return QuadrupleOp.IF_GE;
         return QuadrupleOp.IF_EQ;
     }
 
@@ -439,16 +449,19 @@ public class YC3DVisitor extends YBaseVisitor<String> {
 
     @Override
     public String visitHacer_mientras_sentencia(YParser.Hacer_mientras_sentenciaContext ctx) {
+        String bodyLabel = c3d.newLabel();
         String condLabel = c3d.newLabel();
         String endLabel = c3d.newLabel();
 
         breakLabels.push(endLabel);
         continueLabels.push(condLabel);
 
+        c3d.emitLabel(bodyLabel);
         visit(ctx.bloque());
 
         c3d.emitLabel(condLabel);
-        emitConditionalJump(ctx.condicion(), condLabel, null);
+        // La condición regresa al cuerpo, no a sí misma.
+        emitConditionalJump(ctx.condicion(), bodyLabel, endLabel);
 
         c3d.emitLabel(endLabel);
 
@@ -459,6 +472,7 @@ public class YC3DVisitor extends YBaseVisitor<String> {
 
     @Override
     public String visitPara_sentencia(YParser.Para_sentenciaContext ctx) {
+        symbolTable.enterScope("for_" + ctx.getStart().getStartIndex(), 0, ctx);
         String condLabel = c3d.newLabel();
         String bodyLabel = c3d.newLabel();
         String incrementLabel = c3d.newLabel();
@@ -487,6 +501,7 @@ public class YC3DVisitor extends YBaseVisitor<String> {
 
         breakLabels.pop();
         continueLabels.pop();
+        symbolTable.exitScope();
         return null;
     }
 
@@ -499,7 +514,7 @@ public class YC3DVisitor extends YBaseVisitor<String> {
         if (sym == null) {
             return null;
         }
-        boolean isArray = sym.getType() != null && sym.getType().isArray();
+        boolean isArray = access != null;
 
         String antes = isArray ? readCell(access) : leerVariable(sym);
         if (antes == null) {
@@ -513,7 +528,7 @@ public class YC3DVisitor extends YBaseVisitor<String> {
             writeOnAccess(access, after);
             return null;
         }
-        c3d.emitAssign(sym.getName(), after);
+        c3d.emitAssign(sym.getStorageName(), after);
         return null;
     }
 
@@ -524,7 +539,8 @@ public class YC3DVisitor extends YBaseVisitor<String> {
         String defaultLabel = always != null ? c3d.newLabel() : endLabel;
 
         breakLabels.push(endLabel);
-        continueLabels.push(endLabel);
+        boolean selectionContinue = continueLabels.isEmpty();
+        if (selectionContinue) continueLabels.push(endLabel);
 
         String valor = visit(ctx.expresion());
         List<YParser.Caso_bloqueContext> casos = ctx.caso_bloque();
@@ -552,7 +568,7 @@ public class YC3DVisitor extends YBaseVisitor<String> {
         c3d.emitLabel(endLabel);
 
         breakLabels.pop();
-        continueLabels.pop();
+        if (selectionContinue) continueLabels.pop();
         return null;
     }
 
@@ -593,10 +609,12 @@ public class YC3DVisitor extends YBaseVisitor<String> {
         if (ctx.argumentos() != null) {
             for (YParser.ExpresionContext exprCtx : ctx.argumentos().expresion()) {
                 String val = visit(exprCtx);
-                if (isString(exprCtx)) {
+                Type type = expressionType(exprCtx);
+                if (Type.STRING.equals(type)) {
                     c3d.emit(QuadrupleOp.PRINT_STR, val, null, null);
                 } else {
-                    c3d.emit(QuadrupleOp.PRINT_INT, val, null, null);
+                    c3d.emit(Type.DOUBLE.equals(type) ? QuadrupleOp.PRINT_FLOAT
+                            : Type.CHAR.equals(type) ? QuadrupleOp.PRINT_CHAR : QuadrupleOp.PRINT_INT, val, null, null);
                 }
             }
         }
@@ -666,10 +684,7 @@ public class YC3DVisitor extends YBaseVisitor<String> {
             String endLabel = c3d.newLabel();
 
             String op = ctx.operador_relacional().getText();
-            QuadrupleOp qOp = "==".equals(op) ? QuadrupleOp.IF_EQ :
-                    "!=".equals(op) ? QuadrupleOp.IF_NE :
-                    "<".equals(op) ? QuadrupleOp.IF_LT :
-                    ">".equals(op) ? QuadrupleOp.IF_GT : QuadrupleOp.IF_GE;
+            QuadrupleOp qOp = relacionalDe(op);
 
             String falseLabel = c3d.newLabel();
             c3d.emit(qOp, left, right, trueLabel);
@@ -702,17 +717,25 @@ public class YC3DVisitor extends YBaseVisitor<String> {
     @Override
     public String visitSumatoria(YParser.SumatoriaContext ctx) {
         String acumulado = visit(ctx.productoria(0));
-        boolean isText = isText(ctx.productoria(0));
+        Type currentType = expressionType(ctx.productoria(0));
+        boolean isText = Type.STRING.equals(currentType);
         for (int i = 1; i < ctx.productoria().size(); i++) {
             YParser.ProductoriaContext next = ctx.productoria(i);
             String op = ctx.operador_aditivo(i - 1).getText();
-            boolean concat = "+".equals(op) && (isText || isText(next));
+            Type nextType = expressionType(next);
+            boolean concat = "+".equals(op) && (isText || Type.STRING.equals(nextType));
+            String right = visit(next);
+            if (concat) {
+                acumulado = ValueRuntime.asText(c3d, acumulado, currentType);
+                right = ValueRuntime.asText(c3d, right, nextType);
+            }
             String temp = c3d.newTemp();
             c3d.emit(concat ? QuadrupleOp.CONCAT
                     : "+".equals(op) ? QuadrupleOp.ADD : QuadrupleOp.SUB,
-                    acumulado, visit(next), temp);
+                     acumulado, right, temp);
             acumulado = temp;
             isText = concat;
+            currentType = concat ? Type.STRING : com.compi.backend.symbols.TypeCompatibility.checkArithmetic(currentType, nextType, op);
         }
         return acumulado;
     }
@@ -720,12 +743,16 @@ public class YC3DVisitor extends YBaseVisitor<String> {
     @Override
     public String visitProductoria(YParser.ProductoriaContext ctx) {
         String acumulado = visit(ctx.termino(0));
+        Type currentType = expressionType(ctx.termino(0));
         for (int i = 1; i < ctx.termino().size(); i++) {
             String op = ctx.operador_multiplicativo(i - 1).getText();
             String temp = c3d.newTemp();
-            c3d.emit("*".equals(op) ? QuadrupleOp.MUL : QuadrupleOp.DIV,
+            Type nextType = expressionType(ctx.termino(i));
+            boolean integerDivision = Type.INT.equals(currentType) && Type.INT.equals(nextType);
+            c3d.emit("*".equals(op) ? QuadrupleOp.MUL : integerDivision ? QuadrupleOp.INT_DIV : QuadrupleOp.DIV,
                     acumulado, visit(ctx.termino(i)), temp);
             acumulado = temp;
+            currentType = com.compi.backend.symbols.TypeCompatibility.checkArithmetic(currentType, nextType, op);
         }
         return acumulado;
     }
@@ -782,6 +809,8 @@ public class YC3DVisitor extends YBaseVisitor<String> {
 
     @Override
     public String visitTermino(YParser.TerminoContext ctx) {
+        if (ctx.llamada_funcion() != null) return visit(ctx.llamada_funcion());
+        if (ctx.leer_funcion() != null) return visit(ctx.leer_funcion());
         if (ctx.NUMERO_ENTERO() != null) return ctx.NUMERO_ENTERO().getText();
         if (ctx.NUMERO_DECIMAL() != null) return ctx.NUMERO_DECIMAL().getText();
         if (ctx.VERDADERO() != null) return "1";
@@ -794,7 +823,8 @@ public class YC3DVisitor extends YBaseVisitor<String> {
         }
 
         if (ctx.ID() != null) {
-            return ctx.ID().getText();
+            Symbol symbol = symbolTable.resolve(ctx.ID().getText());
+            return symbol == null ? ctx.ID().getText() : symbol.getStorageName();
         }
 
         if (ctx.acceso_miembro() != null) {
@@ -812,5 +842,20 @@ public class YC3DVisitor extends YBaseVisitor<String> {
         }
 
         return "0";
+    }
+
+    private Type expressionType(ParseTree tree) {
+        return new YSemanticVisitor(symbolTable).visit(tree);
+    }
+
+    private String readValue(Type type) {
+        String result = c3d.newTemp();
+        c3d.emit(Type.STRING.equals(type) ? QuadrupleOp.READ_STR : QuadrupleOp.READ, result, null, null);
+        return result;
+    }
+
+    @Override
+    public String visitLeer_funcion(YParser.Leer_funcionContext ctx) {
+        return readValue(Type.STRING);
     }
 }

@@ -63,6 +63,14 @@ public class Symbol {
         return null;
     }
 
+    public Symbol getCallable(String memberName, int argumentCount) {
+        for (Symbol member : members) {
+            if (member.name.equals(memberName) && member.parameters.size() == argumentCount
+                    && (member.category == SymbolCategory.METHOD || member.category == SymbolCategory.CONSTRUCTOR)) return member;
+        }
+        return null;
+    }
+
     public Symbol inFile(String fileName) {
         this.sourceFile = fileName;
         return this;
@@ -90,6 +98,13 @@ public class Symbol {
     public Symbol markWorking() {
         this.working = true;
         return this;
+    }
+
+    /** Identificador interno que distingue variables de ámbitos diferentes. */
+    public String getStorageName() {
+        if (isGlobal) return "g_" + name;
+        return "v_" + (scope == null ? "local" : scope.replaceAll("[^A-Za-z0-9_]", "_"))
+                + "_" + name + "_" + Math.max(line, 0) + "_" + Math.max(column, 0);
     }
 
     @Override

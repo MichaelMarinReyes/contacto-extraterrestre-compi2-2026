@@ -14,6 +14,8 @@ declaracion: ESTO VARIABLE DOS_PUNTOS? tipo_dato expresion PUNTO_COMA
            | ESTO VARIABLE DOS_PUNTOS? LITTERA CARACTER PUNTO_COMA
            | ESTO VARIABLE DOS_PUNTOS? NOVUS VARIABLE PARENTESIS_IZQ argumentos? PARENTESIS_DER PUNTO_COMA
            | ESTO VARIABLE DOS_PUNTOS? VARIABLE structura_instanciacion PUNTO_COMA
+           | ESTO VARIABLE DOS_PUNTOS? VARIABLE expresion PUNTO_COMA
+           | ESTO VARIABLE DOS_PUNTOS? ASIGNACION (expresion | condicion) PUNTO_COMA
            | ESTO VARIABLE DOS_PUNTOS? expresion PUNTO_COMA
            | arreglo_declaracion;
 
@@ -27,7 +29,7 @@ elemento_arreglo_valor: expresion
 
 elemento_arreglo_struct: structura_instanciacion (COMA structura_instanciacion)*;
 
-structura_instanciacion: (VARIABLE)? LLAVE_IZQ atributo_asignacion (COMA atributo_asignacion)* LLAVE_DER
+structura_instanciacion: (VARIABLE)? LLAVE_IZQ (atributo_asignacion (COMA atributo_asignacion)* | expresion (COMA expresion)*)? LLAVE_DER
                         | VARIABLE CORCHETE_IZQ NUMERO_ENTERO CORCHETE_DER;
 
 atributo_asignacion: VARIABLE DOS_PUNTOS? (expresion | structura_instanciacion | arreglo_literal | NOVUS VARIABLE PARENTESIS_IZQ argumentos? PARENTESIS_DER);
@@ -38,8 +40,7 @@ tipo_dato: NUMERUS
          | TEXTUM
          | DECIMALIS
          | LITTERA
-         | VERUM
-         | FALSUS;
+         | BOOL;
 
 expresion: producto (suma_resta producto)*;
 
@@ -59,6 +60,7 @@ termino: VARIABLE
        | FALSUS
        | llamada_funcion
        | NOVUS VARIABLE PARENTESIS_IZQ argumentos? PARENTESIS_DER
+       | PARENTESIS_IZQ expresion PARENTESIS_DER
        | MENOS termino;
 
 acceso_miembro: VARIABLE (PUNTO VARIABLE | CORCHETE_IZQ expresion CORCHETE_DER)+;
@@ -82,7 +84,7 @@ leer_sentencia: (VARIABLE | acceso_miembro)? LEER;
 
 asignacion_sentencia: (VARIABLE | acceso_miembro) ASIGNACION (expresion | condicion | structura_instanciacion | arreglo_literal | NOVUS VARIABLE PARENTESIS_IZQ argumentos? PARENTESIS_DER) PUNTO_COMA?;
 
-imprimir_sentencia: IMPRIMIR (CADENA_TEXTO | VARIABLE | acceso_miembro | llamada_funcion) (IMPRIMIR (CADENA_TEXTO | VARIABLE | acceso_miembro | llamada_funcion))* PUNTO_COMA?;
+imprimir_sentencia: IMPRIMIR expresion (IMPRIMIR expresion)* PUNTO_COMA?;
 
 si_sentencia: SI PARENTESIS_IZQ condicion PARENTESIS_DER LLAVE_IZQ sentencia* LLAVE_DER aliter_bloque* ((ALITER) LLAVE_IZQ sentencia* LLAVE_DER)? FINIS PUNTO_COMA;
 
@@ -159,8 +161,9 @@ NUMERUS: 'numerus';
 TEXTUM: 'textum';
 DECIMALIS: 'decimalis';
 LITTERA: 'littera';
+BOOL: 'bool';
 
-// Booleanos
+// Valores booleanos
 VERUM: 'verum';
 FALSUS: 'falsus';
 

@@ -51,7 +51,7 @@ public class StackSimulator {
         }
         switch (op) {
 
-            case ADD: case SUB: case MUL: case DIV: case MOD:
+            case ADD: case SUB: case MUL: case DIV: case INT_DIV: case MOD:
             case AND: case OR: case CONCAT:
             case IF_EQ: case IF_NE: case IF_LT: case IF_LE: case IF_GT: case IF_GE:
                 pop(2);
@@ -88,7 +88,13 @@ public class StackSimulator {
                 pop(1);
                 break;
 
-            case GOTO: case LABEL: case FUNCTION_START: case FUNCTION_END: case CALL:
+            case CALL:
+                if (q.getResult() != null) push(q.getResult());
+                break;
+            case READ: case READ_STR: case READ_CHAR:
+                push(q.getArg1());
+                break;
+            case GOTO: case LABEL: case FUNCTION_START: case FUNCTION_END:
 
                 break;
 
