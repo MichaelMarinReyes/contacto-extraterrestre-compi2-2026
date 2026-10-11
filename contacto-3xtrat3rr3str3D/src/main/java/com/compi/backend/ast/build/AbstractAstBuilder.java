@@ -7,6 +7,8 @@ import com.compi.backend.symbols.Type;
 import java.math.BigInteger;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.IdentityHashMap;
+import java.util.Map;
 import org.antlr.v4.runtime.ParserRuleContext;
 import org.antlr.v4.runtime.Token;
 import org.antlr.v4.runtime.tree.*;
@@ -14,6 +16,7 @@ import org.antlr.v4.runtime.tree.*;
 /** Utilidades compartidas de construcción; ningún nodo retiene el parse tree. */
 public abstract class AbstractAstBuilder extends AbstractParseTreeVisitor<ASTNode> {
     private final String[] rules;
+    private final Map<ParserRuleContext, ASTNode> bindings = new IdentityHashMap<>();
     protected AbstractAstBuilder(String[] rules) { this.rules = rules; }
 
     public ProgramNodeAST build(ParseTree tree, String sourceFile) {
@@ -24,8 +27,13 @@ public abstract class AbstractAstBuilder extends AbstractParseTreeVisitor<ASTNod
 
     @Override public ASTNode visitChildren(RuleNode tree) {
         ParserRuleContext context = (ParserRuleContext) tree;
-        return buildRule(rule(context), context);
+        ASTNode node = buildRule(rule(context), context);
+        bind(context, node);
+        return node;
     }
+
+    protected void bind(ParserRuleContext context, ASTNode node) { if (node != null) bindings.put(context, node); }
+    public Map<ParserRuleContext, ASTNode> bindings() { return java.util.Collections.unmodifiableMap(bindings); }
 
     protected abstract ASTNode buildRule(String rule, ParserRuleContext context);
     protected String rule(ParserRuleContext c) { return rules[c.getRuleIndex()]; }

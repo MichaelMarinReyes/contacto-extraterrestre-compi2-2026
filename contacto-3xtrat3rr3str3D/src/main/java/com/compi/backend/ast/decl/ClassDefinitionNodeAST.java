@@ -11,9 +11,15 @@ public class ClassDefinitionNodeAST extends AbstractDefinitionNodeAST {
 
     private final String name;
     private final List<AbstractNodeAST> members;
+    private final boolean publicClass;
 
     public ClassDefinitionNodeAST(int line, int column, String name, List<AbstractNodeAST> members) {
+        this(line, column, name, members, false);
+    }
+
+    public ClassDefinitionNodeAST(int line, int column, String name, List<AbstractNodeAST> members, boolean publicClass) {
         super(line, column);
+        this.publicClass = publicClass;
         this.name = name;
         this.members = members;
     }
@@ -33,6 +39,8 @@ public class ClassDefinitionNodeAST extends AbstractDefinitionNodeAST {
     public String name() {
         return name;
     }
+
+    public boolean publicClass() { return publicClass; }
 
     public List<AbstractNodeAST> members() {
         return members;

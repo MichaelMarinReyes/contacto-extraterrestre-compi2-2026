@@ -98,7 +98,7 @@ final class YAccessEmitter {
         if (address == null) {
             return null;
         }
-        Type type = new YSemanticVisitor(symbolTable).visit(ctx);
+        Type type = symbolTable.typeOfSyntax(ctx);
         if (type != null && type.isArray()
                 && "]".equals(ctx.getChild(ctx.getChildCount() - 1).getText())) {
             return address;

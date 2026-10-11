@@ -6,9 +6,9 @@ import com.compi.backend.c3d.C3DGenerator;
 import com.compi.backend.errors.CompilationError;
 import com.compi.backend.errors.ErrorType;
 import com.compi.backend.languages.piglatin.PigLatinC3DVisitor;
-import com.compi.backend.languages.piglatin.PigLatinSemanticVisitor;
 import com.compi.backend.languages.piglatin.PigLatinAstBuilder;
 import com.compi.backend.ast.stmt.ProgramNodeAST;
+import com.compi.backend.ast.semantic.SemanticModel;
 import com.compi.backend.symbols.Symbol;
 import com.compi.backend.symbols.SymbolTable;
 import org.antlr.v4.runtime.CharStreams;
@@ -27,15 +27,21 @@ import java.util.Collections;
 
 public class PigLatinCompiler extends AbstractLanguageCompiler {
     private final Map<String, ProgramNodeAST> astImports = new LinkedHashMap<>();
+    private final Map<String, SemanticModel> semanticImports = new LinkedHashMap<>();
 
     @Override
     public ProgramNodeAST buildAst(ParseTree tree, String sourceFile) {
-        return new PigLatinAstBuilder().build(tree, sourceFile);
+        return constructAst(new PigLatinAstBuilder(), tree, sourceFile);
     }
 
     @Override
     public Map<String, ProgramNodeAST> importedAsts() {
         return Collections.unmodifiableMap(new LinkedHashMap<>(astImports));
+    }
+
+    @Override
+    public Map<String, SemanticModel> importedSemanticModels() {
+        return Collections.unmodifiableMap(new LinkedHashMap<>(semanticImports));
     }
 
     @Override
@@ -73,22 +79,6 @@ public class PigLatinCompiler extends AbstractLanguageCompiler {
     }
 
     @Override
-    public void analyze(ParseTree tree, SymbolTable symbolTable, List<CompilationError> errors) {
-        if (tree == null) {
-            return;
-        }
-        try {
-            PigLatinSemanticVisitor semantic = new PigLatinSemanticVisitor(symbolTable);
-            semantic.visit(tree);
-            markLanguage(symbolTable, displayName());
-            errors.addAll(semantic.getErrors());
-        } catch (Exception e) {
-
-            errors.add(internalError(displayName(), e, tree));
-        }
-    }
-
-    @Override
     public void generateIntermediate(ParseTree tree, SymbolTable symbolTable, C3DGenerator generator) {
         if (tree == null) {
             return;
@@ -113,6 +103,7 @@ public class PigLatinCompiler extends AbstractLanguageCompiler {
             return nuevos;
         }
         astImports.clear();
+        semanticImports.clear();
         for (PigLatinParser.Import_declaracionContext impCtx
                 : init.pig_latin().import_declaracion()) {
             nuevos.addAll(loadImport(impCtx, symbolTable, generator, errors, cargados));
@@ -171,26 +162,20 @@ public class PigLatinCompiler extends AbstractLanguageCompiler {
         target.setSourceFileName(found.getName());
         List<CompilationError> sink = new ArrayList<>();
         ParseTree importedTree = target.parse(content, sink);
-        if (sink.isEmpty() && importedTree != null) astImports.put(key, target.buildAst(importedTree, key));
+        ProgramNodeAST importedAst = sink.isEmpty() && importedTree != null ? target.buildAst(importedTree, key) : null;
+        if (importedAst != null) astImports.put(key, importedAst);
         if (sink.isEmpty()) {
             nuevos.addAll(target.loadImports(importedTree, symbolTable, generator, sink, cargados));
             astImports.putAll(target.importedAsts());
-            List<Symbol> antes = new ArrayList<>(symbolTable.getAllSymbols());
-            target.analyze(importedTree, symbolTable, sink);
-            markSource(symbolTable, antes, key);
+            target.analyze(importedAst, symbolTable, sink);
+            if (target.semanticModel() != null) semanticImports.put(key, target.semanticModel());
+            semanticImports.putAll(target.importedSemanticModels());
         }
         if (sink.isEmpty()) {
             target.generateIntermediate(importedTree, symbolTable, generator);
         }
         for (CompilationError e : sink) {
             errors.add(e.inFile(found.getPath()));
-        }
-    }
-
-    private void markSource(SymbolTable symbolTable, List<Symbol> antes, String key) {
-        List<Symbol> after = symbolTable.getAllSymbols();
-        for (int i = antes.size(); i < after.size(); i++) {
-            after.get(i).inFile(key);
         }
     }
 

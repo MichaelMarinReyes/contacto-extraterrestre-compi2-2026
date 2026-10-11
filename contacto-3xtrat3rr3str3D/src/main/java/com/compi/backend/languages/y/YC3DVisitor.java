@@ -440,7 +440,7 @@ public class YC3DVisitor extends YBaseVisitor<String> {
     }
 
     private Type expressionType(ParseTree tree) {
-        return new YSemanticVisitor(symbolTable).visit(tree);
+        return symbolTable.typeOfSyntax(tree);
     }
 
     @Override

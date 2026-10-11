@@ -552,7 +552,7 @@ public class ZetarianoC3DVisitor extends ZetarianoBaseVisitor<String> {
     }
 
     private Type expressionType(ParseTree expression) {
-        return new ZetarianoSemanticVisitor(symbolTable).visit(expression);
+        return symbolTable.typeOfSyntax(expression);
     }
 
     private String accessAddress(ZetarianoParser.AccesoMiembroContext access, int limit) {

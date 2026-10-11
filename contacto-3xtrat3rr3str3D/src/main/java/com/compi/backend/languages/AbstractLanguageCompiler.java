@@ -3,15 +3,40 @@ package com.compi.backend.languages;
 import com.compi.backend.errors.CompilationError;
 import com.compi.backend.errors.Diagnostic;
 import com.compi.backend.errors.ErrorType;
-import com.compi.backend.symbols.Symbol;
 import com.compi.backend.symbols.SymbolTable;
+import com.compi.backend.ast.ASTNode;
+import com.compi.backend.ast.build.AbstractAstBuilder;
+import com.compi.backend.ast.stmt.ProgramNodeAST;
+import com.compi.backend.ast.semantic.AstSemanticAnalyzer;
+import com.compi.backend.ast.semantic.SemanticModel;
 import org.antlr.v4.runtime.*;
 import org.antlr.v4.runtime.tree.ParseTree;
 
 import java.io.File;
 import java.util.List;
+import java.util.Map;
+import java.util.IdentityHashMap;
 
 public abstract class AbstractLanguageCompiler implements LanguageCompiler {
+    private Map<ParserRuleContext, ASTNode> astBindings = Map.of();
+    private SemanticModel semanticModel;
+
+    protected ProgramNodeAST constructAst(AbstractAstBuilder builder, ParseTree tree, String sourceFile) {
+        var ast = builder.build(tree, sourceFile);
+        astBindings = new IdentityHashMap<>(builder.bindings());
+        semanticModel = null;
+        return ast;
+    }
+
+    @Override
+    public SemanticModel semanticModel() { return semanticModel; }
+
+    @Override
+    public void analyze(ProgramNodeAST ast, SymbolTable symbols, List<CompilationError> errors) {
+        if (ast == null) return;
+        semanticModel = new AstSemanticAnalyzer(symbols, id(), errors).analyze(ast);
+        symbols.bindSyntax(astBindings, semanticModel);
+    }
     private File workingDirectory = new File(".");
     private File projectDirectory = new File(".");
     private Vocabulary vocabulary;
@@ -76,14 +101,6 @@ public abstract class AbstractLanguageCompiler implements LanguageCompiler {
 
     protected CompilationError internalError(String language, Exception e) {
         return internalError(language, e, null);
-    }
-
-    protected void markLanguage(SymbolTable symbolTable, String language) {
-        for (Symbol symbol : symbolTable.getAllSymbols()) {
-            if (symbol.getLanguage() == null) {
-                symbol.inLanguage(language);
-            }
-        }
     }
 
     protected CompilationError internalError(String language, Exception e, ParseTree tree) {

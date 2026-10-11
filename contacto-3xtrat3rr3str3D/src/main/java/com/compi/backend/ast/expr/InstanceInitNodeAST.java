@@ -13,9 +13,16 @@ public class InstanceInitNodeAST extends AbstractExpressionNodeAST {
     private final List<AbstractExpressionNodeAST> positional;
     private final Map<String, AbstractExpressionNodeAST> named;
     private final AbstractExpressionNodeAST arrayRef;
+    private final List<String> duplicateFields;
 
     public InstanceInitNodeAST(int line, int column, String typeName, List<AbstractExpressionNodeAST> positional, Map<String, AbstractExpressionNodeAST> named, AbstractExpressionNodeAST arrayRef) {
+        this(line, column, typeName, positional, named, arrayRef, List.of());
+    }
+
+    public InstanceInitNodeAST(int line, int column, String typeName, List<AbstractExpressionNodeAST> positional,
+                               Map<String, AbstractExpressionNodeAST> named, AbstractExpressionNodeAST arrayRef, List<String> duplicateFields) {
         super(line, column);
+        this.duplicateFields = List.copyOf(duplicateFields);
         this.typeName = typeName;
         this.positional = positional;
         this.named = named;
@@ -39,6 +46,8 @@ public class InstanceInitNodeAST extends AbstractExpressionNodeAST {
     public String typeName() {
         return typeName;
     }
+
+    public List<String> duplicateFields() { return duplicateFields; }
 
     public List<AbstractExpressionNodeAST> positional() {
         return positional;

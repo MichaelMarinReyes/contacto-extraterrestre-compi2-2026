@@ -20,12 +20,14 @@ import com.compi.backend.symbols.SymbolTable;
 import com.compi.backend.symbols.TypeEntry;
 import com.compi.backend.utils.ASTDotGenerator;
 import com.compi.backend.ast.stmt.ProgramNodeAST;
+import com.compi.backend.ast.semantic.SemanticModel;
 import lombok.AccessLevel;
 import lombok.Getter;
 
 import java.io.File;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import org.antlr.v4.runtime.tree.ParseTree;
 
 @Getter
@@ -67,6 +69,8 @@ public class Compiler {
 
     private List<String> importedFiles = List.of();
     private ProgramNodeAST ast;
+    private SemanticModel semanticModel;
+    private Map<String, SemanticModel> importedSemanticModels = Map.of();
     private java.util.Map<String, ProgramNodeAST> importedAsts = java.util.Map.of();
 
     public void setWorkingDirectory(File directory) {
@@ -138,10 +142,12 @@ public class Compiler {
         if (tree != null && errors.isEmpty()) {
             importedFiles = compiler.loadImports(tree, symbolTable, c3dGenerator, errors, rootFiles());
             importedAsts = compiler.importedAsts();
+            importedSemanticModels = compiler.importedSemanticModels();
         }
 
         if (tree != null && errors.isEmpty()) {
-            compiler.analyze(tree, symbolTable, errors);
+            compiler.analyze(ast, symbolTable, errors);
+            semanticModel = compiler.semanticModel();
         }
 
         if (tree != null && errors.isEmpty()) {
@@ -195,6 +201,8 @@ public class Compiler {
         c3dGenerator.clear();
         astDot = "";
         ast = null;
+        semanticModel = null;
+        importedSemanticModels = java.util.Map.of();
         importedAsts = java.util.Map.of();
         translatedCode = "";
         c3dCode = "";

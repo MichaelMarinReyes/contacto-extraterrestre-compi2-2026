@@ -11,9 +11,15 @@ public class ConstructorDefinitionNodeAST extends AbstractDefinitionNodeAST {
 
     private final List<ParameterNodeAST> parameters;
     private final AbstractStatementNodeAST body;
+    private final String name;
 
     public ConstructorDefinitionNodeAST(int line, int column, List<ParameterNodeAST> parameters, AbstractStatementNodeAST body) {
+        this(line, column, "", parameters, body);
+    }
+
+    public ConstructorDefinitionNodeAST(int line, int column, String name, List<ParameterNodeAST> parameters, AbstractStatementNodeAST body) {
         super(line, column);
+        this.name = name;
         this.parameters = parameters;
         this.body = body;
     }
@@ -34,6 +40,8 @@ public class ConstructorDefinitionNodeAST extends AbstractDefinitionNodeAST {
     public List<ParameterNodeAST> parameters() {
         return parameters;
     }
+
+    public String name() { return name; }
 
     public AbstractStatementNodeAST body() {
         return body;

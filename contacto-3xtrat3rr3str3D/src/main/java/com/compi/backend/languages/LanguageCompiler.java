@@ -4,6 +4,7 @@ import com.compi.backend.c3d.C3DGenerator;
 import com.compi.backend.errors.CompilationError;
 import com.compi.backend.symbols.SymbolTable;
 import com.compi.backend.ast.stmt.ProgramNodeAST;
+import com.compi.backend.ast.semantic.SemanticModel;
 import org.antlr.v4.runtime.Vocabulary;
 import org.antlr.v4.runtime.tree.ParseTree;
 
@@ -26,6 +27,10 @@ public interface LanguageCompiler {
         return Map.of();
     }
 
+    default Map<String, SemanticModel> importedSemanticModels() {
+        return Map.of();
+    }
+
     default Vocabulary vocabulary() {
         return null;
     }
@@ -34,7 +39,9 @@ public interface LanguageCompiler {
         return null;
     }
 
-    void analyze(ParseTree tree, SymbolTable symbolTable, List<CompilationError> errors);
+    void analyze(ProgramNodeAST tree, SymbolTable symbolTable, List<CompilationError> errors);
+
+    SemanticModel semanticModel();
 
     void generateIntermediate(ParseTree tree, SymbolTable symbolTable, C3DGenerator generator);
 

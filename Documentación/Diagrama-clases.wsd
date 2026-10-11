@@ -1,5 +1,5 @@
 @startuml Diagrama de clases - Contacto 3xtrat3rr3str3D
-' Arquitectura implementada al completar la Fase 1 del AST.
+' Arquitectura implementada al completar la migración semántica al AST.
 skinparam dpi 120
 skinparam shadowing false
 skinparam classAttributeIconSize 0
@@ -16,8 +16,8 @@ legend right
   **Arquitectura implementada**
   ..|> implementación · --|> herencia
   *-- composición · o-- agregación · ..> dependencia
-  ParseTree → constructores → AST propio → panel AST (Fase 1).
-  Semántica y C3D todavía recorren ParseTree; migración pendiente.
+  ParseTree → constructores → AST propio → semántica y panel AST.
+  C3D aún recorre ParseTree y consulta resultados semánticos mediante un puente.
 endlegend
 
 package "com.compi" {
@@ -74,6 +74,7 @@ package "com.compi.backend" {
     +setCMode(Mode)
     +getAst() : ProgramNodeAST
     +getImportedAsts() : Map<String, ProgramNodeAST>
+    +getSemanticModel() : SemanticModel
   }
   enum StackAction {
     SHIFT
@@ -86,7 +87,8 @@ package "com.compi.backend.languages" {
     +parse(source, errors) : ParseTree
     +buildAst(ParseTree, sourceFile) : ProgramNodeAST
     +importedAsts() : Map<String, ProgramNodeAST>
-    +analyze(ParseTree, SymbolTable, errors)
+    +analyze(ProgramNodeAST, SymbolTable, errors)
+    +semanticModel() : SemanticModel
     +generateIntermediate(ParseTree, SymbolTable, C3DGenerator)
     +loadImports(ParseTree, ...)
   }
@@ -98,9 +100,6 @@ package "com.compi.backend.languages" {
 }
 package "com.compi.backend.languages.piglatin" {
   class PigLatinAstBuilder
-  class PigLatinSemanticVisitor
-  class PigLatinArrayAnalyzer
-  class PigLatinConditionAnalyzer
   class PigLatinC3DVisitor
   class PigLatinConditionEmitter
   class PigLatinObjectEmitter
@@ -108,7 +107,6 @@ package "com.compi.backend.languages.piglatin" {
 package "com.compi.backend.languages.y" {
   class YAstBuilder
   class YIndentLexer
-  class YSemanticVisitor
   class YC3DVisitor
   class YDeclarationEmitter
   class YControlEmitter
@@ -116,7 +114,6 @@ package "com.compi.backend.languages.y" {
 }
 package "com.compi.backend.languages.zetariano" {
   class ZetarianoAstBuilder
-  class ZetarianoSemanticVisitor
   class ZetarianoC3DVisitor
   class ZetarianoArrayEmitter
   class ZetarianoClassEmitter
@@ -145,6 +142,19 @@ package "com.compi.backend.ast" {
   abstract AbstractStatementNodeAST
   abstract AbstractExpressionNodeAST
   abstract AbstractDefinitionNodeAST
+}
+package "com.compi.backend.ast.semantic" {
+  class AstSemanticAnalyzer {
+    +analyze(ProgramNodeAST) : SemanticModel
+  }
+  class AstExpressionAnalyzer
+  class AstDeclarationAnalyzer
+  class AstDefinitionAnalyzer
+  class SemanticModel {
+    +typeOf(ASTNode) : Type
+    +symbolOf(ASTNode) : Symbol
+    +scopeOf(ASTNode) : Scope
+  }
 }
 package "com.compi.backend.ast.stmt" {
   class ProgramNodeAST {
@@ -354,18 +364,28 @@ PigLatinCompiler --|> AbstractLanguageCompiler
 YCompiler --|> AbstractLanguageCompiler
 ZetarianoCompiler --|> AbstractLanguageCompiler
 LanguageCompilerFactory ..> LanguageCompiler
-PigLatinCompiler ..> PigLatinSemanticVisitor
 PigLatinCompiler ..> PigLatinC3DVisitor
 PigLatinCompiler ..> PigLatinAstBuilder
-YCompiler ..> YSemanticVisitor
 YCompiler ..> YC3DVisitor
 YCompiler ..> YAstBuilder
 YCompiler ..> YIndentLexer
-ZetarianoCompiler ..> ZetarianoSemanticVisitor
 ZetarianoCompiler ..> ZetarianoC3DVisitor
 ZetarianoCompiler ..> ZetarianoAstBuilder
-PigLatinSemanticVisitor *-- PigLatinArrayAnalyzer
-PigLatinSemanticVisitor *-- PigLatinConditionAnalyzer
+AbstractLanguageCompiler ..> AstSemanticAnalyzer
+AbstractLanguageCompiler o-- SemanticModel
+Compiler o-- SemanticModel : principal e importados
+AstSemanticAnalyzer --|> AbstractASTVisitor
+AstSemanticAnalyzer *-- AstExpressionAnalyzer
+AstSemanticAnalyzer *-- AstDeclarationAnalyzer
+AstSemanticAnalyzer *-- AstDefinitionAnalyzer
+AstSemanticAnalyzer *-- SemanticModel
+AstSemanticAnalyzer ..> SymbolTable
+SemanticModel ..> ASTNode
+SemanticModel o-- Type
+SemanticModel o-- Symbol
+SemanticModel o-- Scope
+SymbolTable ..> ASTNode : ámbitos por identidad
+SymbolTable ..> SemanticModel : puente temporal para C3D
 PigLatinC3DVisitor *-- PigLatinConditionEmitter
 PigLatinC3DVisitor *-- PigLatinObjectEmitter
 YC3DVisitor *-- YDeclarationEmitter

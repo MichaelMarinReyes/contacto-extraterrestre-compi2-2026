@@ -24,7 +24,7 @@ public class ZetarianoAstBuilder extends AbstractAstBuilder {
             case "programa" -> new ProgramNodeAST(line(c), col(c), List.of(),
                     all(c, "claseDef").stream().map(child -> (AbstractDefinitionNodeAST) visit(child)).toList(), List.of(), List.of());
             case "claseDef" -> new ClassDefinitionNodeAST(line(c), col(c), tokens(c, "ID").getFirst(),
-                    all(c, "miembroClase").stream().map(child -> (AbstractNodeAST) visit(child)).toList());
+                    all(c, "miembroClase").stream().map(child -> (AbstractNodeAST) visit(child)).toList(), has(c, "public"));
             case "miembroClase", "forInit", "forUpdate" -> unwrap(c);
             case "sentencia" -> statementRule(c);
             case "bloque" -> block(c, "sentencia");
@@ -80,7 +80,7 @@ public class ZetarianoAstBuilder extends AbstractAstBuilder {
                     tokens(param, "ID").getFirst(), false));
         }
         AbstractStatementNodeAST body = statement(node(c, "bloque"));
-        if (rule(c).equals("constructorDef")) return new ConstructorDefinitionNodeAST(line(c), col(c), parameters, body);
+        if (rule(c).equals("constructorDef")) return new ConstructorDefinitionNodeAST(line(c), col(c), tokens(c, "ID").getFirst(), parameters, body);
         return new MethodDefinitionNodeAST(line(c), col(c), type(one(c, "tipoDato").getText(), true),
                 tokens(c, "ID").getFirst(), parameters, body);
     }

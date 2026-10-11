@@ -80,7 +80,7 @@ final class PigLatinObjectEmitter {
     String readElement(PigLatinBaseVisitor<String> self,
                        PigLatinParser.Acceso_miembroContext ctx) {
         String address = accessAddress(self, ctx, ctx.getChildCount());
-        Type type = new PigLatinSemanticVisitor(symbolTable).visit(ctx);
+        Type type = symbolTable.typeOfSyntax(ctx);
         boolean partialArray = type != null && type.isArray()
                 && "]".equals(ctx.getChild(ctx.getChildCount() - 1).getText());
         return partialArray ? address : HeapRuntime.read(c3d, address);

@@ -20,6 +20,8 @@ public class SymbolTable {
     @Getter(AccessLevel.NONE)
     private final Map<String, Symbol> structs = new HashMap<>();
     @Getter(AccessLevel.NONE)
+    private final Map<Scope, Map<String, Symbol>> localStructs = new IdentityHashMap<>();
+    @Getter(AccessLevel.NONE)
     private final Map<String, Symbol> classes = new HashMap<>();
     @Getter(AccessLevel.NONE)
     private final Map<String, Symbol> functions = new HashMap<>();
@@ -31,6 +33,10 @@ public class SymbolTable {
     private final Map<org.antlr.v4.runtime.ParserRuleContext, Scope> syntaxScopes = new IdentityHashMap<>();
     @Getter(AccessLevel.NONE)
     private final Map<Symbol, Scope> typeScopes = new IdentityHashMap<>();
+    @Getter(AccessLevel.NONE)
+    private final Map<com.compi.backend.ast.ASTNode, Scope> astScopes = new IdentityHashMap<>();
+    @Getter(AccessLevel.NONE)
+    private final Map<org.antlr.v4.runtime.ParserRuleContext, Type> syntaxTypes = new IdentityHashMap<>();
 
     public SymbolTable() {
         this.globalScope = new Scope("global", null);
@@ -75,10 +81,38 @@ public class SymbolTable {
         }
     }
 
+    public void enterAstScope(String name, int offset, com.compi.backend.ast.ASTNode node) {
+        if (generatingCode) {
+            currentScope = astScopes.get(node);
+            if (currentScope == null) throw new IllegalStateException("El nodo no tiene ámbito semántico");
+        } else {
+            currentScope = new Scope(name, currentScope, offset);
+            typeTable.scopeId(currentScope);
+            astScopes.put(node, currentScope);
+        }
+    }
+
+    public Scope scopeOf(com.compi.backend.ast.ASTNode node) { return astScopes.get(node); }
+
+    /** Puente temporal para C3D: proyecta resultados ya comprobados, sin analizar el parser. */
+    public void bindSyntax(Map<org.antlr.v4.runtime.ParserRuleContext, com.compi.backend.ast.ASTNode> bindings,
+                           com.compi.backend.ast.semantic.SemanticModel model) {
+        bindings.forEach((context, node) -> {
+            Scope scope = astScopes.get(node);
+            if (scope != null) syntaxScopes.put(context, scope);
+            syntaxTypes.put(context, model.typeOf(node));
+        });
+    }
+
+    public Type typeOfSyntax(org.antlr.v4.runtime.tree.ParseTree tree) {
+        return syntaxTypes.getOrDefault(tree, Type.UNKNOWN);
+    }
+
     public void clear() {
         currentScope = globalScope;
         globalScope.clear();
         structs.clear();
+        localStructs.clear();
         classes.clear();
         functions.clear();
         closedScopes.clear();
@@ -86,6 +120,8 @@ public class SymbolTable {
         syntaxScopes.clear();
         typeScopes.clear();
         typeTable.clear();
+        astScopes.clear();
+        syntaxTypes.clear();
     }
 
     /** Reutiliza los símbolos comprobados, sin volver a declararlos durante C3D. */
@@ -120,13 +156,24 @@ public class SymbolTable {
     public void addStruct(Symbol struct) {
 
         struct.setScopeIfAbsent(struct.getName());
-        structs.put(struct.getName(), struct);
+        if (currentScope == globalScope) structs.put(struct.getName(), struct);
+        else localStructs.computeIfAbsent(currentScope, scope -> new HashMap<>()).put(struct.getName(), struct);
         typeScopes.put(struct, currentScope);
         typeTable.define(struct.getName(), struct.getType(), currentScope);
     }
 
     public Symbol getStruct(String name) {
+        for (Scope scope = currentScope; scope != null; scope = scope.getParent()) {
+            Map<String, Symbol> local = localStructs.get(scope);
+            if (local != null && local.containsKey(name)) return local.get(name);
+        }
         return structs.get(name);
+    }
+
+    public Symbol getStructInCurrentScope(String name) {
+        if (currentScope == globalScope) return structs.get(name);
+        Map<String, Symbol> local = localStructs.get(currentScope);
+        return local == null ? null : local.get(name);
     }
 
     public void addClass(Symbol clazz) {
@@ -159,6 +206,9 @@ public class SymbolTable {
     /** Incluye los tipos de firmas y miembros añadidos después de registrar su dueño. */
     public List<TypeEntry> getTypeEntries() {
         for (Symbol owner : structs.values()) registerNestedTypes(owner, typeScopes.get(owner));
+        for (Map<String, Symbol> local : localStructs.values()) {
+            for (Symbol owner : local.values()) registerNestedTypes(owner, typeScopes.get(owner));
+        }
         for (Symbol owner : classes.values()) registerNestedTypes(owner, typeScopes.get(owner));
         for (Symbol owner : functions.values()) registerNestedTypes(owner, typeScopes.get(owner));
         return typeTable.getEntries();
@@ -179,6 +229,7 @@ public class SymbolTable {
             collectAllSymbols(scope, all, seen);
         }
         addNested(structs.values(), all, seen);
+        for (Map<String, Symbol> local : localStructs.values()) addNested(local.values(), all, seen);
         addNested(classes.values(), all, seen);
         addNested(functions.values(), all, seen);
         return all;

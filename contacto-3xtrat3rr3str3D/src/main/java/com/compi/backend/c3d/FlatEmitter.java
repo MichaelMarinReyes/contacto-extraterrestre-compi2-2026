@@ -26,7 +26,7 @@ final class FlatEmitter {
 
     String build() {
         out.append(prologue());
-        out.append("int main(void) {\n");
+        out.append("\nint main(void) {\n");
         out.append("    P = ").append(layout.globals.size()).append(";\n");
         emitMain();
         emitFunctions();

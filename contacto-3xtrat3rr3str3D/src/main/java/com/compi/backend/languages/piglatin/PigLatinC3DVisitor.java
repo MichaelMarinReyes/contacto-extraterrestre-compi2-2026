@@ -96,7 +96,7 @@ public class PigLatinC3DVisitor extends PigLatinBaseVisitor<String> {
     @Override
     public String visitImprimir_sentencia(PigLatinParser.Imprimir_sentenciaContext ctx) {
         for (PigLatinParser.ExpresionContext expression : ctx.expresion()) {
-            Type type = new PigLatinSemanticVisitor(symbolTable).visit(expression);
+            Type type = symbolTable.typeOfSyntax(expression);
             c3d.emit(printOf(type), visit(expression), null, null);
         }
         c3d.emit(QuadrupleOp.PRINTLN, null, null, null);
@@ -342,14 +342,14 @@ public class PigLatinC3DVisitor extends PigLatinBaseVisitor<String> {
             return visit(ctx.producto(0));
         }
         String current = visit(ctx.producto(0));
-        Type currentType = new PigLatinSemanticVisitor(symbolTable).visit(ctx.producto(0));
+        Type currentType = symbolTable.typeOfSyntax(ctx.producto(0));
         boolean isText = Type.STRING.equals(currentType);
         for (int i = 1; i < ctx.producto().size(); i++) {
             PigLatinParser.ProductoContext factor = ctx.producto(i);
             String next = visit(factor);
             String op = ctx.suma_resta(i - 1).getText();
             String temp = c3d.newTemp();
-            Type nextType = new PigLatinSemanticVisitor(symbolTable).visit(factor);
+            Type nextType = symbolTable.typeOfSyntax(factor);
             boolean concat = "+".equals(op) && (isText || Type.STRING.equals(nextType));
             if (concat) {
                 current = ValueRuntime.asText(c3d, current, currentType);
@@ -371,12 +371,12 @@ public class PigLatinC3DVisitor extends PigLatinBaseVisitor<String> {
             return visit(ctx.termino(0));
         }
         String current = visit(ctx.termino(0));
-        Type currentType = new PigLatinSemanticVisitor(symbolTable).visit(ctx.termino(0));
+        Type currentType = symbolTable.typeOfSyntax(ctx.termino(0));
         for (int i = 1; i < ctx.termino().size(); i++) {
             String next = visit(ctx.termino(i));
             String op = ctx.multiplicacion(i - 1).getText();
             String temp = c3d.newTemp();
-            Type nextType = new PigLatinSemanticVisitor(symbolTable).visit(ctx.termino(i));
+            Type nextType = symbolTable.typeOfSyntax(ctx.termino(i));
             boolean integerDivision = Type.INT.equals(currentType) && Type.INT.equals(nextType);
             c3d.emit("*".equals(op) ? QuadrupleOp.MUL : integerDivision ? QuadrupleOp.INT_DIV : QuadrupleOp.DIV,
                     current, next, temp);

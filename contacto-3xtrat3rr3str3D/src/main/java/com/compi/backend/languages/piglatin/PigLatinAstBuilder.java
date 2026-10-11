@@ -59,7 +59,9 @@ public class PigLatinAstBuilder extends AbstractAstBuilder {
         List<AbstractStatementNodeAST> globals = new ArrayList<>();
         ParserRuleContext variables = one(c, "variables");
         if (variables != null) for (ParserRuleContext child : contexts(variables)) globals.add(statement(visit(child)));
-        return new ProgramNodeAST(line(c), col(c), imports, List.of(), globals, block(one(c, "maior"), "sentencia").statements());
+        ProgramNodeAST program = new ProgramNodeAST(line(c), col(c), imports, List.of(), globals, block(one(c, "maior"), "sentencia").statements());
+        bind(one(c, "maior"), program);
+        return program;
     }
 
     private ASTNode declarationOrAssignment(ParserRuleContext c) {
@@ -73,7 +75,8 @@ public class PigLatinAstBuilder extends AbstractAstBuilder {
         else if (ids.size() > 1) declared = type(ids.get(1), has(c, "novus"));
         AbstractExpressionNodeAST value = initializer(c);
         if (value instanceof InstanceInitNodeAST init && init.typeName().isEmpty()) {
-            value = new InstanceInitNodeAST(init.line(), init.column(), ids.get(1), init.positional(), init.named(), init.arrayRef());
+            value = new InstanceInitNodeAST(init.line(), init.column(), ids.get(1), init.positional(), init.named(), init.arrayRef(), init.duplicateFields());
+            bind(one(c, "structura_instanciacion"), value);
         }
         if (has(c, "{")) {
             value = one(c, "elemento_arreglo") != null ? expr(c, "elemento_arreglo")
@@ -147,8 +150,13 @@ public class PigLatinAstBuilder extends AbstractAstBuilder {
         if (has(c, "[")) return new InstanceInitNodeAST(line(c), col(c), "", List.of(), java.util.Map.of(),
                 new IndexNodeAST(line(c), col(c), identifier(c, name), fixedDimensions(c, "NUMERO_ENTERO")));
         LinkedHashMap<String, AbstractExpressionNodeAST> named = new LinkedHashMap<>();
-        for (ParserRuleContext attr : all(c, "atributo_asignacion")) named.put(tokens(attr, "VARIABLE").getFirst(), initializer(attr));
-        return new InstanceInitNodeAST(line(c), col(c), name, expressions(c, "expresion"), named, null);
+        List<String> duplicates = new ArrayList<>();
+        for (ParserRuleContext attr : all(c, "atributo_asignacion")) {
+            String field = tokens(attr, "VARIABLE").getFirst();
+            if (named.containsKey(field)) duplicates.add(field);
+            named.put(field, initializer(attr));
+        }
+        return new InstanceInitNodeAST(line(c), col(c), name, expressions(c, "expresion"), named, null, duplicates);
     }
 
     private ASTNode conditional(ParserRuleContext c) {

@@ -8,7 +8,6 @@ import com.compi.backend.c3d.C3DGenerator;
 import com.compi.backend.errors.CompilationError;
 import com.compi.backend.errors.ErrorType;
 import com.compi.backend.languages.zetariano.ZetarianoC3DVisitor;
-import com.compi.backend.languages.zetariano.ZetarianoSemanticVisitor;
 import com.compi.backend.symbols.SymbolTable;
 import java.util.List;
 import org.antlr.v4.runtime.CharStreams;
@@ -18,7 +17,7 @@ import org.antlr.v4.runtime.tree.ParseTree;
 public class ZetarianoCompiler extends AbstractLanguageCompiler {
     @Override
     public ProgramNodeAST buildAst(ParseTree tree, String sourceFile) {
-        return new ZetarianoAstBuilder().build(tree, sourceFile);
+        return constructAst(new ZetarianoAstBuilder(), tree, sourceFile);
     }
 
     private String sourceFileName;
@@ -63,24 +62,13 @@ public class ZetarianoCompiler extends AbstractLanguageCompiler {
     }
 
     @Override
-    public void analyze(ParseTree tree, SymbolTable symbolTable, List<CompilationError> errors) {
-        if (tree == null) {
-            return;
-        }
-        try {
-            ZetarianoSemanticVisitor semantic = new ZetarianoSemanticVisitor(symbolTable);
-            semantic.visit(tree);
-            markLanguage(symbolTable, displayName());
-            errors.addAll(semantic.getErrors());
-            checkFileName(tree, errors);
-        } catch (Exception e) {
-
-            errors.add(internalError(displayName(), e, tree));
-        }
+    public void analyze(ProgramNodeAST tree, SymbolTable symbolTable, List<CompilationError> errors) {
+        super.analyze(tree, symbolTable, errors);
+        checkFileName(tree, errors);
     }
 
-    private void checkFileName(ParseTree tree, List<CompilationError> errors) {
-        if (sourceFileName == null || !(tree instanceof ZetarianoParser.ProgramaContext program)) {
+    private void checkFileName(ProgramNodeAST program, List<CompilationError> errors) {
+        if (sourceFileName == null || program == null) {
             return;
         }
         String base = sourceFileName;
@@ -91,26 +79,27 @@ public class ZetarianoCompiler extends AbstractLanguageCompiler {
         int point = base.lastIndexOf('.');
         String esperado = point > 0 ? base.substring(0, point) : base;
 
-        ZetarianoParser.ClaseDefContext clazz = null;
-        for (ZetarianoParser.ClaseDefContext c : program.claseDef()) {
+        com.compi.backend.ast.decl.ClassDefinitionNodeAST clazz = null;
+        for (var definition : program.definitions()) {
+            if (!(definition instanceof com.compi.backend.ast.decl.ClassDefinitionNodeAST c)) continue;
             if (clazz == null) {
                 clazz = c;
             }
-            if (c.PUBLIC() != null) {
+            if (c.publicClass()) {
                 clazz = c;
                 break;
             }
         }
-        if (clazz == null || clazz.ID() == null) {
+        if (clazz == null) {
             return;
         }
-        String declaredType = clazz.ID().getText();
+        String declaredType = clazz.name();
         if (!declaredType.equals(esperado)) {
             errors.add(new CompilationError(ErrorType.SEMANTIC,
                     "El archivo se llama \"" + esperado + "\" pero declara la clase \""
                             + declaredType + "\": en Zetariano el archivo debe llamarse "
                             + "como la clase que define",
-                    clazz.getStart().getLine(), clazz.getStart().getCharPositionInLine()));
+                    clazz.line(), clazz.column()).inFile(program.sourceFile()));
         }
     }
 

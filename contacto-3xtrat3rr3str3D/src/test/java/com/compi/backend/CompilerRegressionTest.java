@@ -272,6 +272,28 @@ class CompilerRegressionTest {
     }
 
     @Test
+    void localStructuresWithTheSameNameKeepIndependentLayoutsInGeneratedC() throws Exception {
+        Files.writeString(temporaryDirectory.resolve("Locales.y"), """
+                %funciones
+                definir uno() -> entero:
+                    estructura Local:
+                        entero a
+                    Local dato = {1}
+                    retornar dato.a
+                definir dos() -> entero:
+                    estructura Local:
+                        entero a
+                        entero b
+                    Local dato = {10,2}
+                    retornar dato.b
+                """);
+        Compiler compiler = new Compiler();
+        compiler.setWorkingDirectory(temporaryDirectory.toFile());
+        assertTrue(compiler.compile("import Locales.y\nMAIOR> >> uno() >> \",\" >> dos(); FINIS;", "pig"), compiler.getErrors().toString());
+        assertEquals("1,2\n", execute(compiler, ""));
+    }
+
+    @Test
     void cyclicImportsLoadTheEntryFileOnlyOnce() throws Exception {
         Path main = temporaryDirectory.resolve("Main.pig");
         Files.writeString(main, "import Otro.pig\nVARIABILES> esto valor : numerus 3;\nMAIOR> >> valor; FINIS;");

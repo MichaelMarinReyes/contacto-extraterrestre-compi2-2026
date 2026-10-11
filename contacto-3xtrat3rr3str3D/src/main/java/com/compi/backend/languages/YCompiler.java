@@ -8,7 +8,6 @@ import com.compi.backend.errors.CompilationError;
 import com.compi.backend.errors.ErrorType;
 import com.compi.backend.languages.y.YC3DVisitor;
 import com.compi.backend.languages.y.YIndentLexer;
-import com.compi.backend.languages.y.YSemanticVisitor;
 import com.compi.backend.symbols.SymbolTable;
 import org.antlr.v4.runtime.CharStreams;
 import org.antlr.v4.runtime.CommonTokenStream;
@@ -19,7 +18,7 @@ import java.util.List;
 public class YCompiler extends AbstractLanguageCompiler {
     @Override
     public ProgramNodeAST buildAst(ParseTree tree, String sourceFile) {
-        return new YAstBuilder().build(tree, sourceFile);
+        return constructAst(new YAstBuilder(), tree, sourceFile);
     }
 
     @Override
@@ -53,21 +52,6 @@ public class YCompiler extends AbstractLanguageCompiler {
         } catch (Exception e) {
             errors.add(internalError(displayName(), e));
             return null;
-        }
-    }
-
-    @Override
-    public void analyze(ParseTree tree, SymbolTable symbolTable, List<CompilationError> errors) {
-        if (tree == null) {
-            return;
-        }
-        try {
-            YSemanticVisitor semantic = new YSemanticVisitor(symbolTable);
-            semantic.visit(tree);
-            markLanguage(symbolTable, displayName());
-            errors.addAll(semantic.getErrors());
-        } catch (Exception e) {
-            errors.add(internalError(displayName(), e, tree));
         }
     }
 
