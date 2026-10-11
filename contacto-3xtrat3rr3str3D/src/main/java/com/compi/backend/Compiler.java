@@ -140,7 +140,7 @@ public class Compiler {
         }
 
         if (tree != null && errors.isEmpty()) {
-            importedFiles = compiler.loadImports(tree, symbolTable, c3dGenerator, errors, rootFiles());
+            importedFiles = compiler.loadImports(ast, symbolTable, c3dGenerator, errors, rootFiles());
             importedAsts = compiler.importedAsts();
             importedSemanticModels = compiler.importedSemanticModels();
         }
@@ -151,7 +151,7 @@ public class Compiler {
         }
 
         if (tree != null && errors.isEmpty()) {
-            compiler.generateIntermediate(tree, symbolTable, c3dGenerator);
+            compiler.generateIntermediate(ast, symbolTable, c3dGenerator);
         }
 
         publishIntermediate(compiler);

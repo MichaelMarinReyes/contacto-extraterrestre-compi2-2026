@@ -60,7 +60,6 @@ public class PigLatinAstBuilder extends AbstractAstBuilder {
         ParserRuleContext variables = one(c, "variables");
         if (variables != null) for (ParserRuleContext child : contexts(variables)) globals.add(statement(visit(child)));
         ProgramNodeAST program = new ProgramNodeAST(line(c), col(c), imports, List.of(), globals, block(one(c, "maior"), "sentencia").statements());
-        bind(one(c, "maior"), program);
         return program;
     }
 
@@ -76,7 +75,6 @@ public class PigLatinAstBuilder extends AbstractAstBuilder {
         AbstractExpressionNodeAST value = initializer(c);
         if (value instanceof InstanceInitNodeAST init && init.typeName().isEmpty()) {
             value = new InstanceInitNodeAST(init.line(), init.column(), ids.get(1), init.positional(), init.named(), init.arrayRef(), init.duplicateFields());
-            bind(one(c, "structura_instanciacion"), value);
         }
         if (has(c, "{")) {
             value = one(c, "elemento_arreglo") != null ? expr(c, "elemento_arreglo")

@@ -5,9 +5,9 @@ import com.compi.PigLatinParser;
 import com.compi.backend.c3d.C3DGenerator;
 import com.compi.backend.errors.CompilationError;
 import com.compi.backend.errors.ErrorType;
-import com.compi.backend.languages.piglatin.PigLatinC3DVisitor;
 import com.compi.backend.languages.piglatin.PigLatinAstBuilder;
 import com.compi.backend.ast.stmt.ProgramNodeAST;
+import com.compi.backend.ast.stmt.ImportNodeAST;
 import com.compi.backend.ast.semantic.SemanticModel;
 import com.compi.backend.symbols.Symbol;
 import com.compi.backend.symbols.SymbolTable;
@@ -79,39 +79,22 @@ public class PigLatinCompiler extends AbstractLanguageCompiler {
     }
 
     @Override
-    public void generateIntermediate(ParseTree tree, SymbolTable symbolTable, C3DGenerator generator) {
-        if (tree == null) {
-            return;
-        }
-        try {
-            symbolTable.beginCodeGeneration();
-            PigLatinC3DVisitor c3d = new PigLatinC3DVisitor(symbolTable, generator);
-            c3d.visit(tree);
-        } catch (Exception exception) {
-            throw new IllegalStateException("No se pudo generar el código intermedio de PigLatin", exception);
-        } finally {
-            symbolTable.endCodeGeneration();
-        }
-    }
-
-    @Override
-    public List<String> loadImports(ParseTree tree, SymbolTable symbolTable,
+    public List<String> loadImports(ProgramNodeAST tree, SymbolTable symbolTable,
                                     C3DGenerator generator, List<CompilationError> errors,
                                     List<String> cargados) {
         List<String> nuevos = new ArrayList<>();
-        if (!(tree instanceof PigLatinParser.InitContext init)) {
+        if (tree == null) {
             return nuevos;
         }
         astImports.clear();
         semanticImports.clear();
-        for (PigLatinParser.Import_declaracionContext impCtx
-                : init.pig_latin().import_declaracion()) {
+        for (ImportNodeAST impCtx : tree.imports()) {
             nuevos.addAll(loadImport(impCtx, symbolTable, generator, errors, cargados));
         }
         return nuevos;
     }
 
-    private List<String> loadImport(PigLatinParser.Import_declaracionContext impCtx,
+    private List<String> loadImport(ImportNodeAST impCtx,
                                     SymbolTable symbolTable, C3DGenerator generator,
                                     List<CompilationError> errors, List<String> cargados) {
         List<String> nuevos = new ArrayList<>();
@@ -122,7 +105,7 @@ public class PigLatinCompiler extends AbstractLanguageCompiler {
             errors.add(new CompilationError(ErrorType.SEMANTIC,
                     "No se encontró el archivo importado \"" + path + "\" ("
                             + LanguageCompilerFactory.extensionPattern() + ")",
-                    impCtx.getStart().getLine(), impCtx.getStart().getCharPositionInLine()));
+                    impCtx.line(), impCtx.column()).inFile(impCtx.sourceFile()));
             return nuevos;
         }
 
@@ -136,7 +119,7 @@ public class PigLatinCompiler extends AbstractLanguageCompiler {
         return nuevos;
     }
 
-    private void compileImport(PigLatinParser.Import_declaracionContext impCtx, File found,
+    private void compileImport(ImportNodeAST impCtx, File found,
                                String key, SymbolTable symbolTable, C3DGenerator generator,
                                List<CompilationError> errors, List<String> cargados,
                                List<String> nuevos) {
@@ -146,7 +129,7 @@ public class PigLatinCompiler extends AbstractLanguageCompiler {
         } catch (IOException e) {
             errors.add(new CompilationError(ErrorType.SEMANTIC,
                     "No se pudo leer el archivo importado \"" + key + "\": " + e.getMessage(),
-                    impCtx.getStart().getLine(), impCtx.getStart().getCharPositionInLine()));
+                    impCtx.line(), impCtx.column()).inFile(impCtx.sourceFile()));
             return;
         }
 
@@ -154,7 +137,7 @@ public class PigLatinCompiler extends AbstractLanguageCompiler {
         if (target == null) {
             errors.add(new CompilationError(ErrorType.SEMANTIC,
                     "El archivo importado \"" + key + "\" no es de un lenguaje soportado",
-                    impCtx.getStart().getLine(), impCtx.getStart().getCharPositionInLine()));
+                    impCtx.line(), impCtx.column()).inFile(impCtx.sourceFile()));
             return;
         }
         target.setWorkingDirectory(found.getAbsoluteFile().getParentFile());
@@ -165,25 +148,22 @@ public class PigLatinCompiler extends AbstractLanguageCompiler {
         ProgramNodeAST importedAst = sink.isEmpty() && importedTree != null ? target.buildAst(importedTree, key) : null;
         if (importedAst != null) astImports.put(key, importedAst);
         if (sink.isEmpty()) {
-            nuevos.addAll(target.loadImports(importedTree, symbolTable, generator, sink, cargados));
+            nuevos.addAll(target.loadImports(importedAst, symbolTable, generator, sink, cargados));
             astImports.putAll(target.importedAsts());
             target.analyze(importedAst, symbolTable, sink);
             if (target.semanticModel() != null) semanticImports.put(key, target.semanticModel());
             semanticImports.putAll(target.importedSemanticModels());
         }
         if (sink.isEmpty()) {
-            target.generateIntermediate(importedTree, symbolTable, generator);
+            target.generateIntermediate(importedAst, symbolTable, generator);
         }
         for (CompilationError e : sink) {
             errors.add(e.inFile(found.getPath()));
         }
     }
 
-    private String importPath(PigLatinParser.Import_declaracionContext impCtx) {
-        List<String> partes = new ArrayList<>();
-        for (TerminalNode v : impCtx.VARIABLE()) {
-            partes.add(v.getText());
-        }
+    private String importPath(ImportNodeAST impCtx) {
+        List<String> partes = new ArrayList<>(List.of(impCtx.path().split("\\.")));
         int last = partes.size() - 1;
         if (last >= 1
                 && LanguageCompilerFactory.byExtensionLanguage(partes.get(last)) != null) {

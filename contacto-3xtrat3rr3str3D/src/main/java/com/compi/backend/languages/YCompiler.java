@@ -6,7 +6,6 @@ import com.compi.YParser;
 import com.compi.backend.c3d.C3DGenerator;
 import com.compi.backend.errors.CompilationError;
 import com.compi.backend.errors.ErrorType;
-import com.compi.backend.languages.y.YC3DVisitor;
 import com.compi.backend.languages.y.YIndentLexer;
 import com.compi.backend.symbols.SymbolTable;
 import org.antlr.v4.runtime.CharStreams;
@@ -55,19 +54,4 @@ public class YCompiler extends AbstractLanguageCompiler {
         }
     }
 
-    @Override
-    public void generateIntermediate(ParseTree tree, SymbolTable symbolTable, C3DGenerator generator) {
-        if (tree == null) {
-            return;
-        }
-        try {
-            symbolTable.beginCodeGeneration();
-            YC3DVisitor c3d = new YC3DVisitor(symbolTable, generator);
-            c3d.visit(tree);
-        } catch (Exception exception) {
-            throw new IllegalStateException("No se pudo generar el código intermedio de Y", exception);
-        } finally {
-            symbolTable.endCodeGeneration();
-        }
-    }
 }

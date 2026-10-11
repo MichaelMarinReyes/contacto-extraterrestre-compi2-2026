@@ -30,13 +30,10 @@ public class SymbolTable {
     @Getter(AccessLevel.NONE)
     private final List<Scope> closedScopes = new ArrayList<>();
     private boolean generatingCode;
-    private final Map<org.antlr.v4.runtime.ParserRuleContext, Scope> syntaxScopes = new IdentityHashMap<>();
     @Getter(AccessLevel.NONE)
     private final Map<Symbol, Scope> typeScopes = new IdentityHashMap<>();
     @Getter(AccessLevel.NONE)
     private final Map<com.compi.backend.ast.ASTNode, Scope> astScopes = new IdentityHashMap<>();
-    @Getter(AccessLevel.NONE)
-    private final Map<org.antlr.v4.runtime.ParserRuleContext, Type> syntaxTypes = new IdentityHashMap<>();
 
     public SymbolTable() {
         this.globalScope = new Scope("global", null);
@@ -61,19 +58,6 @@ public class SymbolTable {
         typeTable.scopeId(currentScope);
     }
 
-    /** Asocia cada bloque a su ámbito; evita confundir módulos o bloques con el mismo nombre. */
-    public void enterScope(String name, int initialOffset, org.antlr.v4.runtime.ParserRuleContext context) {
-        if (generatingCode) {
-            Scope scope = syntaxScopes.get(context);
-            if (scope == null) throw new IllegalStateException("El bloque no tiene un ámbito semántico comprobado");
-            currentScope = scope;
-        } else {
-            currentScope = new Scope(name, currentScope, initialOffset);
-            typeTable.scopeId(currentScope);
-            syntaxScopes.put(context, currentScope);
-        }
-    }
-
     public void exitScope() {
         if (currentScope.getParent() != null) {
             if (!generatingCode) closedScopes.add(currentScope);
@@ -94,20 +78,6 @@ public class SymbolTable {
 
     public Scope scopeOf(com.compi.backend.ast.ASTNode node) { return astScopes.get(node); }
 
-    /** Puente temporal para C3D: proyecta resultados ya comprobados, sin analizar el parser. */
-    public void bindSyntax(Map<org.antlr.v4.runtime.ParserRuleContext, com.compi.backend.ast.ASTNode> bindings,
-                           com.compi.backend.ast.semantic.SemanticModel model) {
-        bindings.forEach((context, node) -> {
-            Scope scope = astScopes.get(node);
-            if (scope != null) syntaxScopes.put(context, scope);
-            syntaxTypes.put(context, model.typeOf(node));
-        });
-    }
-
-    public Type typeOfSyntax(org.antlr.v4.runtime.tree.ParseTree tree) {
-        return syntaxTypes.getOrDefault(tree, Type.UNKNOWN);
-    }
-
     public void clear() {
         currentScope = globalScope;
         globalScope.clear();
@@ -117,11 +87,9 @@ public class SymbolTable {
         functions.clear();
         closedScopes.clear();
         generatingCode = false;
-        syntaxScopes.clear();
         typeScopes.clear();
         typeTable.clear();
         astScopes.clear();
-        syntaxTypes.clear();
     }
 
     /** Reutiliza los símbolos comprobados, sin volver a declararlos durante C3D. */

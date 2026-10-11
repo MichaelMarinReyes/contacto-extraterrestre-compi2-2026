@@ -1,8 +1,8 @@
 @startuml Diagrama de clases - Contacto 3xtrat3rr3str3D
-' Arquitectura implementada al completar la migración semántica al AST.
+' Arquitectura implementada: semántica y generación C3D sobre el AST.
 skinparam dpi 120
 skinparam shadowing false
-skinparam classAttributeIconSize 0
+skinparam classAttributeIconSize 10
 skinparam packageStyle rectangle
 skinparam nodesep 14
 skinparam ranksep 42
@@ -16,297 +16,1767 @@ legend right
   **Arquitectura implementada**
   ..|> implementación · --|> herencia
   *-- composición · o-- agregación · ..> dependencia
-  ParseTree → constructores → AST propio → semántica y panel AST.
-  C3D aún recorre ParseTree y consulta resultados semánticos mediante un puente.
+  ParseTree → constructores → AST propio → semántica → C3D → C.
+  + público · - privado · # protegido · ~ acceso de paquete
+  Se muestran atributos y operaciones propios de cada clase.
+  Los miembros heredados se consultan en sus clases base.
 endlegend
 
 package "com.compi" {
   class Main {
-    {static} +main(String[])
+    + Main()
+    + {static} main(String[]) : void
   }
 }
 package "com.compi.frontend" {
   class MainWindow {
-    -workspace : WorkspaceActions
-    -compilation : CompilationActions
-    +compileActive()
-    +openProject(File)
-    +openInEditor(File)
+    - workspace : WorkspaceActions
+    - compilation : CompilationActions
+    - editorTabs : EditorTabs
+    - consoleDock : ConsoleDock
+    - toolWindow : ToolWindow
+    - statusBar : StatusBar
+    - astPanel : ParserTreePanel
+    - symbolPanel : SymbolTablePanel
+    - stackPanel : StackVisualizerPanel
+    - errorPanel : ErrorTablePanel
+    - typePanel : TypeTablePanel
+    + MainWindow()
+    + compileActive() : void
+    + newFileIn(String) : void
+    + openProject(File) : void
+    + openInEditor(File) : void
+    ~ buildNewFileDialog(File) : NewFileDialog
+    ~ clearToolViews() : void
+    ~ currentContainer() : File
   }
-  class WorkspaceActions
+  class WorkspaceActions {
+    - window : MainWindow
+    - lastContainer : File
+    ~ WorkspaceActions(MainWindow)
+    ~ currentContainer() : File
+    ~ lastContainer() : File
+    ~ newFile() : void
+    ~ newFileIn(String) : void
+    ~ openFile() : void
+    ~ openProject() : void
+    ~ loadProject(File, boolean) : boolean
+    ~ buildNewFileDialog(File) : NewFileDialog
+  }
   class CompilationActions {
-    -compiler : Compiler
-    -currentCMode : Mode
-    -lastTargets : List<File>
-    +compile()
+    - window : MainWindow
+    - compiler : Compiler
+    - currentCMode : Mode
+    - lastTargets : List<File>
+    - lastFocusFile : File
+    ~ CompilationActions(MainWindow)
+    ~ compile() : void
+    ~ clearResults() : void
+    ~ jumpToError(int) : void
+    ~ jumpToSymbol(int) : void
+    - compileOne(File) : FileResult
   }
-  class TopToolbar
-  class FileTreePanel
-  class EditorTabs
-  class EditorPanel
-  class SyntaxHighlighter
-  class LineNumberComponent
-  class TabHeader
-  class ConsoleDock
-  class StatusBar
-  class WelcomePanel
-  class NewFileDialog
-  class ToolWindow
-  class ToolWindowDock
-  class ParserTreePanel
-  class SymbolTablePanel
-  class StackVisualizerPanel
-  class ErrorTablePanel
-  class TypeTablePanel
-  class TableFilterBar
-  class UiTheme
-  class IdeIcons
+  class TopToolbar {
+    + {static} BAR_HEIGHT : int
+    - actionCluster : JPanel
+    - viewCluster : JPanel
+    - navLabel : JLabel
+    - cModeBox : JComboBox<String>
+    - compileButton : JButton
+    - sideToggle : JToggleButton
+    - projectLabel : JLabel
+    + TopToolbar(JLabel, JComboBox<String>, JButton, JToggleButton)
+    + addFileAction(JButton, String) : void
+    + addViewAction(JButton, String) : void
+    + applyIcons(JButton, JButton, JButton, JButton, JButton, JButton, JButton) : void
+    + onCModeSelected(Consumer<Mode>) : void
+    + {static} bindShortcut(JComponent, String, Action) : void
+    + {static} modeOf(String) : Mode
+  }
+  class FileTreePanel {
+    - tree : JTree
+    - rootNode : DefaultMutableTreeNode
+    - model : DefaultTreeModel
+    - filterField : JTextField
+    - root : File
+    - onFileSelected : Consumer<File>
+    - onDirectorySelected : Consumer<File>
+    + FileTreePanel()
+    + allSourceFiles() : List<File>
+    + codeFolders() : List<File>
+    + contains(File) : boolean
+    + countSourceFiles() : int
+    + loadDirectory(File) : void
+    + projectRoot() : File
+    + reload() : void
+  }
+  class EditorTabs {
+    - open : Map<File, EditorPanel>
+    - headers : Map<EditorPanel, TabHeader>
+    - keys : Map<EditorPanel, File>
+    - untitled : List<File>
+    - untitledCounter : int
+    - onActiveChanged : Consumer<EditorPanel>
+    - onFileClosed : Consumer<File>
+    + EditorTabs(Consumer<EditorPanel>, Consumer<File>)
+    + close(EditorPanel) : boolean
+    + closeActive() : boolean
+    + closeAll() : boolean
+    + isEmpty() : boolean
+    + newFile(String, File, String) : EditorPanel
+    + openFile(File) : EditorPanel
+  }
+  class EditorPanel {
+    - codeTextArea : JTextPane
+    - lineNumberComponent : LineNumberComponent
+    - highlighter : SyntaxHighlighter
+    - file : File
+    - languageId : String
+    - modified : boolean
+    - onCaretMove : Consumer<EditorPanel>
+    - onModified : Runnable
+    + EditorPanel(Consumer<EditorPanel>, Runnable)
+    + applyTheme() : void
+    + gotoLine(int) : void
+    + insertAtCaret(String) : void
+    + isModified() : boolean
+    + refreshHighlight() : void
+    - attachListeners() : void
+    - documentChanged() : void
+  }
+  class SyntaxHighlighter {
+    - pane : JTextPane
+    - styles : Map<String, Style>
+    - languages : Map<String, Language>
+    - languageId : String
+    - running : boolean
+    - pending : boolean
+    - lastText : String
+    + SyntaxHighlighter(JTextPane)
+    + apply() : void
+    + rehighlight() : void
+    - buildStyles() : void
+    - paintDocument(StyledDocument, String) : void
+    - registerLanguages() : void
+  }
+  class LineNumberComponent {
+    - {static} MARGIN : int
+    - {static} MIN_DIGITS : int
+    - textArea : JTextComponent
+    + LineNumberComponent(JTextComponent)
+    + applyTheme() : void
+    + getMinimumSize() : Dimension
+    + getPreferredSize() : Dimension
+    # paintComponent(Graphics) : void
+    - lineCount() : int
+    - preferredWidth() : int
+  }
+  class TabHeader {
+    - iconLabel : JLabel
+    - nameLabel : JLabel
+    - dirtyLabel : JLabel
+    - closeButton : JButton
+    - onClose : Runnable
+    - dirty : boolean
+    + TabHeader(EditorPanel, Runnable)
+    + isDirty() : boolean
+    ~ {static} fileIcon(String) : Icon
+    - fireClose(MouseEvent) : void
+    - initCloseButton() : void
+  }
+  class ConsoleDock {
+    - tabs : JTabbedPane
+    - consoleArea : JTextArea
+    - tripletsArea : JTextArea
+    - quadruplesArea : JTextArea
+    - c3dArea : JTextArea
+    - cCodeArea : JTextArea
+    - summaryArea : JTextArea
+    - statusLabel : JLabel
+    + ConsoleDock()
+    + addView(String, Component) : void
+    + appendConsole(String) : void
+    + applyTheme() : void
+    + clearAll() : void
+    + select(View) : void
+    - buildStatusBar() : JPanel
+  }
+  class StatusBar {
+    - positionLabel : JLabel
+    - fileLabel : JLabel
+    - languageLabel : JLabel
+    - resultLabel : JLabel
+    - countersLabel : JLabel
+    - errorsLabel : JLabel
+    + StatusBar()
+    + setCounts(int, int) : void
+    + setFileName(String) : void
+    + setIdle() : void
+    + setLanguage(String) : void
+    + setPosition(int, int) : void
+    + setResult(boolean, int) : void
+  }
+  class WelcomePanel {
+    - onNewFile : Runnable
+    - onOpenFile : Runnable
+    - onOpenProject : Runnable
+    - onCompile : Runnable
+    + WelcomePanel(Runnable, Runnable, Runnable, Runnable)
+    + getPreferredSize() : Dimension
+    - actionButton(String, Icon, Runnable) : JButton
+    - createShortcutHint() : JPanel
+    - initContent() : void
+  }
+  class NewFileDialog {
+    - nameField : JTextField
+    - extensionBox : JComboBox<String>
+    - folderBox : JComboBox<String>
+    - folders : List<File>
+    - extensions : List<String>
+    - preview : JLabel
+    - owner : Component
+    - projectRoot : File
+    - choice : Choice
+    + NewFileDialog(Component, File, List<File>, String, String)
+    + ask() : Choice
+    - accept() : void
+    - buildButtons() : JPanel
+    - buildContent() : JPanel
+    - buildForm() : JPanel
+  }
+  class ToolWindow {
+    - dock : ToolWindowDock
+    - open : AtomicBoolean
+    - pending : Runnable
+    - lastBounds : Rectangle
+    - onClosed : Runnable
+    + ToolWindow(Frame, ToolWindowDock)
+    + clearPending() : void
+    + close() : void
+    + isOpen() : boolean
+    + postResults(Runnable) : void
+    + showView(ToolWindowDock.View) : boolean
+    + showWindow() : boolean
+    - applyPending() : void
+  }
+  class ToolWindowDock {
+    - tabs : JTabbedPane
+    - astPanel : ParserTreePanel
+    - symbolPanel : SymbolTablePanel
+    - stackPanel : StackVisualizerPanel
+    - errorPanel : ErrorTablePanel
+    - typePanel : TypeTablePanel
+    - errorCount : int
+    + ToolWindowDock(ParserTreePanel, SymbolTablePanel, StackVisualizerPanel, ErrorTablePanel, TypeTablePanel)
+    + applyTheme() : void
+    + select(View) : void
+    - refreshErrorTabTitle() : void
+  }
+  class ParserTreePanel {
+    - canvas : TreeCanvas
+    - scrollPane : JScrollPane
+    - infoLabel : JLabel
+    + ParserTreePanel()
+    + clear() : void
+    + exportPng() : void
+    + hasGraph() : boolean
+    + renderGraph(String) : void
+    - fitGraph() : void
+    - buildToolbar() : JPanel
+  }
+  class SymbolTablePanel {
+    - table : JTable
+    - tableModel : DefaultTableModel
+    - detailsArea : JTextArea
+    - onSymbolActivated : IntConsumer
+    - filterBar : TableFilterBar
+    - allSymbols : List<Symbol>
+    - shown : List<Symbol>
+    + SymbolTablePanel()
+    + clear() : void
+    + clearFilter() : void
+    + loadSymbols(List<Symbol>) : void
+    + symbolAt(int) : Symbol
+    - accepts(Symbol) : boolean
+    - applyFilter() : void
+    - {static} describe(Symbol) : String
+  }
+  class StackVisualizerPanel {
+    - steps : List<ParseStep>
+    - stackDrawPanel : JPanel
+    - logTextArea : JTextArea
+    - countLabel : JLabel
+    - splitPane : JSplitPane
+    + StackVisualizerPanel()
+    + clear() : void
+    + loadSteps(List<ParseStep>) : void
+    - {static} badge(ParseStep) : String
+    - cardHeight(int) : int
+    - drawAllSteps(Graphics) : void
+    - drawStackCard(Graphics2D, List<String>, int, int) : void
+  }
+  class ErrorTablePanel {
+    - errorTable : JTable
+    - tableModel : DefaultTableModel
+    - scrollPane : JScrollPane
+    - filterBar : TableFilterBar
+    - allErrors : List<CompilationError>
+    - shown : List<CompilationError>
+    + ErrorTablePanel()
+    + clear() : void
+    + clearFilter() : void
+    + errorAt(int) : CompilationError
+    + loadErrors(List<CompilationError>) : void
+    - accepts(CompilationError) : boolean
+    - applyFilter() : void
+    - colorForType(ErrorType) : Color
+  }
+  class TypeTablePanel {
+    - model : DefaultTableModel
+    - table : JTable
+    - filterBar : TableFilterBar
+    - sourceLabel : JLabel
+    - entries : List<TypeEntry>
+    - byId : Map<Integer, TypeEntry>
+    + TypeTablePanel()
+    + clear() : void
+    + getTable() : JTable
+    + getTypeCount() : int
+    + loadTypes(List<TypeEntry>, String) : void
+    - applyFilter() : void
+    - bounds(List<Integer>) : String
+    - rowOf(TypeEntry) : Object[]
+  }
+  class TableFilterBar {
+    - field : JTextField
+    - countLabel : JLabel
+    - clearButton : JButton
+    - onFilterChanged : Runnable
+    + TableFilterBar(String)
+    + accepts(String[]) : boolean
+    + clear() : void
+    + setCounts(int, int) : void
+    + setOnFilterChanged(Runnable) : void
+    + text() : String
+    - initFilterListener() : void
+  }
+  class UiTheme {
+    - {static} APPLIED : Set<String>
+    + {static} MONO : String
+    + {static} SANS : String
+    - UiTheme()
+    + {static} accent() : Color
+    + {static} applyFlatLafTweaks() : void
+    + {static} asButton(T) : T
+    + {static} color(String, Color) : Color
+    + {static} editorBg() : Color
+    + {static} error() : Color
+    + {static} hairline() : Border
+  }
+  class IdeIcons {
+    + {static} SIZE : int
+    - IdeIcons()
+    + {static} appMark() : Icon
+    + {static} ast() : Icon
+    + {static} close() : Icon
+    + {static} compile() : Icon
+    + {static} errors() : Icon
+    + {static} export() : Icon
+    + {static} file() : Icon
+  }
 }
 package "com.compi.frontend.dot" {
-  class TreeCanvas
-  class DotModel
-  class TreeLayout
+  class TreeCanvas {
+    - model : DotModel
+    - layout : TreeLayout
+    - zoom : double
+    - hovered : String
+    - selected : String
+    - hitAreas : Map<String, Rectangle2D>
+    + TreeCanvas()
+    + hasGraph() : boolean
+    + relayout() : void
+    + resetZoom() : void
+    + zoomIn() : void
+    + zoomOut() : void
+    + zoomToFit() : void
+    # paintComponent(Graphics) : void
+    - drawEdges(Graphics2D) : void
+    - drawNodes(Graphics2D) : void
+  }
+  class DotModel {
+    - nodes : Map<String, DotNode>
+    - edges : List<String[]>
+    - parentOf : Map<String, String>
+    - DotModel()
+    + {static} parse(String) : DotModel
+    + children(String) : List<String>
+    + depth() : int
+    + edges() : List<String[]>
+    + isEmpty() : boolean
+    + node(String) : DotNode
+    + nodeCount() : int
+    + nodes() : Map<String, DotNode>
+    + root() : String
+  }
+  class TreeLayout {
+    - positions : Map<String, int[]>
+    - sizes : Map<String, Dimension>
+    - maxWidth : int
+    - maxHeight : int
+    - leafCursor : int
+    + TreeLayout()
+    + bounds() : Dimension
+    + compute(DotModel, Font) : void
+    + findParent(DotModel, String) : String
+    + nodeIds() : Set<String>
+    + positionOf(String) : int[]
+    + sizeOf(String) : Dimension
+    - flipAndNormalize(FontMetrics) : void
+  }
 }
 package "com.compi.backend" {
   class Compiler {
-    +compile(source, language, fileName) : boolean
-    +setWorkingDirectory(File)
-    +setCMode(Mode)
-    +getAst() : ProgramNodeAST
-    +getImportedAsts() : Map<String, ProgramNodeAST>
-    +getSemanticModel() : SemanticModel
+    - source : String
+    - language : String
+    - cMode : Mode
+    - sourceFileName : String
+    - symbolTable : SymbolTable
+    - processStack : Stack
+    - errors : List<CompilationError>
+    - parseSteps : List<ParseStep>
+    - icm : IntermediateCodeManager
+    - c3dGenerator : C3DGenerator
+    - ast : ProgramNodeAST
+    - semanticModel : SemanticModel
+    - importedAsts : Map<String, ProgramNodeAST>
+    - importedSemanticModels : Map<String, SemanticModel>
+    + Compiler()
+    + compile(String, String) : boolean
+    + compile(String, String, String) : boolean
+    + setWorkingDirectory(File) : void
+    + setCMode(Mode) : void
+    + getAst() : ProgramNodeAST
+    + getImportedAsts() : Map<String, ProgramNodeAST>
+    + getSemanticModel() : SemanticModel
+    - generateCCode() : String
+    - publishIntermediate(LanguageCompiler) : void
   }
   enum StackAction {
-    SHIFT
-    REDUCE
-    NEUTRAL
+    + {static} SHIFT : StackAction
+    + {static} REDUCE : StackAction
+    + {static} NEUTRAL : StackAction
+    - tag : String
+    - StackAction(String)
+    + getTag() : String
   }
 }
 package "com.compi.backend.languages" {
   interface LanguageCompiler {
-    +parse(source, errors) : ParseTree
-    +buildAst(ParseTree, sourceFile) : ProgramNodeAST
-    +importedAsts() : Map<String, ProgramNodeAST>
-    +analyze(ProgramNodeAST, SymbolTable, errors)
-    +semanticModel() : SemanticModel
-    +generateIntermediate(ParseTree, SymbolTable, C3DGenerator)
-    +loadImports(ParseTree, ...)
+    + id() : String
+    + displayName() : String
+    + extensions() : List<String>
+    + parse(String, List<CompilationError>) : ParseTree
+    + buildAst(ParseTree, String) : ProgramNodeAST
+    + importedAsts() : Map<String, ProgramNodeAST>
+    + importedSemanticModels() : Map<String, SemanticModel>
+    + analyze(ProgramNodeAST, SymbolTable, List<CompilationError>) : void
+    + semanticModel() : SemanticModel
+    + generateIntermediate(ProgramNodeAST, SymbolTable, C3DGenerator) : void
+    + loadImports(ProgramNodeAST, SymbolTable, C3DGenerator, List<CompilationError>) : List<String>
   }
-  abstract AbstractLanguageCompiler
-  class LanguageCompilerFactory
-  class PigLatinCompiler
-  class YCompiler
-  class ZetarianoCompiler
+  abstract AbstractLanguageCompiler {
+    - semanticModel : SemanticModel
+    - workingDirectory : File
+    - projectDirectory : File
+    - vocabulary : Vocabulary
+    - ruleNames : String[]
+    + AbstractLanguageCompiler()
+    + analyze(ProgramNodeAST, SymbolTable, List<CompilationError>) : void
+    + generateIntermediate(ProgramNodeAST, SymbolTable, C3DGenerator) : void
+    + semanticModel() : SemanticModel
+    + ruleNames() : String[]
+    + vocabulary() : Vocabulary
+    # constructAst(AbstractAstBuilder, ParseTree, String) : ProgramNodeAST
+    # errorCollector(Vocabulary, List<CompilationError>, ErrorType) : BaseErrorListener
+    # installErrorListener(Lexer, BaseErrorListener) : void
+    # installErrorListener(Parser, BaseErrorListener) : void
+  }
+  class LanguageCompilerFactory {
+    - {static} BY_EXTENSION : Map<String, String>
+    - {static} BY_ID : Map<String, LanguageCompiler>
+    - {static} ALL : List<LanguageCompiler>
+    - LanguageCompilerFactory()
+    + {static} all() : List<LanguageCompiler>
+    + {static} allowedExtensions() : List<String>
+    + {static} byExtensionLanguage(String) : String
+    + {static} detectLanguageId(String) : String
+    + {static} extensionOf(String) : String
+    + {static} extensionOfLanguage(String) : String
+    + {static} filter(List<CompilationError>, String) : List<CompilationError>
+    + {static} hasAllowedExtension(String) : boolean
+  }
+  class PigLatinCompiler {
+    - astImports : Map<String, ProgramNodeAST>
+    - semanticImports : Map<String, SemanticModel>
+    + PigLatinCompiler()
+    + buildAst(ParseTree, String) : ProgramNodeAST
+    + displayName() : String
+    + extensions() : List<String>
+    + id() : String
+    + importedAsts() : Map<String, ProgramNodeAST>
+    + importedSemanticModels() : Map<String, SemanticModel>
+    + loadImports(ProgramNodeAST, SymbolTable, C3DGenerator, List<CompilationError>, List<String>) : List<String>
+    + parse(String, List<CompilationError>) : ParseTree
+    - compileImport(ImportNodeAST, File, String, SymbolTable, C3DGenerator, List<CompilationError>, List<String>, List<String>) : void
+  }
+  class YCompiler {
+    + YCompiler()
+    + buildAst(ParseTree, String) : ProgramNodeAST
+    + displayName() : String
+    + extensions() : List<String>
+    + id() : String
+    + parse(String, List<CompilationError>) : ParseTree
+  }
+  class ZetarianoCompiler {
+    - sourceFileName : String
+    + ZetarianoCompiler()
+    + analyze(ProgramNodeAST, SymbolTable, List<CompilationError>) : void
+    + buildAst(ParseTree, String) : ProgramNodeAST
+    + displayName() : String
+    + extensions() : List<String>
+    + id() : String
+    + parse(String, List<CompilationError>) : ParseTree
+    + setSourceFileName(String) : void
+    - checkFileName(ProgramNodeAST, List<CompilationError>) : void
+  }
 }
 package "com.compi.backend.languages.piglatin" {
-  class PigLatinAstBuilder
-  class PigLatinC3DVisitor
-  class PigLatinConditionEmitter
-  class PigLatinObjectEmitter
+  class PigLatinAstBuilder {
+    + PigLatinAstBuilder()
+    # buildRule(String, ParserRuleContext) : ASTNode
+    # tokenName(TerminalNode) : String
+    - array(ParserRuleContext) : ASTNode
+    - assignment(ParserRuleContext) : ASTNode
+    - conditional(ParserRuleContext) : ASTNode
+    - initializer(ParserRuleContext) : AbstractExpressionNodeAST
+    - instance(ParserRuleContext) : ASTNode
+  }
 }
 package "com.compi.backend.languages.y" {
-  class YAstBuilder
-  class YIndentLexer
-  class YC3DVisitor
-  class YDeclarationEmitter
-  class YControlEmitter
-  class YAccessEmitter
+  class YAstBuilder {
+    + YAstBuilder()
+    # buildRule(String, ParserRuleContext) : ASTNode
+    # tokenName(TerminalNode) : String
+    - array(ParserRuleContext) : ASTNode
+    - assignment(ParserRuleContext) : ASTNode
+    - declaration(ParserRuleContext) : DeclarationNodeAST
+    - expression(ParserRuleContext) : ASTNode
+    - function(ParserRuleContext) : FunctionDefinitionNodeAST
+  }
+  class YIndentLexer {
+    - indentStack : Stack<Integer>
+    - pendingTokens : Queue<Token>
+    - atStartOfLine : boolean
+    - lastToken : Token
+    - bracketLevel : int
+    + YIndentLexer(CharStream)
+    + nextToken() : Token
+    - adjustIndent(int) : void
+    - calculateIndent(String) : int
+    - createToken(int, String) : Token
+    - handleEof(Token) : Token
+    - handleNewLine(Token) : Token
+    - trackBrackets(Token) : void
+  }
 }
 package "com.compi.backend.languages.zetariano" {
-  class ZetarianoAstBuilder
-  class ZetarianoC3DVisitor
-  class ZetarianoArrayEmitter
-  class ZetarianoClassEmitter
-  class ZetarianoConditionEmitter
+  class ZetarianoAstBuilder {
+    + ZetarianoAstBuilder()
+    # buildRule(String, ParserRuleContext) : ASTNode
+    # tokenName(TerminalNode) : String
+    - assignment(ParserRuleContext) : ASTNode
+    - call(ParserRuleContext) : ASTNode
+    - callable(ParserRuleContext) : ASTNode
+    - conditional(ParserRuleContext) : ASTNode
+    - declaration(ParserRuleContext) : ASTNode
+  }
+}
+package "com.compi.backend.ast.codegen" {
+  class AstCodeGenerator {
+    ~ table : SymbolTable
+    ~ model : SemanticModel
+    ~ c3d : C3DGenerator
+    ~ language : String
+    ~ memory : AstMemoryEmitter
+    ~ expressions : AstExpressionEmitter
+    ~ aggregates : AstAggregateEmitter
+    ~ control : AstControlEmitter
+    ~ definitions : AstDefinitionEmitter
+    ~ currentClass : ClassDefinitionNodeAST
+    - value : String
+    + AstCodeGenerator(SymbolTable, SemanticModel, C3DGenerator, String)
+    + generate(ProgramNodeAST) : void
+    + visit(ProgramNodeAST) : String
+    + visit(DeclarationNodeAST) : String
+    + visit(CallNodeAST) : String
+    ~ emit(ASTNode) : String
+    ~ enter(AbstractNodeAST) : void
+    ~ type(ASTNode) : Type
+    ~ symbol(ASTNode) : Symbol
+    - result(String) : String
+  }
+  class AstMemoryEmitter {
+    - g : AstCodeGenerator
+    ~ AstMemoryEmitter(AstCodeGenerator)
+    ~ capture(String) : String
+    ~ load(Symbol) : String
+    ~ place(AbstractExpressionNodeAST) : Place
+    ~ read(Place) : String
+    ~ store(Symbol, String) : void
+    ~ write(Place, String) : void
+    - collectIndices(IndexNodeAST, List<AbstractExpressionNodeAST>) : AbstractExpressionNodeAST
+    - indexPlace(IndexNodeAST) : Place
+    - symbolPlace(Symbol) : Place
+  }
+  class AstExpressionEmitter {
+    - g : AstCodeGenerator
+    ~ AstExpressionEmitter(AstCodeGenerator)
+    ~ assign(AbstractExpressionNodeAST, String, AbstractExpressionNodeAST) : String
+    ~ binary(BinaryOperationNodeAST) : String
+    ~ call(CallNodeAST) : String
+    ~ increment(IncrementNodeAST) : String
+    ~ literal(LiteralNodeAST) : String
+    ~ printOp(Type) : QuadrupleOp
+    ~ read(Type) : String
+    ~ ternary(TernaryNodeAST) : String
+    ~ unary(UnaryOperationNodeAST) : String
+    - arithmetic(String, Type, Type) : QuadrupleOp
+    - operation(QuadrupleOp, String, String) : String
+    - text(String) : String
+  }
+  class AstAggregateEmitter {
+    - g : AstCodeGenerator
+    ~ AstAggregateEmitter(AstCodeGenerator)
+    ~ declare(DeclarationNodeAST) : void
+    ~ initializer(AbstractExpressionNodeAST, Type) : String
+    ~ instance(InstanceInitNodeAST, Type) : String
+    ~ newObject(NewObjectNodeAST) : String
+    - arrayLiteral(ArrayLiteralNodeAST, Type) : String
+    - fillArray(String, ArrayLiteralNodeAST, Type, int[], int) : void
+    - fillPositional(String, Symbol, List<AbstractExpressionNodeAST>) : void
+    - objectLiteral(ArrayLiteralNodeAST, Type) : String
+  }
+  class AstControlEmitter {
+    ~ breakLabels : Deque<String>
+    ~ continueLabels : Deque<String>
+    - g : AstCodeGenerator
+    ~ AstControlEmitter(AstCodeGenerator)
+    ~ booleanValue(AbstractExpressionNodeAST) : String
+    ~ conditional(IfNodeAST) : void
+    ~ doLoop(DoWhileNodeAST) : void
+    ~ forLoop(ForNodeAST) : void
+    ~ jump(AbstractExpressionNodeAST, String, String) : void
+    ~ selection(SwitchNodeAST) : void
+    ~ whileLoop(WhileNodeAST) : void
+    - branch(AbstractExpressionNodeAST, AbstractStatementNodeAST, String) : void
+    - relational(String) : QuadrupleOp
+  }
+  class AstDefinitionEmitter {
+    - g : AstCodeGenerator
+    ~ AstDefinitionEmitter(AstCodeGenerator)
+    ~ classBody(ClassDefinitionNodeAST) : void
+    ~ constructor(ConstructorDefinitionNodeAST) : void
+    ~ function(FunctionDefinitionNodeAST) : void
+    ~ method(MethodDefinitionNodeAST) : void
+    - body(AbstractNodeAST, String, AbstractStatementNodeAST, boolean) : void
+  }
 }
 package "com.compi.backend.ast" {
   interface ASTNode {
-    +accept(ASTVisitor<?>) : void
-    +line() : int
-    +column() : int
+    + accept(ASTVisitor<?>) : void
+    + line() : int
+    + column() : int
   }
   interface "ASTVisitor<R>" as ASTVisitor {
-    +visit(ProgramNodeAST) : R
-    +visit(AssignmentNodeAST) : R
-    +visit(LiteralNodeAST) : R
+    + visit(ProgramNodeAST) : R
+    + visit(AssignmentNodeAST) : R
+    + visit(LiteralNodeAST) : R
+    + visit(CallNodeAST) : R
+    + visit(ClassDefinitionNodeAST) : R
   }
-  abstract "AbstractASTVisitor<R>" as AbstractASTVisitor
+  abstract "AbstractASTVisitor<R>" as AbstractASTVisitor {
+    + AbstractASTVisitor()
+    + visit(ProgramNodeAST) : R
+    + visit(AssignmentNodeAST) : R
+    + visit(LiteralNodeAST) : R
+    + visit(CallNodeAST) : R
+    + visit(ClassDefinitionNodeAST) : R
+  }
   abstract AbstractNodeAST {
-    -line : int
-    -column : int
-    -sourceFile : String
-    +sourceFile() : String
-    +attachSource(String)
-    +children() : List<ASTNode>
+    - line : int
+    - column : int
+    - sourceFile : String
+    # AbstractNodeAST(int, int)
+    + sourceFile() : String
+    + attachSource(String) : void
+    + line() : int
+    + column() : int
+    + {abstract} children() : List<ASTNode>
+    + toString() : String
   }
-  abstract AbstractStatementNodeAST
-  abstract AbstractExpressionNodeAST
-  abstract AbstractDefinitionNodeAST
+  abstract AbstractStatementNodeAST {
+    # AbstractStatementNodeAST(int, int)
+  }
+  abstract AbstractExpressionNodeAST {
+    # AbstractExpressionNodeAST(int, int)
+  }
+  abstract AbstractDefinitionNodeAST {
+    # AbstractDefinitionNodeAST(int, int)
+  }
 }
 package "com.compi.backend.ast.semantic" {
   class AstSemanticAnalyzer {
-    +analyze(ProgramNodeAST) : SemanticModel
+    ~ table : SymbolTable
+    ~ model : SemanticModel
+    ~ errors : List<CompilationError>
+    ~ language : String
+    ~ expressions : AstExpressionAnalyzer
+    ~ declarations : AstDeclarationAnalyzer
+    ~ definitions : AstDefinitionAnalyzer
+    ~ currentClass : Symbol
+    ~ returnType : Type
+    ~ loopDepth : int
+    ~ switchDepth : int
+    ~ callable : boolean
+    + AstSemanticAnalyzer(SymbolTable, String, List<CompilationError>)
+    + analyze(ProgramNodeAST) : SemanticModel
+    + visit(ProgramNodeAST) : Type
+    + visit(DeclarationNodeAST) : Type
+    + visit(CallNodeAST) : Type
   }
-  class AstExpressionAnalyzer
-  class AstDeclarationAnalyzer
-  class AstDefinitionAnalyzer
+  class AstExpressionAnalyzer {
+    - a : AstSemanticAnalyzer
+    ~ AstExpressionAnalyzer(AstSemanticAnalyzer)
+    ~ assign(AbstractExpressionNodeAST, String, AbstractExpressionNodeAST, ASTNode) : Type
+    ~ binary(BinaryOperationNodeAST) : Type
+    ~ call(CallNodeAST) : Type
+    ~ {static} constant(AbstractExpressionNodeAST) : BigInteger
+    ~ identifier(IdentifierNodeAST) : Type
+    ~ increment(IncrementNodeAST) : Type
+    ~ index(IndexNodeAST) : Type
+    ~ literal(LiteralNodeAST) : Type
+    ~ member(MemberAccessNodeAST) : Type
+  }
+  class AstDeclarationAnalyzer {
+    - a : AstSemanticAnalyzer
+    ~ AstDeclarationAnalyzer(AstSemanticAnalyzer)
+    ~ arrayLiteral(ArrayLiteralNodeAST, Type) : Type
+    ~ attribute(AttributeDefinitionNodeAST) : Type
+    ~ declare(DeclarationNodeAST, boolean) : Type
+    ~ declared(Type, List<AbstractExpressionNodeAST>, ASTNode) : Type
+    ~ global(AbstractStatementNodeAST) : void
+    ~ initializer(AbstractExpressionNodeAST, Type) : Type
+    ~ instance(InstanceInitNodeAST, Type) : Type
+    ~ newArray(NewArrayNodeAST) : Type
+    - positionalFields(List<AbstractExpressionNodeAST>, Symbol, ASTNode) : void
+  }
+  class AstDefinitionAnalyzer {
+    - a : AstSemanticAnalyzer
+    ~ AstDefinitionAnalyzer(AstSemanticAnalyzer)
+    ~ classBody(ClassDefinitionNodeAST) : void
+    ~ constructorBody(ConstructorDefinitionNodeAST) : void
+    ~ functionBody(FunctionDefinitionNodeAST) : void
+    ~ methodBody(MethodDefinitionNodeAST) : void
+    ~ registerProgram(ProgramNodeAST) : void
+    ~ structure(StructDefinitionNodeAST) : void
+    - body(Symbol, String, int, AbstractNodeAST, AbstractStatementNodeAST) : void
+    - publishFields(ClassDefinitionNodeAST) : void
+    - registerClassFields(ClassDefinitionNodeAST) : void
+  }
   class SemanticModel {
-    +typeOf(ASTNode) : Type
-    +symbolOf(ASTNode) : Symbol
-    +scopeOf(ASTNode) : Scope
+    - types : Map<ASTNode, Type>
+    - symbols : Map<ASTNode, Symbol>
+    - scopes : Map<ASTNode, Scope>
+    + SemanticModel()
+    + typeOf(ASTNode) : Type
+    + symbolOf(ASTNode) : Symbol
+    + scopeOf(ASTNode) : Scope
+    ~ type(ASTNode, Type) : void
+    ~ symbol(ASTNode, Symbol) : void
+    ~ scope(ASTNode, Scope) : void
   }
 }
 package "com.compi.backend.ast.stmt" {
   class ProgramNodeAST {
-    -imports : List<ImportNodeAST>
-    -definitions : List<AbstractDefinitionNodeAST>
-    -globals : List<AbstractStatementNodeAST>
-    -statements : List<AbstractStatementNodeAST>
+    - imports : List<ImportNodeAST>
+    - definitions : List<AbstractDefinitionNodeAST>
+    - globals : List<AbstractStatementNodeAST>
+    - statements : List<AbstractStatementNodeAST>
+    + ProgramNodeAST(int, int, List<ImportNodeAST>, List<AbstractDefinitionNodeAST>, List<AbstractStatementNodeAST>, List<AbstractStatementNodeAST>)
+    + accept(ASTVisitor<?>) : void
+    + children() : List<ASTNode>
+    + definitions() : List<AbstractDefinitionNodeAST>
+    + globals() : List<AbstractStatementNodeAST>
+    + imports() : List<ImportNodeAST>
+    + statements() : List<AbstractStatementNodeAST>
   }
-  class BlockNodeAST
-  class DeclarationNodeAST
-  class AssignmentNodeAST
-  class IfNodeAST
-  class ElseIfNodeAST
-  class WhileNodeAST
-  class DoWhileNodeAST
-  class ForNodeAST
-  class SwitchNodeAST
-  class SwitchCaseNodeAST
-  class PrintNodeAST
-  class ReadStatementNodeAST
-  class ReturnNodeAST
-  class BreakNodeAST
-  class ContinueNodeAST
-  class ExpressionStatementNodeAST
-  class DefinitionStatementNodeAST
-  class ImportNodeAST
+  class BlockNodeAST {
+    - statements : List<AbstractStatementNodeAST>
+    + BlockNodeAST(int, int, List<AbstractStatementNodeAST>)
+    + accept(ASTVisitor<?>) : void
+    + children() : List<ASTNode>
+    + statements() : List<AbstractStatementNodeAST>
+  }
+  class DeclarationNodeAST {
+    - type : Type
+    - name : String
+    - dimensions : List<AbstractExpressionNodeAST>
+    - initializer : AbstractExpressionNodeAST
+    + DeclarationNodeAST(int, int, Type, String, List<AbstractExpressionNodeAST>, AbstractExpressionNodeAST)
+    + accept(ASTVisitor<?>) : void
+    + children() : List<ASTNode>
+    + dimensions() : List<AbstractExpressionNodeAST>
+    + initializer() : AbstractExpressionNodeAST
+    + name() : String
+    + type() : Type
+  }
+  class AssignmentNodeAST {
+    - target : AbstractExpressionNodeAST
+    - operator : String
+    - value : AbstractExpressionNodeAST
+    + AssignmentNodeAST(int, int, AbstractExpressionNodeAST, String, AbstractExpressionNodeAST)
+    + accept(ASTVisitor<?>) : void
+    + children() : List<ASTNode>
+    + operator() : String
+    + target() : AbstractExpressionNodeAST
+    + value() : AbstractExpressionNodeAST
+  }
+  class IfNodeAST {
+    - condition : AbstractExpressionNodeAST
+    - thenBody : AbstractStatementNodeAST
+    - elseIfs : List<ElseIfNodeAST>
+    - elseBody : AbstractStatementNodeAST
+    + IfNodeAST(int, int, AbstractExpressionNodeAST, AbstractStatementNodeAST, List<ElseIfNodeAST>, AbstractStatementNodeAST)
+    + accept(ASTVisitor<?>) : void
+    + children() : List<ASTNode>
+    + condition() : AbstractExpressionNodeAST
+    + elseBody() : AbstractStatementNodeAST
+    + elseIfs() : List<ElseIfNodeAST>
+    + thenBody() : AbstractStatementNodeAST
+  }
+  class ElseIfNodeAST {
+    - condition : AbstractExpressionNodeAST
+    - body : AbstractStatementNodeAST
+    + ElseIfNodeAST(int, int, AbstractExpressionNodeAST, AbstractStatementNodeAST)
+    + accept(ASTVisitor<?>) : void
+    + body() : AbstractStatementNodeAST
+    + children() : List<ASTNode>
+    + condition() : AbstractExpressionNodeAST
+  }
+  class WhileNodeAST {
+    - condition : AbstractExpressionNodeAST
+    - body : AbstractStatementNodeAST
+    + WhileNodeAST(int, int, AbstractExpressionNodeAST, AbstractStatementNodeAST)
+    + accept(ASTVisitor<?>) : void
+    + body() : AbstractStatementNodeAST
+    + children() : List<ASTNode>
+    + condition() : AbstractExpressionNodeAST
+  }
+  class DoWhileNodeAST {
+    - body : AbstractStatementNodeAST
+    - condition : AbstractExpressionNodeAST
+    + DoWhileNodeAST(int, int, AbstractStatementNodeAST, AbstractExpressionNodeAST)
+    + accept(ASTVisitor<?>) : void
+    + body() : AbstractStatementNodeAST
+    + children() : List<ASTNode>
+    + condition() : AbstractExpressionNodeAST
+  }
+  class ForNodeAST {
+    - initializer : AbstractStatementNodeAST
+    - condition : AbstractExpressionNodeAST
+    - update : AbstractStatementNodeAST
+    - body : AbstractStatementNodeAST
+    + ForNodeAST(int, int, AbstractStatementNodeAST, AbstractExpressionNodeAST, AbstractStatementNodeAST, AbstractStatementNodeAST)
+    + accept(ASTVisitor<?>) : void
+    + body() : AbstractStatementNodeAST
+    + children() : List<ASTNode>
+    + condition() : AbstractExpressionNodeAST
+    + initializer() : AbstractStatementNodeAST
+    + update() : AbstractStatementNodeAST
+  }
+  class SwitchNodeAST {
+    - subject : AbstractExpressionNodeAST
+    - cases : List<SwitchCaseNodeAST>
+    - defaultBody : AbstractStatementNodeAST
+    + SwitchNodeAST(int, int, AbstractExpressionNodeAST, List<SwitchCaseNodeAST>, AbstractStatementNodeAST)
+    + accept(ASTVisitor<?>) : void
+    + cases() : List<SwitchCaseNodeAST>
+    + children() : List<ASTNode>
+    + defaultBody() : AbstractStatementNodeAST
+    + subject() : AbstractExpressionNodeAST
+  }
+  class SwitchCaseNodeAST {
+    - value : AbstractExpressionNodeAST
+    - body : AbstractStatementNodeAST
+    + SwitchCaseNodeAST(int, int, AbstractExpressionNodeAST, AbstractStatementNodeAST)
+    + accept(ASTVisitor<?>) : void
+    + body() : AbstractStatementNodeAST
+    + children() : List<ASTNode>
+    + value() : AbstractExpressionNodeAST
+  }
+  class PrintNodeAST {
+    - expressions : List<AbstractExpressionNodeAST>
+    - newline : boolean
+    + PrintNodeAST(int, int, List<AbstractExpressionNodeAST>)
+    + PrintNodeAST(int, int, List<AbstractExpressionNodeAST>, boolean)
+    + accept(ASTVisitor<?>) : void
+    + children() : List<ASTNode>
+    + expressions() : List<AbstractExpressionNodeAST>
+    + newline() : boolean
+  }
+  class ReadStatementNodeAST {
+    - target : AbstractExpressionNodeAST
+    + ReadStatementNodeAST(int, int, AbstractExpressionNodeAST)
+    + accept(ASTVisitor<?>) : void
+    + children() : List<ASTNode>
+    + target() : AbstractExpressionNodeAST
+  }
+  class ReturnNodeAST {
+    - expression : AbstractExpressionNodeAST
+    + ReturnNodeAST(int, int, AbstractExpressionNodeAST)
+    + accept(ASTVisitor<?>) : void
+    + children() : List<ASTNode>
+    + expression() : AbstractExpressionNodeAST
+  }
+  class BreakNodeAST {
+    + BreakNodeAST(int, int)
+    + accept(ASTVisitor<?>) : void
+    + children() : List<ASTNode>
+  }
+  class ContinueNodeAST {
+    + ContinueNodeAST(int, int)
+    + accept(ASTVisitor<?>) : void
+    + children() : List<ASTNode>
+  }
+  class ExpressionStatementNodeAST {
+    - expression : AbstractExpressionNodeAST
+    + ExpressionStatementNodeAST(int, int, AbstractExpressionNodeAST)
+    + accept(ASTVisitor<?>) : void
+    + children() : List<ASTNode>
+    + expression() : AbstractExpressionNodeAST
+  }
+  class DefinitionStatementNodeAST {
+    - definition : AbstractDefinitionNodeAST
+    + DefinitionStatementNodeAST(int, int, AbstractDefinitionNodeAST)
+    + accept(ASTVisitor<?>) : void
+    + children() : List<ASTNode>
+    + definition() : AbstractDefinitionNodeAST
+  }
+  class ImportNodeAST {
+    - path : String
+    + ImportNodeAST(int, int, String)
+    + accept(ASTVisitor<?>) : void
+    + children() : List<ASTNode>
+    + path() : String
+  }
 }
 package "com.compi.backend.ast.expr" {
-  class LiteralNodeAST
-  class IdentifierNodeAST
-  class BinaryOperationNodeAST
-  class UnaryOperationNodeAST
-  class AssignmentExpressionNodeAST
-  class MemberAccessNodeAST
-  class IndexNodeAST
-  class CallNodeAST {
-    -callee : AbstractExpressionNodeAST
-    -arguments : List<AbstractExpressionNodeAST>
+  class LiteralNodeAST {
+    - value : Object
+    - kind : LiteralKind
+    + LiteralNodeAST(int, int, Object, LiteralKind)
+    + accept(ASTVisitor<?>) : void
+    + children() : List<ASTNode>
+    + kind() : LiteralKind
+    + value() : Object
   }
-  class NewObjectNodeAST
-  class NewArrayNodeAST
-  class ArrayLiteralNodeAST
-  class TernaryNodeAST
-  class IncrementNodeAST
-  class ReadExpressionNodeAST
-  class InstanceInitNodeAST
-  enum LiteralKind
-  enum OperationKind
-  enum ReadKind
+  class IdentifierNodeAST {
+    - name : String
+    - resolved : Symbol
+    + IdentifierNodeAST(int, int, String, Symbol)
+    + accept(ASTVisitor<?>) : void
+    + children() : List<ASTNode>
+    + name() : String
+    + resolved() : Symbol
+  }
+  class BinaryOperationNodeAST {
+    - left : AbstractExpressionNodeAST
+    - operator : String
+    - right : AbstractExpressionNodeAST
+    - kind : OperationKind
+    + BinaryOperationNodeAST(int, int, AbstractExpressionNodeAST, String, AbstractExpressionNodeAST, OperationKind)
+    + accept(ASTVisitor<?>) : void
+    + children() : List<ASTNode>
+    + kind() : OperationKind
+    + left() : AbstractExpressionNodeAST
+    + operator() : String
+    + right() : AbstractExpressionNodeAST
+  }
+  class UnaryOperationNodeAST {
+    - operator : String
+    - operand : AbstractExpressionNodeAST
+    + UnaryOperationNodeAST(int, int, String, AbstractExpressionNodeAST)
+    + accept(ASTVisitor<?>) : void
+    + children() : List<ASTNode>
+    + operand() : AbstractExpressionNodeAST
+    + operator() : String
+  }
+  class AssignmentExpressionNodeAST {
+    - target : AbstractExpressionNodeAST
+    - operator : String
+    - value : AbstractExpressionNodeAST
+    + AssignmentExpressionNodeAST(int, int, AbstractExpressionNodeAST, String, AbstractExpressionNodeAST)
+    + accept(ASTVisitor<?>) : void
+    + children() : List<ASTNode>
+    + operator() : String
+    + target() : AbstractExpressionNodeAST
+    + value() : AbstractExpressionNodeAST
+  }
+  class MemberAccessNodeAST {
+    - target : AbstractExpressionNodeAST
+    - member : String
+    - resolved : Symbol
+    + MemberAccessNodeAST(int, int, AbstractExpressionNodeAST, String, Symbol)
+    + accept(ASTVisitor<?>) : void
+    + children() : List<ASTNode>
+    + member() : String
+    + resolved() : Symbol
+    + target() : AbstractExpressionNodeAST
+  }
+  class IndexNodeAST {
+    - target : AbstractExpressionNodeAST
+    - indices : List<AbstractExpressionNodeAST>
+    + IndexNodeAST(int, int, AbstractExpressionNodeAST, List<AbstractExpressionNodeAST>)
+    + accept(ASTVisitor<?>) : void
+    + children() : List<ASTNode>
+    + indices() : List<AbstractExpressionNodeAST>
+    + target() : AbstractExpressionNodeAST
+  }
+  class CallNodeAST {
+    - name : String
+    - arguments : List<AbstractExpressionNodeAST>
+    - resolved : Symbol
+    - callee : AbstractExpressionNodeAST
+    + CallNodeAST(int, int, String, List<AbstractExpressionNodeAST>, Symbol)
+    + CallNodeAST(int, int, AbstractExpressionNodeAST, List<AbstractExpressionNodeAST>, Symbol)
+    + accept(ASTVisitor<?>) : void
+    + arguments() : List<AbstractExpressionNodeAST>
+    + callee() : AbstractExpressionNodeAST
+    + children() : List<ASTNode>
+    + name() : String
+    + resolved() : Symbol
+  }
+  class NewObjectNodeAST {
+    - typeName : String
+    - arguments : List<AbstractExpressionNodeAST>
+    - classDef : Symbol
+    + NewObjectNodeAST(int, int, String, List<AbstractExpressionNodeAST>, Symbol)
+    + accept(ASTVisitor<?>) : void
+    + arguments() : List<AbstractExpressionNodeAST>
+    + children() : List<ASTNode>
+    + classDef() : Symbol
+    + typeName() : String
+  }
+  class NewArrayNodeAST {
+    - elementType : Type
+    - sizes : List<AbstractExpressionNodeAST>
+    + NewArrayNodeAST(int, int, Type, List<AbstractExpressionNodeAST>)
+    + accept(ASTVisitor<?>) : void
+    + children() : List<ASTNode>
+    + elementType() : Type
+    + sizes() : List<AbstractExpressionNodeAST>
+  }
+  class ArrayLiteralNodeAST {
+    - elements : List<AbstractExpressionNodeAST>
+    + ArrayLiteralNodeAST(int, int, List<AbstractExpressionNodeAST>)
+    + accept(ASTVisitor<?>) : void
+    + children() : List<ASTNode>
+    + elements() : List<AbstractExpressionNodeAST>
+  }
+  class TernaryNodeAST {
+    - condition : AbstractExpressionNodeAST
+    - thenExpr : AbstractExpressionNodeAST
+    - elseExpr : AbstractExpressionNodeAST
+    + TernaryNodeAST(int, int, AbstractExpressionNodeAST, AbstractExpressionNodeAST, AbstractExpressionNodeAST)
+    + accept(ASTVisitor<?>) : void
+    + children() : List<ASTNode>
+    + condition() : AbstractExpressionNodeAST
+    + elseExpr() : AbstractExpressionNodeAST
+    + thenExpr() : AbstractExpressionNodeAST
+  }
+  class IncrementNodeAST {
+    - target : AbstractExpressionNodeAST
+    - operator : String
+    - prefix : boolean
+    + IncrementNodeAST(int, int, AbstractExpressionNodeAST, String, boolean)
+    + accept(ASTVisitor<?>) : void
+    + children() : List<ASTNode>
+    + operator() : String
+    + prefix() : boolean
+    + target() : AbstractExpressionNodeAST
+  }
+  class ReadExpressionNodeAST {
+    - kind : ReadKind
+    + ReadExpressionNodeAST(int, int, ReadKind)
+    + accept(ASTVisitor<?>) : void
+    + children() : List<ASTNode>
+    + kind() : ReadKind
+  }
+  class InstanceInitNodeAST {
+    - typeName : String
+    - positional : List<AbstractExpressionNodeAST>
+    - named : Map<String, AbstractExpressionNodeAST>
+    - arrayRef : AbstractExpressionNodeAST
+    - duplicateFields : List<String>
+    + InstanceInitNodeAST(int, int, String, List<AbstractExpressionNodeAST>, Map<String, AbstractExpressionNodeAST>, AbstractExpressionNodeAST)
+    + InstanceInitNodeAST(int, int, String, List<AbstractExpressionNodeAST>, Map<String, AbstractExpressionNodeAST>, AbstractExpressionNodeAST, List<String>)
+    + accept(ASTVisitor<?>) : void
+    + arrayRef() : AbstractExpressionNodeAST
+    + children() : List<ASTNode>
+    + duplicateFields() : List<String>
+    + named() : Map<String, AbstractExpressionNodeAST>
+    + positional() : List<AbstractExpressionNodeAST>
+    + typeName() : String
+  }
+  enum LiteralKind {
+    + {static} INTEGER : LiteralKind
+    + {static} DECIMAL : LiteralKind
+    + {static} STRING : LiteralKind
+    + {static} CHARACTER : LiteralKind
+    + {static} BOOLEAN : LiteralKind
+    + {static} NULL : LiteralKind
+    + {static} valueOf(String) : LiteralKind
+    + {static} values() : LiteralKind[]
+  }
+  enum OperationKind {
+    + {static} ARITHMETIC : OperationKind
+    + {static} RELATIONAL : OperationKind
+    + {static} LOGICAL : OperationKind
+    + {static} CONCATENATION : OperationKind
+    + {static} valueOf(String) : OperationKind
+    + {static} values() : OperationKind[]
+  }
+  enum ReadKind {
+    + {static} INPUT : ReadKind
+    + {static} READLINE : ReadKind
+    + {static} READCHAR : ReadKind
+    + {static} valueOf(String) : ReadKind
+    + {static} values() : ReadKind[]
+  }
 }
 package "com.compi.backend.ast.decl" {
-  class FunctionDefinitionNodeAST
-  class ParameterNodeAST
-  class StructDefinitionNodeAST
-  class FieldDefinitionNodeAST
-  class ClassDefinitionNodeAST
-  class MethodDefinitionNodeAST
-  class ConstructorDefinitionNodeAST
-  class AttributeDefinitionNodeAST
+  class FunctionDefinitionNodeAST {
+    - returnType : Type
+    - name : String
+    - parameters : List<ParameterNodeAST>
+    - body : AbstractStatementNodeAST
+    + FunctionDefinitionNodeAST(int, int, Type, String, List<ParameterNodeAST>, AbstractStatementNodeAST)
+    + accept(ASTVisitor<?>) : void
+    + body() : AbstractStatementNodeAST
+    + children() : List<ASTNode>
+    + name() : String
+    + parameters() : List<ParameterNodeAST>
+    + returnType() : Type
+  }
+  class ParameterNodeAST {
+    - type : Type
+    - name : String
+    - byReference : boolean
+    + ParameterNodeAST(int, int, Type, String, boolean)
+    + accept(ASTVisitor<?>) : void
+    + byReference() : boolean
+    + children() : List<ASTNode>
+    + name() : String
+    + type() : Type
+  }
+  class StructDefinitionNodeAST {
+    - name : String
+    - fields : List<FieldDefinitionNodeAST>
+    + StructDefinitionNodeAST(int, int, String, List<FieldDefinitionNodeAST>)
+    + accept(ASTVisitor<?>) : void
+    + children() : List<ASTNode>
+    + fields() : List<FieldDefinitionNodeAST>
+    + name() : String
+  }
+  class FieldDefinitionNodeAST {
+    - type : Type
+    - name : String
+    - dimensions : List<AbstractExpressionNodeAST>
+    + FieldDefinitionNodeAST(int, int, Type, String, List<AbstractExpressionNodeAST>)
+    + accept(ASTVisitor<?>) : void
+    + children() : List<ASTNode>
+    + dimensions() : List<AbstractExpressionNodeAST>
+    + name() : String
+    + type() : Type
+  }
+  class ClassDefinitionNodeAST {
+    - name : String
+    - members : List<AbstractNodeAST>
+    - publicClass : boolean
+    + ClassDefinitionNodeAST(int, int, String, List<AbstractNodeAST>)
+    + ClassDefinitionNodeAST(int, int, String, List<AbstractNodeAST>, boolean)
+    + accept(ASTVisitor<?>) : void
+    + children() : List<ASTNode>
+    + members() : List<AbstractNodeAST>
+    + name() : String
+    + publicClass() : boolean
+  }
+  class MethodDefinitionNodeAST {
+    - returnType : Type
+    - name : String
+    - parameters : List<ParameterNodeAST>
+    - body : AbstractStatementNodeAST
+    + MethodDefinitionNodeAST(int, int, Type, String, List<ParameterNodeAST>, AbstractStatementNodeAST)
+    + accept(ASTVisitor<?>) : void
+    + body() : AbstractStatementNodeAST
+    + children() : List<ASTNode>
+    + name() : String
+    + parameters() : List<ParameterNodeAST>
+    + returnType() : Type
+  }
+  class ConstructorDefinitionNodeAST {
+    - parameters : List<ParameterNodeAST>
+    - body : AbstractStatementNodeAST
+    - name : String
+    + ConstructorDefinitionNodeAST(int, int, List<ParameterNodeAST>, AbstractStatementNodeAST)
+    + ConstructorDefinitionNodeAST(int, int, String, List<ParameterNodeAST>, AbstractStatementNodeAST)
+    + accept(ASTVisitor<?>) : void
+    + body() : AbstractStatementNodeAST
+    + children() : List<ASTNode>
+    + name() : String
+    + parameters() : List<ParameterNodeAST>
+  }
+  class AttributeDefinitionNodeAST {
+    - type : Type
+    - name : String
+    - dimensions : List<AbstractExpressionNodeAST>
+    - initializer : AbstractExpressionNodeAST
+    + AttributeDefinitionNodeAST(int, int, Type, String, List<AbstractExpressionNodeAST>, AbstractExpressionNodeAST)
+    + accept(ASTVisitor<?>) : void
+    + children() : List<ASTNode>
+    + dimensions() : List<AbstractExpressionNodeAST>
+    + initializer() : AbstractExpressionNodeAST
+    + name() : String
+    + type() : Type
+  }
 }
 package "com.compi.backend.symbols" {
-  class SymbolTable
-  class Scope
-  class Symbol
-  class Type
+  class SymbolTable {
+    - currentScope : Scope
+    - globalScope : Scope
+    - structs : Map<String, Symbol>
+    - localStructs : Map<Scope, Map<String, Symbol>>
+    - classes : Map<String, Symbol>
+    - functions : Map<String, Symbol>
+    - typeTable : TypeTable
+    - closedScopes : List<Scope>
+    - generatingCode : boolean
+    - typeScopes : Map<Symbol, Scope>
+    - astScopes : Map<ASTNode, Scope>
+    + SymbolTable()
+    + addClass(Symbol) : void
+    + addFunction(Symbol) : void
+    + addStruct(Symbol) : void
+    + beginCodeGeneration() : void
+    + endCodeGeneration() : void
+    + clear() : void
+    + define(Symbol) : boolean
+    + defineGlobal(Symbol) : boolean
+    + enterAstScope(String, int, ASTNode) : void
+    + exitScope() : void
+    + resolve(String) : Symbol
+    + scopeOf(ASTNode) : Scope
+    + getAllSymbols() : List<Symbol>
+  }
+  class Scope {
+    - name : String
+    - parent : Scope
+    - symbols : Map<String, Symbol>
+    - currentOffset : int
+    + Scope(String, Scope)
+    + Scope(String, Scope, int)
+    + allocateOffset(int) : int
+    + clear() : void
+    + define(Symbol) : boolean
+    + getCurrentOffset() : int
+    + getName() : String
+    + getParent() : Scope
+    + getSymbols() : Collection<Symbol>
+    + resolve(String) : Symbol
+  }
+  class Symbol {
+    - name : String
+    - type : Type
+    - category : SymbolCategory
+    - offset : int
+    - isGlobal : boolean
+    - isByReference : boolean
+    - parameters : List<Symbol>
+    - returnType : Type
+    - members : List<Symbol>
+    - line : int
+    - column : int
+    - scope : String
+    - language : String
+    - sourceFile : String
+    - working : boolean
+    + Symbol(String, Type, SymbolCategory)
+    + Symbol(String, Type, SymbolCategory, int, boolean)
+    + addMember(Symbol) : void
+    + addParameter(Symbol) : void
+    + getMember(String) : Symbol
+    + getCallable(String, int) : Symbol
+    + getStorageName() : String
+    + at(ParserRuleContext) : Symbol
+    + inFile(String) : Symbol
+    + inLanguage(String) : Symbol
+    + markWorking() : Symbol
+  }
+  class Type {
+    + {static} INT : Type
+    + {static} DOUBLE : Type
+    + {static} CHAR : Type
+    + {static} BOOLEAN : Type
+    + {static} STRING : Type
+    + {static} VOID : Type
+    + {static} NULL : Type
+    + {static} UNKNOWN : Type
+    + {static} UNKNOWN_SIZE : int
+    - dataType : DataType
+    - customTypeName : String
+    - elementType : Type
+    - dimensions : int
+    - sizes : int[]
+    + Type(DataType)
+    + Type(DataType, String)
+    + Type(DataType, String, Type, int)
+    + Type(DataType, String, Type, int, int[])
+    + {static} array(Type, int) : Type
+    + {static} arrayOf(Type, int[]) : Type
+    + {static} classType(String) : Type
+    + {static} structType(String) : Type
+    + conTamanos(int[]) : Type
+    + desindexar(int) : Type
+    + hasSizes() : boolean
+    + isArray() : boolean
+    + isAssignableTo(Type) : boolean
+    + isClass() : boolean
+    + isStruct() : boolean
+    + isNumeric() : boolean
+  }
   class TypeTable {
-    +define(name, Type, Scope) : TypeEntry
-    +resolve(name, Scope) : Type
-    +getEntries() : List<TypeEntry>
-    +clear()
+    - globalScope : Scope
+    - scopedTypes : Map<Scope, Map<String, TypeEntry>>
+    - scopeIds : Map<Scope, Integer>
+    - entries : Map<Integer, TypeEntry>
+    - primitives : Map<DataType, TypeEntry>
+    - nextId : int
+    + TypeTable()
+    + TypeTable(Scope)
+    + clear() : void
+    + define(String, Type) : void
+    + define(String, Type, Scope) : TypeEntry
+    + define(String, Type, Scope, Integer) : TypeEntry
+    + entryById(int) : TypeEntry
+    + exists(String) : boolean
+    + register(Type, Scope) : TypeEntry
+    + resolve(String) : Type
+    + resolve(String, Scope) : Type
+    + getEntries() : List<TypeEntry>
   }
   class TypeEntry <<record>> {
-    id : int
-    name : String
-    type : Type
-    baseTypeId : Integer
-    parentId : Integer
-    dimension : int
-    minimum : List<Integer>
-    maximum : List<Integer>
-    scopeId : int
-    scopeName : String
+    - id : int
+    - name : String
+    - type : Type
+    - baseTypeId : Integer
+    - parentId : Integer
+    - dimension : int
+    - minimum : List<Integer>
+    - maximum : List<Integer>
+    - scopeId : int
+    - scopeName : String
+    + TypeEntry(int, String, Type, Integer, Integer, int, List<Integer>, List<Integer>, int, String)
+    + id() : int
+    + name() : String
+    + type() : Type
+    + baseTypeId() : Integer
+    + parentId() : Integer
+    + dimension() : int
+    + minimum() : List<Integer>
+    + maximum() : List<Integer>
+    + scopeId() : int
+    + scopeName() : String
   }
-  class TypeCompatibility
-  class CallValidator
-  class ArrayLiteral
+  class TypeCompatibility {
+    + TypeCompatibility()
+    + {static} checkArithmetic(Type, Type, String) : Type
+    + {static} checkEquality(Type, Type) : Type
+    + {static} checkLogical(Type, Type) : Type
+    + {static} checkRelational(Type, Type, String) : Type
+  }
+  class CallValidator {
+    - CallValidator()
+    + {static} report(String, ParserRuleContext, List<CompilationError>) : void
+    + {static} validate(Symbol, List<Type>, ParserRuleContext, List<CompilationError>) : void
+  }
+  class ArrayLiteral {
+    - ArrayLiteral()
+    + {static} completeSizes(Type, Type) : Type
+    + {static} validate(String, Type, Type, ParserRuleContext) : CompilationError
+  }
   enum DataType {
-    INT
-    DOUBLE
-    CHAR
-    BOOLEAN
-    STRING
-    STRUCT
-    CLASS
-    ARRAY
-    VOID
-    NULL
-    UNKNOWN
+    + {static} INT : DataType
+    + {static} DOUBLE : DataType
+    + {static} CHAR : DataType
+    + {static} BOOLEAN : DataType
+    + {static} STRING : DataType
+    + {static} STRUCT : DataType
+    + {static} CLASS : DataType
+    + {static} ARRAY : DataType
+    + {static} VOID : DataType
+    + {static} NULL : DataType
+    + {static} UNKNOWN : DataType
+    + isNumeric() : boolean
+    + {static} valueOf(String) : DataType
+    + {static} values() : DataType[]
   }
   enum SymbolCategory {
-    VARIABLE
-    PARAMETER
-    FUNCTION
-    METHOD
-    CONSTRUCTOR
-    STRUCT
-    CLASS
-    FIELD
+    + {static} VARIABLE : SymbolCategory
+    + {static} PARAMETER : SymbolCategory
+    + {static} FUNCTION : SymbolCategory
+    + {static} METHOD : SymbolCategory
+    + {static} CONSTRUCTOR : SymbolCategory
+    + {static} STRUCT : SymbolCategory
+    + {static} CLASS : SymbolCategory
+    + {static} FIELD : SymbolCategory
+    - label : String
+    - SymbolCategory(String)
+    + label() : String
+    + toString() : String
   }
 }
 package "com.compi.backend.c3d" {
-  class C3DGenerator
-  class Quadruple
-  enum QuadrupleOp
-  class Triplet
-  class IntermediateCodeManager
-  class CCodeEmitter <<delegado>>
-  class FlatEmitter {
-    +build() : String
+  class C3DGenerator {
+    - tempCounter : int
+    - labelCounter : int
+    - quadruples : List<Quadruple>
+    - declaredTemps : Set<String>
+    + C3DGenerator()
+    + clear() : void
+    + emit(Quadruple) : void
+    + emit(QuadrupleOp, String, String, String) : void
+    + emitAssign(String, String) : void
+    + emitGoto(String) : void
+    + emitGotoTop(Deque<String>) : void
+    + emitLabel(String) : void
+    + emitReturn(String) : void
+    + newLabel() : String
+    + newTemp() : String
+    + toC3DString() : String
   }
-  class FlatLayout
-  class ArrayRuntime
-  class HeapRuntime
-  class FunctionRuntime
-  class ValueRuntime
+  class Quadruple {
+    - op : QuadrupleOp
+    - arg1 : String
+    - arg2 : String
+    - result : String
+    + Quadruple(QuadrupleOp, String, String, String)
+    + getOp() : QuadrupleOp
+    + getArg1() : String
+    + getArg2() : String
+    + getResult() : String
+    + setOp(QuadrupleOp) : void
+    + setArg1(String) : void
+    + setArg2(String) : void
+    + setResult(String) : void
+    + toC3D() : String
+    + toQuadruple() : String
+    - {static} c3dCall(QuadrupleOp, String, String, String) : String
+    - {static} c3dControl(QuadrupleOp, String, String, String) : String
+    - {static} c3dMemory(QuadrupleOp, String, String, String) : String
+  }
+  enum QuadrupleOp {
+    + {static} ADD : QuadrupleOp
+    + {static} SUB : QuadrupleOp
+    + {static} MUL : QuadrupleOp
+    + {static} DIV : QuadrupleOp
+    + {static} INT_DIV : QuadrupleOp
+    + {static} MOD : QuadrupleOp
+    + {static} NEG : QuadrupleOp
+    + {static} CONCAT : QuadrupleOp
+    + {static} AND : QuadrupleOp
+    + {static} OR : QuadrupleOp
+    + {static} NOT : QuadrupleOp
+    + {static} ASSIGN : QuadrupleOp
+    + {static} ARRAY_GET : QuadrupleOp
+    + {static} ARRAY_SET : QuadrupleOp
+    + {static} GOTO : QuadrupleOp
+    + {static} IF_TRUE : QuadrupleOp
+    + {static} IF_FALSE : QuadrupleOp
+    + {static} LABEL : QuadrupleOp
+    + {static} IF_EQ : QuadrupleOp
+    + {static} IF_NE : QuadrupleOp
+    + {static} IF_LT : QuadrupleOp
+    + {static} IF_LE : QuadrupleOp
+    + {static} IF_GT : QuadrupleOp
+    + {static} IF_GE : QuadrupleOp
+    + {static} CALL : QuadrupleOp
+    + {static} PARAM : QuadrupleOp
+    + {static} RETURN : QuadrupleOp
+    + {static} FUNCTION_START : QuadrupleOp
+    + {static} FUNCTION_END : QuadrupleOp
+    + {static} STACK_SET : QuadrupleOp
+    + {static} STACK_GET : QuadrupleOp
+    + {static} HEAP_SET : QuadrupleOp
+    + {static} HEAP_GET : QuadrupleOp
+    + {static} SET_P : QuadrupleOp
+    + {static} GET_P : QuadrupleOp
+    + {static} SET_H : QuadrupleOp
+    + {static} GET_H : QuadrupleOp
+    + {static} PRINT_INT : QuadrupleOp
+    + {static} PRINT_FLOAT : QuadrupleOp
+    + {static} PRINT_CHAR : QuadrupleOp
+    + {static} PRINT_STR : QuadrupleOp
+    + {static} PRINTLN : QuadrupleOp
+    + {static} READ : QuadrupleOp
+    + {static} READ_CHAR : QuadrupleOp
+    + {static} READ_STR : QuadrupleOp
+    - symbol : String
+    - QuadrupleOp(String)
+    + getSymbol() : String
+  }
+  class Triplet {
+    - op : QuadrupleOp
+    - arg1 : String
+    - arg2 : String
+    - result : String
+    + Triplet(QuadrupleOp, String, String)
+    + Triplet(QuadrupleOp, String, String, String)
+    + getArg1() : String
+    + getArg2() : String
+    + getOp() : QuadrupleOp
+    + getResult() : String
+    + toString() : String
+  }
+  class IntermediateCodeManager {
+    - triplets : List<Triplet>
+    + IntermediateCodeManager()
+    + clear() : void
+    + getTriplets() : List<Triplet>
+    + getTripletsString() : String
+    + loadFromQuadruples(List<Quadruple>) : void
+    - toTriplet(Quadruple) : void
+  }
+  class CCodeEmitter <<delegado>> {
+    - CCodeEmitter()
+    + {static} generateCCode(List<Quadruple>, Set<String>, SymbolTable) : String
+  }
+  class FlatEmitter {
+    - layout : FlatLayout
+    - out : StringBuilder
+    - callSites : List<Integer>
+    - pending : List<String>
+    - function : String
+    - nextCallId : int
+    - nextUid : int
+    - returnValueSet : boolean
+    ~ FlatEmitter(FlatLayout)
+    ~ build() : String
+    - assign(String, String) : void
+    - emitArithmetic(Quadruple) : void
+    - emitAssign(Quadruple) : void
+    - emitBody(List<Quadruple>) : void
+    - emitCall(Quadruple) : void
+    - emitConcat(Quadruple) : void
+    - emitControl(Quadruple) : void
+  }
+  class FlatLayout {
+    ~ {static} ENTRY : String
+    ~ bodies : Map<String, List<Quadruple>>
+    ~ signatures : Map<String, List<String>>
+    ~ slots : Map<String, Map<String, Integer>>
+    ~ frames : Map<String, Integer>
+    ~ globals : Map<String, Integer>
+    ~ FlatLayout(List<Quadruple>, SymbolTable)
+    ~ frame(String) : int
+    ~ {static} isGlobal(String) : boolean
+    ~ {static} isLocal(String) : boolean
+    ~ {static} isTemp(String) : boolean
+    ~ operand(String, String) : String
+    ~ {static} parametersByFunction(SymbolTable) : Map<String, List<String>>
+    - assignFrames() : void
+    - assignGlobals(List<Quadruple>) : void
+  }
+  class ArrayRuntime {
+    - ArrayRuntime()
+    + {static} add(C3DGenerator, String, int) : String
+    + {static} address(C3DGenerator, String, List<String>, int[]) : String
+    + {static} allocate(C3DGenerator, int) : String
+    + {static} allocateArray(C3DGenerator, List<String>) : String
+    + {static} allocateArray(C3DGenerator, int[]) : String
+    + {static} constantAddress(C3DGenerator, String, int[], int[]) : String
+    + {static} leer(C3DGenerator, String, List<String>, int[]) : String
+    + {static} offset(int[], int[]) : int
+    + {static} productFrom(int[], int) : int
+  }
+  class HeapRuntime {
+    - HeapRuntime()
+    + {static} allocateObject(C3DGenerator, Symbol) : String
+    + {static} definition(SymbolTable, Type) : Symbol
+    + {static} fieldOffset(Symbol, String) : int
+    + {static} read(C3DGenerator, String) : String
+  }
+  class FunctionRuntime {
+    - FunctionRuntime()
+    + {static} name(String, String, int) : String
+  }
+  class ValueRuntime {
+    - ValueRuntime()
+    + {static} asText(C3DGenerator, String, Type) : String
+  }
   enum Mode {
-    TRIPLETS
-    QUADRUPLES
+    + {static} TRIPLETS : Mode
+    + {static} QUADRUPLES : Mode
+    + {static} valueOf(String) : Mode
+    + {static} values() : Mode[]
   }
 }
 package "com.compi.backend.errors" {
-  class CompilationError
-  class Diagnostic
+  class CompilationError {
+    - type : ErrorType
+    - message : String
+    - line : int
+    - column : int
+    - fileName : String
+    + CompilationError(ErrorType, String, int, int)
+    + getColumn() : int
+    + getErrorType() : ErrorType
+    + getFileName() : String
+    + getLine() : int
+    + getMessage() : String
+    + getType() : String
+    + inFile(String) : CompilationError
+    + toString() : String
+  }
+  class Diagnostic {
+    - {static} OPEN_QUOTE : char
+    - {static} CLOSE_QUOTE : char
+    - {static} MAX_IN_LIST : int
+    - {static} RULE_PREFIX : Pattern
+    - {static} LEXICAL : Pattern
+    - {static} CLASES : Map<String, String>
+    - Diagnostic()
+    + {static} fromAntlr(Vocabulary, String, Token) : String
+    + {static} alreadyDeclaredVariable(String, ParserRuleContext) : CompilationError
+    + {static} duplicateParameter(String, ParserRuleContext) : CompilationError
+    + {static} incompatibleAssignment(Type, Type, ParserRuleContext) : CompilationError
+    + {static} indexOutOfRange(String, int, int, ParserRuleContext) : CompilationError
+  }
   enum ErrorType {
-    LEXICAL
-    SYNTACTIC
-    SEMANTIC
+    + {static} LEXICAL : ErrorType
+    + {static} SYNTACTIC : ErrorType
+    + {static} SEMANTIC : ErrorType
+    - tag : String
+    - ErrorType(String)
+    + getTag() : String
+    + toString() : String
   }
 }
 package "com.compi.backend.parser" {
-  class ParseTrace
-  class ParseStep
+  class ParseTrace {
+    - {static} MAX_TEXT : int
+    - ParseTrace()
+    + {static} build(ParseTree, Vocabulary, String[]) : List<ParseStep>
+    - {static} ruleName(ParserRuleContext, String[]) : String
+    - {static} trim(String) : String
+  }
+  class ParseStep {
+    + {static} MARK_START : String
+    - number : int
+    - type : StackAction
+    - symbol : String
+    - terminal : String
+    - line : int
+    - column : int
+    - invalid : boolean
+    - stack : List<String>
+    - consumed : List<String>
+    ~ ParseStep(int, StackAction, String, String, int, int, boolean, List<String>, List<String>)
+    + {static} builder() : ParseStepBuilder
+    + isInvalid() : boolean
+    + getNumber() : int
+    + getType() : StackAction
+    + getStack() : List<String>
+    + getConsumed() : List<String>
+  }
 }
 package "com.compi.backend.runtime" {
-  class StackSimulator
-  class StackState
-  class Stack
+  class StackSimulator {
+    - states : List<StackState>
+    - stack : List<String>
+    - poppedThisStep : List<String>
+    - step : int
+    - popsIntentados : int
+    - pushedThisStep : String
+    + StackSimulator()
+    + simulate(List<Quadruple>) : List<StackState>
+    - apply(Quadruple) : void
+    - binary(Quadruple) : void
+    - pop(int) : void
+    - push(String) : void
+    - stepAction() : StackAction
+    - unaryPopPush(Quadruple) : void
+  }
+  class StackState {
+    - index : int
+    - operation : String
+    - elements : List<String>
+    - c3dInstruction : String
+    - action : StackAction
+    - popped : List<String>
+    - pushed : String
+    + StackState(int, String, List<String>, String)
+    + StackState(int, String, List<String>, String, StackAction, List<String>, String)
+    + depth() : int
+    + getIndex() : int
+    + getElements() : List<String>
+    + getAction() : StackAction
+  }
+  class Stack {
+    - data : List<Object>
+    + Stack()
+    + clear() : void
+    + peek() : Object
+    + pop() : Object
+    + push(Object) : void
+    + size() : int
+  }
 }
 package "com.compi.backend.utils" {
-  class ParseTreeDotGenerator
+  class ParseTreeDotGenerator {
+    - ids : Map<ParseTree, Integer>
+    - sb : StringBuilder
+    - counter : int
+    + ParseTreeDotGenerator()
+    + build(ParseTree, String) : String
+    - escape(String) : String
+    - label(ParseTree) : String
+    - ruleName(ParserRuleContext) : String
+    - sanitize(String) : String
+    - visit(ParseTree) : int
+  }
   class ASTDotGenerator {
-    +build(AbstractNodeAST, String) : String
+    - ids : Map<AbstractNodeAST, Integer>
+    - sb : StringBuilder
+    - counter : int
+    + ASTDotGenerator()
+    + build(AbstractNodeAST, String) : String
+    - detail(AbstractNodeAST) : String
+    - dimensions(int) : String
+    - escape(String) : String
+    - label(AbstractNodeAST) : String
+    - sanitize(String) : String
+    - visit(AbstractNodeAST) : int
   }
 }
 
@@ -364,12 +1834,9 @@ PigLatinCompiler --|> AbstractLanguageCompiler
 YCompiler --|> AbstractLanguageCompiler
 ZetarianoCompiler --|> AbstractLanguageCompiler
 LanguageCompilerFactory ..> LanguageCompiler
-PigLatinCompiler ..> PigLatinC3DVisitor
 PigLatinCompiler ..> PigLatinAstBuilder
-YCompiler ..> YC3DVisitor
 YCompiler ..> YAstBuilder
 YCompiler ..> YIndentLexer
-ZetarianoCompiler ..> ZetarianoC3DVisitor
 ZetarianoCompiler ..> ZetarianoAstBuilder
 AbstractLanguageCompiler ..> AstSemanticAnalyzer
 AbstractLanguageCompiler o-- SemanticModel
@@ -385,16 +1852,15 @@ SemanticModel o-- Type
 SemanticModel o-- Symbol
 SemanticModel o-- Scope
 SymbolTable ..> ASTNode : ámbitos por identidad
-SymbolTable ..> SemanticModel : puente temporal para C3D
-PigLatinC3DVisitor *-- PigLatinConditionEmitter
-PigLatinC3DVisitor *-- PigLatinObjectEmitter
-YC3DVisitor *-- YDeclarationEmitter
-YC3DVisitor *-- YControlEmitter
-YC3DVisitor *-- YAccessEmitter
-ZetarianoC3DVisitor *-- ZetarianoArrayEmitter
-ZetarianoC3DVisitor *-- ZetarianoClassEmitter
-ZetarianoC3DVisitor *-- ZetarianoConditionEmitter
-ZetarianoClassEmitter o-- ZetarianoArrayEmitter
+AbstractLanguageCompiler ..> AstCodeGenerator
+AbstractASTVisitor <|-- AstCodeGenerator
+AstCodeGenerator o-- SemanticModel
+AstCodeGenerator o-- C3DGenerator
+AstCodeGenerator *-- AstMemoryEmitter
+AstCodeGenerator *-- AstExpressionEmitter
+AstCodeGenerator *-- AstAggregateEmitter
+AstCodeGenerator *-- AstControlEmitter
+AstCodeGenerator *-- AstDefinitionEmitter
 AbstractNodeAST ..|> ASTNode
 AbstractASTVisitor ..|> ASTVisitor
 AbstractStatementNodeAST --|> AbstractNodeAST
@@ -458,8 +1924,17 @@ ASTNode ..> ASTVisitor : accept()
 ASTDotGenerator ..> AbstractNodeAST
 package "com.compi.backend.ast.build" {
   abstract AbstractAstBuilder {
-    +build(ParseTree, sourceFile) : ProgramNodeAST
-    #buildRule(rule, ParserRuleContext) : ASTNode
+    - rules : String[]
+    # AbstractAstBuilder(String[])
+    + build(ParseTree, String) : ProgramNodeAST
+    + visitChildren(RuleNode) : ASTNode
+    # {abstract} buildRule(String, ParserRuleContext) : ASTNode
+    # access(ParserRuleContext, String, String) : AbstractExpressionNodeAST
+    # all(ParserRuleContext, String) : List<ParserRuleContext>
+    # arguments(ParserRuleContext, String, String) : List<AbstractExpressionNodeAST>
+    # binary(ParserRuleContext, AbstractExpressionNodeAST, String, AbstractExpressionNodeAST) : AbstractExpressionNodeAST
+    # block(ParserRuleContext, String) : BlockNodeAST
+    # col(ParserRuleContext) : int
   }
 }
 PigLatinAstBuilder --|> AbstractAstBuilder

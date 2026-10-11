@@ -43,14 +43,14 @@ public interface LanguageCompiler {
 
     SemanticModel semanticModel();
 
-    void generateIntermediate(ParseTree tree, SymbolTable symbolTable, C3DGenerator generator);
+    void generateIntermediate(ProgramNodeAST tree, SymbolTable symbolTable, C3DGenerator generator);
 
-    default List<String> loadImports(ParseTree tree, SymbolTable symbolTable,
+    default List<String> loadImports(ProgramNodeAST tree, SymbolTable symbolTable,
                                      C3DGenerator generator, List<CompilationError> errors) {
         return loadImports(tree, symbolTable, generator, errors, new ArrayList<>());
     }
 
-    default List<String> loadImports(ParseTree tree, SymbolTable symbolTable,
+    default List<String> loadImports(ProgramNodeAST tree, SymbolTable symbolTable,
                                      C3DGenerator generator, List<CompilationError> errors,
                                      List<String> yaCargados) {
         return List.of();

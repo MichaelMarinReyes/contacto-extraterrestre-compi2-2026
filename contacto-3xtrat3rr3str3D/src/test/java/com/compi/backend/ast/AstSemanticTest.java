@@ -55,7 +55,7 @@ class AstSemanticTest {
         assertSame(symbols.scopeOf(ast), model.scopeOf(use));
         assertEquals("manual.pig", model.symbolOf(use).getSourceFile());
         assertEquals(1, model.symbolOf(use).getColumn());
-        assertTrue(symbols.getSyntaxScopes().isEmpty());
+        assertSame(symbols.scopeOf(ast), model.scopeOf(ast));
     }
 
     @Test
@@ -170,7 +170,7 @@ class AstSemanticTest {
         assertTrue(compiler.getImportedSemanticModels().isEmpty());
         assertFalse(compiler.compile("MAIOR> >> ; FINIS;", "pig"));
         assertNull(compiler.getSemanticModel());
-        assertTrue(compiler.getSymbolTable().getSyntaxScopes().isEmpty());
+        assertSame(compiler.getSymbolTable().getGlobalScope(), compiler.getSymbolTable().getCurrentScope());
     }
 
     @Test
