@@ -9,6 +9,7 @@ import com.compi.backend.languages.LanguageCompiler;
 import com.compi.backend.languages.LanguageCompilerFactory;
 import com.compi.backend.parser.ParseStep;
 import com.compi.backend.parser.ParseTrace;
+import com.compi.backend.riscv.RiscvAssembler;
 import com.compi.backend.runtime.Stack;
 import com.compi.backend.runtime.StackSimulator;
 import com.compi.backend.runtime.StackState;
@@ -54,6 +55,10 @@ public class Compiler {
     private String quadruplesCode = "";
 
     private String cCode = "";
+
+    private String riscvCode = "";
+
+    private boolean riscvEnabled = true;
 
     private File workingDirectory = new File(".");
     private boolean workingDirectoryConfigured;
@@ -173,7 +178,12 @@ public class Compiler {
 
         if (errors.isEmpty()) {
             cCode = generateCCode();
+            generateRiscv();
         }
+    }
+
+    private void generateRiscv() {
+        riscvCode = RiscvAssembler.generateAssembly(c3dGenerator.getQuadruples(), symbolTable);
     }
 
     private void recordInternalError(Exception e) {
@@ -200,6 +210,7 @@ public class Compiler {
         tripletsCode = "";
         quadruplesCode = "";
         cCode = "";
+        riscvCode = "";
     }
 
     private String generateCCode() {
@@ -265,6 +276,16 @@ public class Compiler {
     public void setCMode(Mode mode) {
         this.cMode = mode == null ? Mode.QUADRUPLES : mode;
         this.cCode = errors.isEmpty() ? generateCCode() : "";
+    }
+
+    public void setRiscvEnabled(boolean enabled) {
+        this.riscvEnabled = enabled;
+        this.riscvCode = enabled && errors.isEmpty()
+                ? RiscvAssembler.generateAssembly(c3dGenerator.getQuadruples(), symbolTable) : "";
+    }
+
+    public boolean isRiscvEnabled() {
+        return riscvEnabled;
     }
 
 }

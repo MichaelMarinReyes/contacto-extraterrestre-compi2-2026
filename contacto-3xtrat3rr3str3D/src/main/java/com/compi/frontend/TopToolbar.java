@@ -16,6 +16,7 @@ import javax.swing.Box;
 import javax.swing.BoxLayout;
 import javax.swing.ButtonGroup;
 import javax.swing.JButton;
+import javax.swing.JCheckBox;
 import javax.swing.JComboBox;
 import javax.swing.JComponent;
 import javax.swing.JLabel;
@@ -31,14 +32,16 @@ public class TopToolbar extends JPanel {
     private final JPanel viewCluster = new JPanel();
     private final JLabel navLabel;
     private final JComboBox<String> cModeBox;
+    private final JCheckBox riscvToggle;
     private final JButton compileButton;
     private final JToggleButton sideToggle;
     private final JLabel projectLabel = new JLabel();
 
-    public TopToolbar(JLabel navLabel, JComboBox<String> cModeBox,
+    public TopToolbar(JLabel navLabel, JComboBox<String> cModeBox, JCheckBox riscvToggle,
                       JButton compileButton, JToggleButton sideToggle) {
         this.navLabel = navLabel;
         this.cModeBox = cModeBox;
+        this.riscvToggle = riscvToggle;
         this.compileButton = compileButton;
         this.sideToggle = sideToggle;
 
@@ -111,6 +114,10 @@ public class TopToolbar extends JPanel {
 
         right.add(labelled("Generar C", cModeBox));
 
+        styleRiscvToggle();
+
+        right.add(riscvToggle);
+
         if (sideToggle != null) {
             sideToggle.setText("Herramientas");
             sideToggle.setFocusable(false);
@@ -158,6 +165,15 @@ public class TopToolbar extends JPanel {
         box.setFont(UiTheme.sans(12));
         box.setPreferredSize(new Dimension(width, 26));
         box.setMaximumSize(new Dimension(width, 26));
+    }
+
+    private void styleRiscvToggle() {
+        riscvToggle.setText("RISC-V");
+        riscvToggle.setSelected(true);
+        riscvToggle.setFocusable(false);
+        riscvToggle.setOpaque(false);
+        riscvToggle.setFont(UiTheme.sans(12));
+        riscvToggle.setToolTipText("Generar también la traducción a ensamblador RISC-V (RARS)");
     }
 
     public void addFileAction(JButton button, String tooltip) {
@@ -240,6 +256,14 @@ public class TopToolbar extends JPanel {
                 consumer.accept("Tripletes".equals(v.toString()) ? Mode.TRIPLETS : Mode.QUADRUPLES);
             }
         });
+    }
+
+    public void onRiscvToggled(Consumer<Boolean> consumer) {
+        riscvToggle.addActionListener(e -> consumer.accept(riscvToggle.isSelected()));
+    }
+
+    public boolean isRiscvSelected() {
+        return riscvToggle.isSelected();
     }
 
     public static Mode modeOf(String label) {

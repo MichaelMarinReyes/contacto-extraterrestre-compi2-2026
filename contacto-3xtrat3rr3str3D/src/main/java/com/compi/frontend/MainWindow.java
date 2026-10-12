@@ -14,6 +14,7 @@ import java.util.ArrayList;
 import java.util.List;
 import javax.swing.AbstractAction;
 import javax.swing.JButton;
+import javax.swing.JCheckBox;
 import javax.swing.JComboBox;
 import javax.swing.JFileChooser;
 import javax.swing.JFrame;
@@ -38,6 +39,7 @@ public class MainWindow extends JFrame {
     private final TypeTablePanel typePanel = new TypeTablePanel();
     private final FileTreePanel fileTreePanelInstance = new FileTreePanel();
     private final JComboBox<String> cModeCombo = new JComboBox<>();
+    private final JCheckBox riscvToggle = new JCheckBox();
     private final JToggleButton toolsToggle = new JToggleButton();
     private final JButton compileButton = new JButton();
     private final JButton newProjectButton = new JButton();
@@ -145,7 +147,7 @@ public class MainWindow extends JFrame {
         cModeCombo.addItem("Cuartetas");
         cModeCombo.addItem("Tripletes");
         cModeCombo.setSelectedIndex(0);
-        topToolbar = new TopToolbar(optionSelectedLabel, cModeCombo, compileButton, toolsToggle);
+        topToolbar = new TopToolbar(optionSelectedLabel, cModeCombo, riscvToggle, compileButton, toolsToggle);
         topToolbar.applyIcons(newFileButton, openFileButton, saveFileButton,
                 astButton, symbolTableButton, stackButton, lexerErrorButton);
         initFileActions();
@@ -154,6 +156,8 @@ public class MainWindow extends JFrame {
         compileButton.addActionListener(event -> compilation.compile());
         cModeCombo.addActionListener(event -> compilation.setMode(
                 "Tripletes".equals(String.valueOf(cModeCombo.getSelectedItem())) ? Mode.TRIPLETS : Mode.QUADRUPLES));
+        topToolbar.onRiscvToggled(compilation::setRiscvEnabled);
+        compilation.setRiscvEnabled(riscvToggle.isSelected());
         sidebarPanel.setPreferredSize(new Dimension(100, TopToolbar.BAR_HEIGHT));
         sidebarPanel.setMinimumSize(new Dimension(100, TopToolbar.BAR_HEIGHT));
         sidebarPanel.setMaximumSize(new Dimension(Integer.MAX_VALUE, TopToolbar.BAR_HEIGHT));

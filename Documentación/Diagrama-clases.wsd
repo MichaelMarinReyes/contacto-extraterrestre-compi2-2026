@@ -455,15 +455,20 @@ package "com.compi.backend" {
     - semanticModel : SemanticModel
     - importedAsts : Map<String, ProgramNodeAST>
     - importedSemanticModels : Map<String, SemanticModel>
+    - riscvCode : String
+    - riscvEnabled : boolean
     + Compiler()
     + compile(String, String) : boolean
     + compile(String, String, String) : boolean
     + setWorkingDirectory(File) : void
     + setCMode(Mode) : void
+    + setRiscvEnabled(boolean) : void
     + getAst() : ProgramNodeAST
     + getImportedAsts() : Map<String, ProgramNodeAST>
     + getSemanticModel() : SemanticModel
+    + getRiscvCode() : String
     - generateCCode() : String
+    - generateRiscv() : void
     - publishIntermediate(LanguageCompiler) : void
   }
   enum StackAction {
@@ -523,6 +528,8 @@ package "com.compi.backend.languages" {
   class PigLatinCompiler {
     - astImports : Map<String, ProgramNodeAST>
     - semanticImports : Map<String, SemanticModel>
+    - {static} PENDING : ThreadLocal<List<PendingGeneration>>
+    - {static} IMPORT_DEPTH : ThreadLocal<Integer>
     + PigLatinCompiler()
     + buildAst(ParseTree, String) : ProgramNodeAST
     + displayName() : String
@@ -533,6 +540,13 @@ package "com.compi.backend.languages" {
     + loadImports(ProgramNodeAST, SymbolTable, C3DGenerator, List<CompilationError>, List<String>) : List<String>
     + parse(String, List<CompilationError>) : ParseTree
     - compileImport(ImportNodeAST, File, String, SymbolTable, C3DGenerator, List<CompilationError>, List<String>, List<String>) : void
+    - flushPending(SymbolTable, C3DGenerator) : void
+  }
+  class PendingGeneration <<record>> {
+    - compiler : LanguageCompiler
+    - ast : ProgramNodeAST
+    + compiler() : LanguageCompiler
+    + ast() : ProgramNodeAST
   }
   class YCompiler {
     + YCompiler()
@@ -600,10 +614,12 @@ package "com.compi.backend.languages.zetariano" {
     # buildRule(String, ParserRuleContext) : ASTNode
     # tokenName(TerminalNode) : String
     - assignment(ParserRuleContext) : ASTNode
+    - accessOf(ParserRuleContext) : AccessModifier
     - call(ParserRuleContext) : ASTNode
     - callable(ParserRuleContext) : ASTNode
     - conditional(ParserRuleContext) : ASTNode
     - declaration(ParserRuleContext) : ASTNode
+    - memberAccess(ParserRuleContext) : ASTNode
   }
 }
 package "com.compi.backend.ast.codegen" {
@@ -628,6 +644,7 @@ package "com.compi.backend.ast.codegen" {
     ~ enter(AbstractNodeAST) : void
     ~ type(ASTNode) : Type
     ~ symbol(ASTNode) : Symbol
+    - assignTypeTags() : void
     - result(String) : String
   }
   class AstMemoryEmitter {
@@ -656,8 +673,12 @@ package "com.compi.backend.ast.codegen" {
     ~ ternary(TernaryNodeAST) : String
     ~ unary(UnaryOperationNodeAST) : String
     - arithmetic(String, Type, Type) : QuadrupleOp
+    - dispatch(CallNodeAST, String, Map<Integer, String>, int) : String
+    - isDescendant(Symbol, Symbol) : boolean
+    - label(Symbol) : String
     - operation(QuadrupleOp, String, String) : String
     - text(String) : String
+    - virtualTargets(Symbol, Symbol, int) : Map<Integer, String>
   }
   class AstAggregateEmitter {
     - g : AstCodeGenerator
@@ -738,6 +759,15 @@ package "com.compi.backend.ast" {
   abstract AbstractDefinitionNodeAST {
     # AbstractDefinitionNodeAST(int, int)
   }
+  enum AccessModifier {
+    + {static} PUBLIC : AccessModifier
+    + {static} PRIVATE : AccessModifier
+    + {static} PROTECTED : AccessModifier
+    + {static} DEFAULT : AccessModifier
+    + {static} from(String) : AccessModifier
+    + {static} valueOf(String) : AccessModifier
+    + {static} values() : AccessModifier[]
+  }
 }
 package "com.compi.backend.ast.semantic" {
   class AstSemanticAnalyzer {
@@ -758,6 +788,11 @@ package "com.compi.backend.ast.semantic" {
     + visit(ProgramNodeAST) : Type
     + visit(DeclarationNodeAST) : Type
     + visit(CallNodeAST) : Type
+    ~ assignable(Type, Type) : boolean
+    ~ checkAccess(Symbol, ASTNode) : void
+    ~ inheritedField(Symbol, String) : Symbol
+    ~ isSubclass(Symbol, Symbol) : boolean
+    ~ subclassOf(Type, Type) : boolean
   }
   class AstExpressionAnalyzer {
     - a : AstSemanticAnalyzer
@@ -794,9 +829,17 @@ package "com.compi.backend.ast.semantic" {
     ~ methodBody(MethodDefinitionNodeAST) : void
     ~ registerProgram(ProgramNodeAST) : void
     ~ structure(StructDefinitionNodeAST) : void
+    - accessOf(AbstractNodeAST) : String
     - body(Symbol, String, int, AbstractNodeAST, AbstractStatementNodeAST) : void
+    - inheritedField(Symbol, String) : Symbol
+    - inheritedFieldCount(Symbol) : int
+    - linkParents(ProgramNodeAST) : void
+    - ownField(Symbol, String) : Symbol
     - publishFields(ClassDefinitionNodeAST) : void
     - registerClassFields(ClassDefinitionNodeAST) : void
+    - registerClassMethods(ClassDefinitionNodeAST) : void
+    - registerMethod(String, Type, SymbolCategory, List<ParameterNodeAST>, AbstractNodeAST) : void
+    - validateHierarchy(ProgramNodeAST) : void
   }
   class SemanticModel {
     - types : Map<ASTNode, Type>
@@ -1216,14 +1259,17 @@ package "com.compi.backend.ast.decl" {
   }
   class ClassDefinitionNodeAST {
     - name : String
+    - parentName : String
     - members : List<AbstractNodeAST>
     - publicClass : boolean
     + ClassDefinitionNodeAST(int, int, String, List<AbstractNodeAST>)
     + ClassDefinitionNodeAST(int, int, String, List<AbstractNodeAST>, boolean)
+    + ClassDefinitionNodeAST(int, int, String, String, List<AbstractNodeAST>, boolean)
     + accept(ASTVisitor<?>) : void
     + children() : List<ASTNode>
     + members() : List<AbstractNodeAST>
     + name() : String
+    + parentName() : String
     + publicClass() : boolean
   }
   class MethodDefinitionNodeAST {
@@ -1231,11 +1277,16 @@ package "com.compi.backend.ast.decl" {
     - name : String
     - parameters : List<ParameterNodeAST>
     - body : AbstractStatementNodeAST
+    - access : AccessModifier
+    - override : boolean
     + MethodDefinitionNodeAST(int, int, Type, String, List<ParameterNodeAST>, AbstractStatementNodeAST)
+    + MethodDefinitionNodeAST(int, int, Type, String, List<ParameterNodeAST>, AbstractStatementNodeAST, AccessModifier, boolean)
     + accept(ASTVisitor<?>) : void
+    + access() : AccessModifier
     + body() : AbstractStatementNodeAST
     + children() : List<ASTNode>
     + name() : String
+    + override() : boolean
     + parameters() : List<ParameterNodeAST>
     + returnType() : Type
   }
@@ -1243,9 +1294,12 @@ package "com.compi.backend.ast.decl" {
     - parameters : List<ParameterNodeAST>
     - body : AbstractStatementNodeAST
     - name : String
+    - access : AccessModifier
     + ConstructorDefinitionNodeAST(int, int, List<ParameterNodeAST>, AbstractStatementNodeAST)
     + ConstructorDefinitionNodeAST(int, int, String, List<ParameterNodeAST>, AbstractStatementNodeAST)
+    + ConstructorDefinitionNodeAST(int, int, String, List<ParameterNodeAST>, AbstractStatementNodeAST, AccessModifier)
     + accept(ASTVisitor<?>) : void
+    + access() : AccessModifier
     + body() : AbstractStatementNodeAST
     + children() : List<ASTNode>
     + name() : String
@@ -1256,8 +1310,11 @@ package "com.compi.backend.ast.decl" {
     - name : String
     - dimensions : List<AbstractExpressionNodeAST>
     - initializer : AbstractExpressionNodeAST
+    - access : AccessModifier
     + AttributeDefinitionNodeAST(int, int, Type, String, List<AbstractExpressionNodeAST>, AbstractExpressionNodeAST)
+    + AttributeDefinitionNodeAST(int, int, Type, String, List<AbstractExpressionNodeAST>, AbstractExpressionNodeAST, AccessModifier)
     + accept(ASTVisitor<?>) : void
+    + access() : AccessModifier
     + children() : List<ASTNode>
     + dimensions() : List<AbstractExpressionNodeAST>
     + initializer() : AbstractExpressionNodeAST
@@ -1292,6 +1349,7 @@ package "com.compi.backend.symbols" {
     + resolve(String) : Symbol
     + scopeOf(ASTNode) : Scope
     + getAllSymbols() : List<Symbol>
+    + getClasses() : Collection<Symbol>
   }
   class Scope {
     - name : String
@@ -1319,6 +1377,10 @@ package "com.compi.backend.symbols" {
     - parameters : List<Symbol>
     - returnType : Type
     - members : List<Symbol>
+    - parentClass : Symbol
+    - ownerClass : Symbol
+    - typeTag : int
+    - access : String
     - line : int
     - column : int
     - scope : String
@@ -1331,6 +1393,8 @@ package "com.compi.backend.symbols" {
     + addParameter(Symbol) : void
     + getMember(String) : Symbol
     + getCallable(String, int) : Symbol
+    + resolveMethod(String, int) : Symbol
+    + getInheritedMethod(String, int) : Symbol
     + getStorageName() : String
     + inFile(String) : Symbol
     + inLanguage(String) : Symbol
@@ -1526,6 +1590,8 @@ package "com.compi.backend.c3d" {
     + {static} STACK_GET : QuadrupleOp
     + {static} HEAP_SET : QuadrupleOp
     + {static} HEAP_GET : QuadrupleOp
+    + {static} TYPE_SET : QuadrupleOp
+    + {static} TYPE_GET : QuadrupleOp
     + {static} SET_P : QuadrupleOp
     + {static} GET_P : QuadrupleOp
     + {static} SET_H : QuadrupleOp
@@ -1620,6 +1686,7 @@ package "com.compi.backend.c3d" {
     - HeapRuntime()
     + {static} allocateObject(C3DGenerator, Symbol) : String
     + {static} definition(SymbolTable, Type) : Symbol
+    + {static} fieldCount(Symbol) : int
     + {static} fieldOffset(Symbol, String) : int
     + {static} read(C3DGenerator, String) : String
   }
@@ -1636,6 +1703,112 @@ package "com.compi.backend.c3d" {
     + {static} QUADRUPLES : Mode
     + {static} valueOf(String) : Mode
     + {static} values() : Mode[]
+  }
+}
+package "com.compi.backend.riscv" {
+  class RiscvAssembler <<fachada>> {
+    - RiscvAssembler()
+    + {static} generateAssembly(List<Quadruple>, SymbolTable) : String
+  }
+  class RiscvTranslator {
+    - ctx : RiscvContext
+    - flow : RiscvFlow
+    - arithmetic : RiscvArithmetic
+    - memory : RiscvMemory
+    - runtime : RiscvRuntime
+    ~ RiscvTranslator(List<Quadruple>, SymbolTable)
+    ~ build() : String
+    - generateBody() : void
+    - emitFunctions() : void
+    - emitOne(Quadruple) : void
+    - hasFunctions() : boolean
+    - dataSection() : String
+    - textSection() : String
+  }
+  class RiscvLayout {
+    ~ {static} ENTRY : String
+    ~ bodies : Map<String, List<Quadruple>>
+    ~ signatures : Map<String, List<String>>
+    ~ slots : Map<String, Map<String, Integer>>
+    ~ frames : Map<String, Integer>
+    ~ globals : Map<String, Integer>
+    ~ RiscvLayout(List<Quadruple>, SymbolTable)
+    ~ frame(String) : int
+    ~ slot(String, String) : int
+    ~ {static} isGlobal(String) : boolean
+    ~ {static} isLocal(String) : boolean
+    ~ {static} isTemp(String) : boolean
+    ~ {static} label(String) : String
+  }
+  class RiscvAccess {
+    - ctx : RiscvContext
+    ~ RiscvAccess(RiscvContext)
+    ~ load(String, String) : void
+    ~ store(String, String) : void
+    ~ loadConstant(String, String) : void
+    ~ addressOf(String) : void
+    ~ frameAddress(int) : void
+    ~ frameLoad(int, String) : void
+    ~ frameStore(int, String) : void
+    ~ heapAppendInt(String) : void
+    ~ heapAppendDouble(String) : void
+    ~ heapAppendImmediate(int) : void
+  }
+  class RiscvConstants {
+    - labels : Map<String, String>
+    ~ {static} isNumeric(String) : boolean
+    ~ label(String) : String
+    ~ section() : String
+  }
+  class RiscvContext {
+    ~ out : RiscvWriter
+    ~ layout : RiscvLayout
+    ~ constants : RiscvConstants
+    ~ access : RiscvAccess
+    ~ pending : List<String>
+    ~ callSites : List<Integer>
+    ~ function : String
+    ~ returnValueSet : boolean
+    ~ uid() : String
+  }
+  class RiscvWriter {
+    ~ line(String) : void
+    ~ label(String) : void
+    ~ content() : String
+  }
+  class RiscvFlow {
+    - ctx : RiscvContext
+    - access : RiscvAccess
+    - runtime : RiscvRuntime
+    ~ control(Quadruple) : void
+    ~ function(Quadruple) : void
+    ~ doReturn() : void
+    ~ dispatch() : void
+  }
+  class RiscvArithmetic {
+    - ctx : RiscvContext
+    - access : RiscvAccess
+    - runtime : RiscvRuntime
+    ~ assign(Quadruple) : void
+    ~ operation(Quadruple) : void
+    ~ concat(Quadruple) : void
+  }
+  class RiscvMemory {
+    - ctx : RiscvContext
+    - access : RiscvAccess
+    ~ operation(Quadruple) : void
+    ~ simple(Quadruple) : void
+  }
+  class RiscvRuntime {
+    - ctx : RiscvContext
+    - access : RiscvAccess
+    ~ isRuntime(String) : boolean
+    ~ call(String, String) : void
+    ~ writeString(String, String) : void
+    ~ printStringOps(Quadruple) : void
+    ~ readText(String) : void
+    ~ readChar(String) : void
+    ~ numberToText(String, String) : void
   }
 }
 package "com.compi.backend.errors" {
@@ -1818,6 +1991,7 @@ Compiler ..> ASTDotGenerator
 Compiler o-- ProgramNodeAST : principal e importados
 Compiler ..> ParseTrace
 Compiler ..> CCodeEmitter
+Compiler ..> RiscvAssembler : módulo nuevo, independiente del C
 Compiler ..> StackSimulator
 AbstractLanguageCompiler ..|> LanguageCompiler
 PigLatinCompiler --|> AbstractLanguageCompiler
@@ -1939,13 +2113,32 @@ TypeEntry o-- Type
 TypeEntry ..> TypeEntry : tipo base / padre por ID
 Scope o-- Symbol
 Symbol o-- Type
+Symbol o-- Symbol : superclase / clase dueña
 Type ..> DataType
 Symbol ..> SymbolCategory
+Symbol ..> AccessModifier : visibilidad declarada
+PigLatinCompiler o-- PendingGeneration : generación diferida
+MethodDefinitionNodeAST ..> AccessModifier
+ConstructorDefinitionNodeAST ..> AccessModifier
+AttributeDefinitionNodeAST ..> AccessModifier
 C3DGenerator o-- Quadruple
 Quadruple ..> QuadrupleOp
 IntermediateCodeManager o-- Triplet
 CCodeEmitter ..> FlatEmitter : delega
 FlatEmitter *-- FlatLayout
+RiscvAssembler ..> RiscvTranslator : delega
+RiscvTranslator *-- RiscvContext
+RiscvContext *-- RiscvLayout
+RiscvContext *-- RiscvWriter
+RiscvContext *-- RiscvConstants
+RiscvContext *-- RiscvAccess
+RiscvTranslator *-- RiscvFlow
+RiscvTranslator *-- RiscvArithmetic
+RiscvTranslator *-- RiscvMemory
+RiscvTranslator *-- RiscvRuntime
+RiscvFlow ..> RiscvLayout : etiquetas de funciones
+RiscvAccess ..> RiscvConstants
+RiscvAccess ..> RiscvLayout : offsets de frame y globales
 FlatEmitter ..> Quadruple
 FlatLayout ..> SymbolTable
 ArrayRuntime ..> C3DGenerator

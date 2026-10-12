@@ -18,6 +18,7 @@ public class ConsoleDock extends JPanel {
         QUADRUPLE("Cuartetas", null),
         C3D("Código 3D", null),
         C_CODE("Código C", null),
+        ASSEMBLY("Ensamblador", null),
         SUMMARY("Resumen", null);
 
         private final String title;
@@ -43,6 +44,7 @@ public class ConsoleDock extends JPanel {
     private final JTextArea quadruplesArea = area();
     private final JTextArea c3dArea = area();
     private final JTextArea cCodeArea = area();
+    private final JTextArea assemblyArea = area();
     private final JTextArea summaryArea = area();
 
     private final JLabel statusLabel = new JLabel(" ");
@@ -59,6 +61,7 @@ public class ConsoleDock extends JPanel {
         tabs.addTab(View.QUADRUPLE.title(), new Scroller(quadruplesArea));
         tabs.addTab(View.C3D.title(), new Scroller(c3dArea));
         tabs.addTab(View.C_CODE.title(), new Scroller(cCodeArea));
+        tabs.addTab(View.ASSEMBLY.title(), new Scroller(assemblyArea));
         tabs.addTab(View.SUMMARY.title(), new Scroller(summaryArea));
 
         add(tabs, BorderLayout.CENTER);
@@ -123,6 +126,10 @@ public class ConsoleDock extends JPanel {
         set(cCodeArea, text);
     }
 
+    public void setAssembly(String text) {
+        set(assemblyArea, text);
+    }
+
     public void setSummary(String text) {
         set(summaryArea, text);
     }
@@ -174,6 +181,10 @@ public class ConsoleDock extends JPanel {
         return cCodeArea;
     }
 
+    public JTextArea getAssemblyArea() {
+        return assemblyArea;
+    }
+
     public JTextArea getSummaryArea() {
         return summaryArea;
     }
@@ -183,7 +194,8 @@ public class ConsoleDock extends JPanel {
     }
 
     private JTextArea[] all() {
-        return new JTextArea[]{consoleArea, tripletsArea, quadruplesArea, c3dArea, cCodeArea, summaryArea};
+        return new JTextArea[]{consoleArea, tripletsArea, quadruplesArea, c3dArea, cCodeArea,
+                assemblyArea, summaryArea};
     }
 
     private static void set(JTextArea area, String text) {

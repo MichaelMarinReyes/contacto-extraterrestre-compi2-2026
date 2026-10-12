@@ -29,7 +29,8 @@ final class CompilationActions {
                               String astDot, List<Symbol> symbols, List<TypeEntry> types, List<ParseStep> steps,
                               List<CompilationError> errors, int quadruples, int triplets,
                               String tripletsCode, String quadruplesCode,
-                              String c3dCode, String cCode, String translated, List<String> imports) { }
+                              String c3dCode, String cCode, String riscvCode,
+                              String translated, List<String> imports) { }
 
     CompilationActions(MainWindow window) {
         this.window = window;
@@ -91,7 +92,7 @@ final class CompilationActions {
                 CompilationError error = new CompilationError(ErrorType.SEMANTIC,
                         "No se pudo leer el archivo: " + e.getMessage(), -1, -1).inFile(file.getName());
                 return new FileResult(file, language, false, "", List.of(), List.of(), List.of(), List.of(error),
-                        0, 0, "", "", "", "", "", List.of());
+                        0, 0, "", "", "", "", "", "", List.of());
             }
         }
         boolean ok = compiler.compile(source, language, file.getAbsolutePath());
@@ -105,7 +106,8 @@ final class CompilationActions {
                 compiler.getTypes(), new ArrayList<>(compiler.getParseSteps()), errors,
                 compiler.getQuadrupleList().size(), compiler.getIcm().getTriplets().size(),
                 compiler.getTriplets(), compiler.getQuadruples(), compiler.getC3DCode(),
-                compiler.getCCode(), compiler.getTranslatedCode(), compiler.getImportedFiles());
+                compiler.getCCode(), compiler.getRiscvCode(), compiler.getTranslatedCode(),
+                compiler.getImportedFiles());
     }
 
     private void publishResults(List<FileResult> results) {
@@ -119,7 +121,7 @@ final class CompilationActions {
         publishToolResults(focus, aggregatedSymbols(results), errors);
         publishCode(focus, errors);
         publishStatus(results, errors);
-        String warning = errors.isEmpty() ? writeCFile(focus) : "";
+        String warning = errors.isEmpty() ? writeArtifacts(focus) : "";
         window.getConsoleDock().appendConsole(buildReport(results, errors, focus));
         window.getConsoleDock().appendConsole(warning);
     }
@@ -145,6 +147,7 @@ final class CompilationActions {
         console.setQuadruples(focus == null ? "" : focus.quadruplesCode());
         console.setC3D(focus == null ? "" : focus.c3dCode());
         console.setCCode(focus == null ? "" : focus.cCode());
+        console.setAssembly(focus == null ? "" : focus.riscvCode());
         console.setSummary(focus == null ? "" : focus.translated());
         console.setStatus("Modo de generación de C: " + TopToolbar.modeLabel(currentCMode));
         window.getStatusBar().setResult(errors.isEmpty(), errors.size());
@@ -179,6 +182,29 @@ final class CompilationActions {
         } catch (IOException e) {
             return "\nNo se pudo escribir el C en la raiz del proyecto: " + e.getMessage() + "\n";
         }
+    }
+
+    private String writeArtifacts(FileResult principal) {
+        return writeCFile(principal) + writeAssemblyFile(principal);
+    }
+
+    private String writeAssemblyFile(FileResult principal) {
+        File container = window.currentContainer();
+        if (container == null) container = principal.file().getAbsoluteFile().getParentFile();
+        if (!principal.ok() || principal.riscvCode() == null || principal.riscvCode().isBlank()) return "";
+        String name = principal.file().getName();
+        int point = name.lastIndexOf('.');
+        File target = new File(container, (point > 0 ? name.substring(0, point) : name) + ".s");
+        try {
+            Files.writeString(target.toPath(), principal.riscvCode());
+            return "\nEnsamblador RISC-V generado: " + target.getPath() + "\n";
+        } catch (IOException e) {
+            return "\nNo se pudo escribir el ensamblador en la raiz del proyecto: " + e.getMessage() + "\n";
+        }
+    }
+
+    void setRiscvEnabled(boolean enabled) {
+        compiler.setRiscvEnabled(enabled);
     }
 
     void clearResults() {
