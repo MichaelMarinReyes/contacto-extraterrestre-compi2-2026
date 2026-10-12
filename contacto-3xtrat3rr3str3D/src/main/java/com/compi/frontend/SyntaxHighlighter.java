@@ -42,7 +42,7 @@ public class SyntaxHighlighter {
                         "facere", "per", "perge", "interrumpe", "actio", "ratio", "reddere",
                         "import", "novus", "MAIOR", "VARIABILES", "MUNERA"),
                 List.of("numerus", "textum", "decimalis", "littera"),
-                List.of("verum", "falsus")));
+                List.of("verum", "falsus", "null")));
 
         languages.put("y", new Language(
                 List.of("definir", "estructura", "si", "entonces", "sino", "contrario", "elegir",
@@ -52,8 +52,10 @@ public class SyntaxHighlighter {
                 List.of("verdadero", "falso")));
 
         languages.put("zet", new Language(
-                List.of("public", "private", "protected", "class", "return", "new", "if", "else",
-                        "while", "for", "read", "print", "void", "this", "static"),
+                List.of("public", "private", "protected", "extends", "class", "return", "new",
+                        "if", "else", "switch", "case", "default", "break", "continue",
+                        "while", "for", "do", "print", "println", "read", "readln",
+                        "void", "this", "static"),
                 List.of("entero", "decimalis", "numerus", "textum", "littera", "boolean", "double",
                         "float", "int", "char", "String"),
                 List.of("verdadero", "falso", "true", "false", "null", "este")));
@@ -151,6 +153,8 @@ public class SyntaxHighlighter {
                 paint(doc, text, "\\b(VARIABILES|MUNERA|MAIOR)\\b", "constant");
             } else if ("y".equals(languageId)) {
                 paint(doc, text, "(?m)^\\s*%\\w+", "constant");
+            } else if ("zet".equals(languageId)) {
+                paint(doc, text, "@Override\\b", "keyword");
             }
 
             Language lang = languages.get(languageId);
