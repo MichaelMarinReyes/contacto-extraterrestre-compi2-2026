@@ -1,10 +1,10 @@
 package com.compi.backend.languages;
 
+import com.compi.backend.ast.semantic.SemanticModel;
+import com.compi.backend.ast.statements.ProgramNodeAST;
 import com.compi.backend.c3d.C3DGenerator;
 import com.compi.backend.errors.CompilationError;
 import com.compi.backend.symbols.SymbolTable;
-import com.compi.backend.ast.stmt.ProgramNodeAST;
-import com.compi.backend.ast.semantic.SemanticModel;
 import org.antlr.v4.runtime.Vocabulary;
 import org.antlr.v4.runtime.tree.ParseTree;
 

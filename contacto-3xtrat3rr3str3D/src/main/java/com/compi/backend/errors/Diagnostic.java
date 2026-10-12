@@ -1,14 +1,17 @@
 package com.compi.backend.errors;
 
+import org.antlr.v4.runtime.Token;
+import org.antlr.v4.runtime.Vocabulary;
+
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-import org.antlr.v4.runtime.Token;
-import org.antlr.v4.runtime.Vocabulary;
 
-/** Traduce los diagnósticos léxicos y sintácticos de ANTLR al español. */
+/**
+ * Traduce los diagnósticos léxicos y sintácticos de ANTLR al español.
+ */
 public final class Diagnostic {
 
     private static final char OPEN_QUOTE = '«';
@@ -42,9 +45,6 @@ public final class Diagnostic {
             "CARACTER", "un carácter entre comillas simples",
             "NUEVA_LINEA", "un salto de línea",
             "LITTERA", "una letra");
-
-    private Diagnostic() {
-    }
 
     public static String fromAntlr(Vocabulary vocabulary, String msg, Token token) {
         if (msg == null || msg.isBlank()) {

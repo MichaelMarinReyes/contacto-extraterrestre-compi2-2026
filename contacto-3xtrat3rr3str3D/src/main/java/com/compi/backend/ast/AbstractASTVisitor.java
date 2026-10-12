@@ -1,51 +1,15 @@
 package com.compi.backend.ast;
 
-import com.compi.backend.ast.decl.AttributeDefinitionNodeAST;
-import com.compi.backend.ast.decl.ClassDefinitionNodeAST;
-import com.compi.backend.ast.decl.ConstructorDefinitionNodeAST;
-import com.compi.backend.ast.decl.FieldDefinitionNodeAST;
-import com.compi.backend.ast.decl.FunctionDefinitionNodeAST;
-import com.compi.backend.ast.decl.MethodDefinitionNodeAST;
-import com.compi.backend.ast.decl.ParameterNodeAST;
-import com.compi.backend.ast.decl.StructDefinitionNodeAST;
-import com.compi.backend.ast.expr.ArrayLiteralNodeAST;
-import com.compi.backend.ast.expr.AssignmentExpressionNodeAST;
-import com.compi.backend.ast.expr.BinaryOperationNodeAST;
-import com.compi.backend.ast.expr.CallNodeAST;
-import com.compi.backend.ast.expr.IdentifierNodeAST;
-import com.compi.backend.ast.expr.IncrementNodeAST;
-import com.compi.backend.ast.expr.IndexNodeAST;
-import com.compi.backend.ast.expr.InstanceInitNodeAST;
-import com.compi.backend.ast.expr.LiteralNodeAST;
-import com.compi.backend.ast.expr.MemberAccessNodeAST;
-import com.compi.backend.ast.expr.NewArrayNodeAST;
-import com.compi.backend.ast.expr.NewObjectNodeAST;
-import com.compi.backend.ast.expr.ReadExpressionNodeAST;
-import com.compi.backend.ast.expr.TernaryNodeAST;
-import com.compi.backend.ast.expr.UnaryOperationNodeAST;
-import com.compi.backend.ast.stmt.AssignmentNodeAST;
-import com.compi.backend.ast.stmt.BlockNodeAST;
-import com.compi.backend.ast.stmt.BreakNodeAST;
-import com.compi.backend.ast.stmt.ContinueNodeAST;
-import com.compi.backend.ast.stmt.DeclarationNodeAST;
-import com.compi.backend.ast.stmt.DoWhileNodeAST;
-import com.compi.backend.ast.stmt.ElseIfNodeAST;
-import com.compi.backend.ast.stmt.ExpressionStatementNodeAST;
-import com.compi.backend.ast.stmt.ForNodeAST;
-import com.compi.backend.ast.stmt.IfNodeAST;
-import com.compi.backend.ast.stmt.ImportNodeAST;
-import com.compi.backend.ast.stmt.PrintNodeAST;
-import com.compi.backend.ast.stmt.ProgramNodeAST;
-import com.compi.backend.ast.stmt.ReadStatementNodeAST;
-import com.compi.backend.ast.stmt.ReturnNodeAST;
-import com.compi.backend.ast.stmt.SwitchCaseNodeAST;
-import com.compi.backend.ast.stmt.SwitchNodeAST;
-import com.compi.backend.ast.stmt.WhileNodeAST;
+import com.compi.backend.ast.declarations.*;
+import com.compi.backend.ast.exprressions.*;
+import com.compi.backend.ast.statements.*;
 
-/** Implementacion por defecto: cada visita devuelve {@code null}. */
+/**
+ * Implementación por defecto: cada visita devuelve {@code null}.
+ */
 public abstract class AbstractASTVisitor<R> implements ASTVisitor<R> {
     @Override
-    public R visit(com.compi.backend.ast.stmt.DefinitionStatementNodeAST node) {
+    public R visit(com.compi.backend.ast.statements.DefinitionStatementNodeAST node) {
         return null;
     }
 

@@ -17,14 +17,18 @@ public final class ArrayRuntime {
     }
 
     public static String address(C3DGenerator c3d, String base, List<String> indices,
-                                   int[] sizes) {
+                                 int[] sizes) {
         String address = base;
         for (int d = 0; d < indices.size(); d++) {
 
             int step = productFrom(sizes, d + 1);
             String addend = indices.get(d);
             boolean dynamic = false;
-            for (int next = d + 1; next < sizes.length; next++) if (sizes[next] <= 0) dynamic = true;
+            for (int next = d + 1; next < sizes.length; next++)
+                if (sizes[next] <= 0) {
+                    dynamic = true;
+                    break;
+                }
             if (dynamic) {
                 for (int next = d + 1; next < sizes.length; next++) {
                     String header = add(c3d, base, next - sizes.length);
@@ -54,7 +58,9 @@ public final class ArrayRuntime {
         return valor;
     }
 
-    /** Guarda las dimensiones antes de los datos; la referencia apunta al primer elemento. */
+    /**
+     * Guarda las dimensiones antes de los datos; la referencia apunta al primer elemento.
+     */
     public static String allocateArray(C3DGenerator generator, int[] sizes) {
         return allocateArray(generator, java.util.Arrays.stream(sizes).mapToObj(String::valueOf).toList());
     }
@@ -84,17 +90,17 @@ public final class ArrayRuntime {
     }
 
     public static void write(C3DGenerator c3d, String base, List<String> indices,
-                                int[] sizes, String valor) {
+                             int[] sizes, String valor) {
         c3d.emit(QuadrupleOp.HEAP_SET, address(c3d, base, indices, sizes), valor, null);
     }
 
     public static void writeConstant(C3DGenerator c3d, String base, int[] indices,
-                                         int[] sizes, String valor) {
+                                     int[] sizes, String valor) {
         c3d.emit(QuadrupleOp.HEAP_SET, constantAddress(c3d, base, indices, sizes), valor, null);
     }
 
     public static String constantAddress(C3DGenerator c3d, String base, int[] indices,
-                                             int[] sizes) {
+                                         int[] sizes) {
         int offset = 0;
         for (int d = 0; d < indices.length; d++) {
             offset += indices[d] * productFrom(sizes, d + 1);

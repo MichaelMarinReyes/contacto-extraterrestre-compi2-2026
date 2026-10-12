@@ -1,13 +1,11 @@
 package com.compi.backend.languages;
-import com.compi.backend.ast.stmt.ProgramNodeAST;
-import com.compi.backend.languages.y.YAstBuilder;
 
 import com.compi.YParser;
-import com.compi.backend.c3d.C3DGenerator;
+import com.compi.backend.ast.statements.ProgramNodeAST;
 import com.compi.backend.errors.CompilationError;
 import com.compi.backend.errors.ErrorType;
+import com.compi.backend.languages.y.YAstBuilder;
 import com.compi.backend.languages.y.YIndentLexer;
-import com.compi.backend.symbols.SymbolTable;
 import org.antlr.v4.runtime.CharStreams;
 import org.antlr.v4.runtime.CommonTokenStream;
 import org.antlr.v4.runtime.tree.ParseTree;

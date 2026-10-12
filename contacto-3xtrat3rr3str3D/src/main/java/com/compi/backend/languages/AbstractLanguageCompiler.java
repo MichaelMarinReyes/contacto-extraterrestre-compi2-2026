@@ -1,15 +1,15 @@
 package com.compi.backend.languages;
 
+import com.compi.backend.ast.build.AbstractAstBuilder;
+import com.compi.backend.ast.codegen.AstCodeGenerator;
+import com.compi.backend.ast.semantic.AstSemanticAnalyzer;
+import com.compi.backend.ast.semantic.SemanticModel;
+import com.compi.backend.ast.statements.ProgramNodeAST;
+import com.compi.backend.c3d.C3DGenerator;
 import com.compi.backend.errors.CompilationError;
 import com.compi.backend.errors.Diagnostic;
 import com.compi.backend.errors.ErrorType;
 import com.compi.backend.symbols.SymbolTable;
-import com.compi.backend.ast.build.AbstractAstBuilder;
-import com.compi.backend.ast.stmt.ProgramNodeAST;
-import com.compi.backend.ast.semantic.AstSemanticAnalyzer;
-import com.compi.backend.ast.semantic.SemanticModel;
-import com.compi.backend.ast.codegen.AstCodeGenerator;
-import com.compi.backend.c3d.C3DGenerator;
 import org.antlr.v4.runtime.*;
 import org.antlr.v4.runtime.tree.ParseTree;
 
@@ -18,6 +18,10 @@ import java.util.List;
 
 public abstract class AbstractLanguageCompiler implements LanguageCompiler {
     private SemanticModel semanticModel;
+    private File workingDirectory = new File(".");
+    private File projectDirectory = new File(".");
+    private Vocabulary vocabulary;
+    private String[] ruleNames;
 
     protected ProgramNodeAST constructAst(AbstractAstBuilder builder, ParseTree tree, String sourceFile) {
         var ast = builder.build(tree, sourceFile);
@@ -26,7 +30,9 @@ public abstract class AbstractLanguageCompiler implements LanguageCompiler {
     }
 
     @Override
-    public SemanticModel semanticModel() { return semanticModel; }
+    public SemanticModel semanticModel() {
+        return semanticModel;
+    }
 
     @Override
     public void analyze(ProgramNodeAST ast, SymbolTable symbols, List<CompilationError> errors) {
@@ -38,25 +44,23 @@ public abstract class AbstractLanguageCompiler implements LanguageCompiler {
     public void generateIntermediate(ProgramNodeAST ast, SymbolTable symbols, C3DGenerator generator) {
         if (ast != null) new AstCodeGenerator(symbols, semanticModel, generator, id()).generate(ast);
     }
-    private File workingDirectory = new File(".");
-    private File projectDirectory = new File(".");
-    private Vocabulary vocabulary;
-    private String[] ruleNames;
 
     protected File getWorkingDirectory() {
         return workingDirectory;
     }
 
-    protected File getProjectDirectory() { return projectDirectory; }
+    @Override
+    public void setWorkingDirectory(File directory) {
+        this.workingDirectory = directory == null ? new File(".") : directory;
+    }
+
+    protected File getProjectDirectory() {
+        return projectDirectory;
+    }
 
     @Override
     public void setProjectDirectory(File directory) {
         projectDirectory = directory == null ? workingDirectory : directory;
-    }
-
-    @Override
-    public void setWorkingDirectory(File directory) {
-        this.workingDirectory = directory == null ? new File(".") : directory;
     }
 
     @Override

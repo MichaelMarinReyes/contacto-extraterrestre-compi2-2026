@@ -45,7 +45,7 @@ public class TypeCompatibility {
         if (t1.isNumeric() && t2.isNumeric()) return Type.BOOLEAN;
 
         if ((t1.getDataType() == DataType.NULL && (t2.isClass() || t2.isArray() || t2.isStruct())) ||
-            (t2.getDataType() == DataType.NULL && (t1.isClass() || t1.isArray() || t1.isStruct()))) {
+                (t2.getDataType() == DataType.NULL && (t1.isClass() || t1.isArray() || t1.isStruct()))) {
             return Type.BOOLEAN;
         }
 

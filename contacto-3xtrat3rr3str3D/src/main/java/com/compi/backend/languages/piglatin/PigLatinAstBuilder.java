@@ -1,25 +1,36 @@
 package com.compi.backend.languages.piglatin;
 
 import com.compi.PigLatinParser;
-import com.compi.backend.ast.*;
+import com.compi.backend.ast.ASTNode;
+import com.compi.backend.ast.AbstractExpressionNodeAST;
+import com.compi.backend.ast.AbstractStatementNodeAST;
 import com.compi.backend.ast.build.AbstractAstBuilder;
-import com.compi.backend.ast.expr.*;
-import com.compi.backend.ast.stmt.*;
+import com.compi.backend.ast.exprressions.*;
+import com.compi.backend.ast.statements.*;
 import com.compi.backend.symbols.Type;
+import org.antlr.v4.runtime.ParserRuleContext;
+import org.antlr.v4.runtime.tree.ParseTree;
+import org.antlr.v4.runtime.tree.TerminalNode;
+
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
-import org.antlr.v4.runtime.ParserRuleContext;
-import org.antlr.v4.runtime.tree.*;
 
-/** Traduce la sintaxis de PigLatin a nodos compartidos del AST. */
+/**
+ * Traduce la sintaxis de PigLatin a nodos compartidos del AST.
+ */
 public class PigLatinAstBuilder extends AbstractAstBuilder {
-    public PigLatinAstBuilder() { super(PigLatinParser.ruleNames); }
-    @Override protected String tokenName(TerminalNode node) {
+    public PigLatinAstBuilder() {
+        super(PigLatinParser.ruleNames);
+    }
+
+    @Override
+    protected String tokenName(TerminalNode node) {
         return PigLatinParser.VOCABULARY.getSymbolicName(node.getSymbol().getType());
     }
 
-    @Override protected ASTNode buildRule(String rule, ParserRuleContext c) {
+    @Override
+    protected ASTNode buildRule(String rule, ParserRuleContext c) {
         return switch (rule) {
             case "init", "sentencia", "condiciones_per" -> wrapper(c);
             case "pig_latin" -> program(c);
@@ -33,13 +44,15 @@ public class PigLatinAstBuilder extends AbstractAstBuilder {
             case "ciclo_facere" -> new DoWhileNodeAST(line(c), col(c), block(c, "sentencia"), expr(c, "condicion"));
             case "ciclo_per" -> new ForNodeAST(line(c), col(c), statement(node(c, "inicializacion_per")),
                     expr(c, "condiciones_per"), statement(node(c, "incremento_per")), block(c, "sentencia"));
-            case "salto_sentencia" -> has(c, "perge") ? new ContinueNodeAST(line(c), col(c)) : new BreakNodeAST(line(c), col(c));
+            case "salto_sentencia" ->
+                    has(c, "perge") ? new ContinueNodeAST(line(c), col(c)) : new BreakNodeAST(line(c), col(c));
             case "expresion" -> fold(c, "producto", "suma_resta");
             case "producto" -> fold(c, "termino", "multiplicacion");
             case "termino", "primaria_logica" -> primary(c);
             case "condicion", "conjuncion", "negacion_logica" -> logical(c);
             case "acceso_miembro", "arreglo_acceso" -> access(c, "VARIABLE", "expresion");
-            case "llamada_funcion" -> new CallNodeAST(line(c), col(c), target(c), arguments(c, "argumentos", "expresion"), null);
+            case "llamada_funcion" ->
+                    new CallNodeAST(line(c), col(c), target(c), arguments(c, "argumentos", "expresion"), null);
             case "arreglo_literal", "elemento_arreglo", "elemento_arreglo_valor", "elemento_arreglo_struct" -> array(c);
             case "structura_instanciacion" -> instance(c);
             default -> throw new IllegalArgumentException("Regla PigLatin sin AST: " + rule);
@@ -120,7 +133,8 @@ public class PigLatinAstBuilder extends AbstractAstBuilder {
             List<ParserRuleContext> operands = all(c, "expresion");
             return binary(c, expr(operands.getFirst()), one(c, "operador_relacional").getText(), expr(operands.getLast()));
         }
-        if (has(c, "-") && one(c, "termino") != null) return new UnaryOperationNodeAST(line(c), col(c), "-", expr(c, "termino"));
+        if (has(c, "-") && one(c, "termino") != null)
+            return new UnaryOperationNodeAST(line(c), col(c), "-", expr(c, "termino"));
         if (!contexts(c).isEmpty()) return unwrap(c);
         if (!tokens(c, "VARIABLE").isEmpty()) return target(c);
         return literal(c, c.getText());

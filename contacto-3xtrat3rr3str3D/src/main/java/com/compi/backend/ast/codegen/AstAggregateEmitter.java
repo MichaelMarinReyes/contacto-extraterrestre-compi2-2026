@@ -1,16 +1,31 @@
 package com.compi.backend.ast.codegen;
 
 import com.compi.backend.ast.AbstractExpressionNodeAST;
-import com.compi.backend.ast.expr.*;
-import com.compi.backend.ast.stmt.DeclarationNodeAST;
-import com.compi.backend.c3d.*;
-import com.compi.backend.symbols.*;
+import com.compi.backend.ast.exprressions.ArrayLiteralNodeAST;
+import com.compi.backend.ast.exprressions.InstanceInitNodeAST;
+import com.compi.backend.ast.exprressions.NewObjectNodeAST;
+import com.compi.backend.ast.exprressions.ReadExpressionNodeAST;
+import com.compi.backend.ast.statements.DeclarationNodeAST;
+import com.compi.backend.c3d.ArrayRuntime;
+import com.compi.backend.c3d.FunctionRuntime;
+import com.compi.backend.c3d.HeapRuntime;
+import com.compi.backend.c3d.QuadrupleOp;
+import com.compi.backend.symbols.ArrayLiteral;
+import com.compi.backend.symbols.Symbol;
+import com.compi.backend.symbols.SymbolCategory;
+import com.compi.backend.symbols.Type;
+
 import java.util.List;
 
-/** Reserva y rellena agregados; cada campo guarda una referencia o un escalar. */
+/**
+ * Reserva y rellena agregados; cada campo guarda una referencia o un escalar.
+ */
 final class AstAggregateEmitter {
     private final AstCodeGenerator g;
-    AstAggregateEmitter(AstCodeGenerator generator) { g = generator; }
+
+    AstAggregateEmitter(AstCodeGenerator generator) {
+        g = generator;
+    }
 
     void declare(DeclarationNodeAST n) {
         Symbol symbol = g.symbol(n);
@@ -87,7 +102,8 @@ final class AstAggregateEmitter {
         Symbol owner = g.table.getClass(n.typeName());
         String base = HeapRuntime.allocateObject(g.c3d, owner);
         g.c3d.emit(QuadrupleOp.PARAM, base, null, null);
-        for (AbstractExpressionNodeAST arg : n.arguments()) g.c3d.emit(QuadrupleOp.PARAM, g.memory.capture(g.emit(arg)), null, null);
+        for (AbstractExpressionNodeAST arg : n.arguments())
+            g.c3d.emit(QuadrupleOp.PARAM, g.memory.capture(g.emit(arg)), null, null);
         g.c3d.emit(QuadrupleOp.CALL, FunctionRuntime.name(n.typeName(), g.symbol(n).getName(), n.arguments().size()),
                 String.valueOf(n.arguments().size() + 1), null);
         return base;

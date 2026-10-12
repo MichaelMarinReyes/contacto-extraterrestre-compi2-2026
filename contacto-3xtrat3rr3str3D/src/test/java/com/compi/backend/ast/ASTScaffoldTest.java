@@ -1,10 +1,10 @@
 package com.compi.backend.ast;
 
-import com.compi.backend.ast.expr.IdentifierNodeAST;
-import com.compi.backend.ast.expr.LiteralKind;
-import com.compi.backend.ast.expr.LiteralNodeAST;
-import com.compi.backend.ast.stmt.AssignmentNodeAST;
-import com.compi.backend.ast.stmt.ProgramNodeAST;
+import com.compi.backend.ast.exprressions.IdentifierNodeAST;
+import com.compi.backend.ast.exprressions.LiteralKind;
+import com.compi.backend.ast.exprressions.LiteralNodeAST;
+import com.compi.backend.ast.statements.AssignmentNodeAST;
+import com.compi.backend.ast.statements.ProgramNodeAST;
 import com.compi.backend.utils.ASTDotGenerator;
 import java.util.List;
 import org.junit.jupiter.api.Test;

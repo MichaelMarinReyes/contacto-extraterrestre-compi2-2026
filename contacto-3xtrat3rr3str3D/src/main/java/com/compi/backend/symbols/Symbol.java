@@ -65,7 +65,8 @@ public class Symbol {
     public Symbol getCallable(String memberName, int argumentCount) {
         for (Symbol member : members) {
             if (member.name.equals(memberName) && member.parameters.size() == argumentCount
-                    && (member.category == SymbolCategory.METHOD || member.category == SymbolCategory.CONSTRUCTOR)) return member;
+                    && (member.category == SymbolCategory.METHOD || member.category == SymbolCategory.CONSTRUCTOR))
+                return member;
         }
         return null;
     }
@@ -91,7 +92,9 @@ public class Symbol {
         return this;
     }
 
-    /** Identificador interno que distingue variables de ámbitos diferentes. */
+    /**
+     * Identificador interno que distingue variables de ámbitos diferentes.
+     */
     public String getStorageName() {
         if (isGlobal) return "g_" + name;
         return "v_" + (scope == null ? "local" : scope.replaceAll("[^A-Za-z0-9_]", "_"))

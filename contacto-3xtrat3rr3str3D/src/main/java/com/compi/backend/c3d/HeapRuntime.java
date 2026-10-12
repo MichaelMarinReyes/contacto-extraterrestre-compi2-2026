@@ -5,9 +5,12 @@ import com.compi.backend.symbols.SymbolCategory;
 import com.compi.backend.symbols.SymbolTable;
 import com.compi.backend.symbols.Type;
 
-/** Convención común: cada campo ocupa una celda y los agregados guardan referencias. */
+/**
+ * Convención común: cada campo ocupa una celda y los agregados guardan referencias.
+ */
 public final class HeapRuntime {
-    private HeapRuntime() { }
+    private HeapRuntime() {
+    }
 
     public static Symbol definition(SymbolTable symbols, Type type) {
         if (type == null) return null;

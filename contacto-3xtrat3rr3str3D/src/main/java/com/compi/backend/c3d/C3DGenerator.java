@@ -1,18 +1,15 @@
 package com.compi.backend.c3d;
 
-import java.util.ArrayList;
-import java.util.Deque;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Set;
+import java.util.*;
 
 public class C3DGenerator {
-    private int tempCounter = 0;
-    private int labelCounter = 1;
     private final List<Quadruple> quadruples = new ArrayList<>();
     private final Set<String> declaredTemps = new HashSet<>();
+    private int tempCounter = 0;
+    private int labelCounter = 1;
 
-    public C3DGenerator() {}
+    public C3DGenerator() {
+    }
 
     public String newTemp() {
         String t = "t" + (tempCounter++);

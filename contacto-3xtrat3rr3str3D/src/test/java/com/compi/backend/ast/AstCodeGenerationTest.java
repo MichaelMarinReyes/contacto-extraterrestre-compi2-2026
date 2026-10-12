@@ -2,8 +2,8 @@ package com.compi.backend.ast;
 
 import com.compi.backend.Compiler;
 import com.compi.backend.ast.codegen.AstCodeGenerator;
-import com.compi.backend.ast.expr.*;
-import com.compi.backend.ast.stmt.*;
+import com.compi.backend.ast.exprressions.*;
+import com.compi.backend.ast.statements.*;
 import com.compi.backend.ast.semantic.AstSemanticAnalyzer;
 import com.compi.backend.c3d.*;
 import com.compi.backend.errors.CompilationError;

@@ -1,18 +1,28 @@
 package com.compi.backend.ast.semantic;
 
-import com.compi.backend.ast.*;
-import com.compi.backend.ast.decl.AttributeDefinitionNodeAST;
-import com.compi.backend.ast.expr.*;
-import com.compi.backend.ast.stmt.*;
+import com.compi.backend.ast.ASTNode;
+import com.compi.backend.ast.AbstractExpressionNodeAST;
+import com.compi.backend.ast.AbstractStatementNodeAST;
+import com.compi.backend.ast.declarations.AttributeDefinitionNodeAST;
+import com.compi.backend.ast.exprressions.ArrayLiteralNodeAST;
+import com.compi.backend.ast.exprressions.InstanceInitNodeAST;
+import com.compi.backend.ast.exprressions.NewArrayNodeAST;
+import com.compi.backend.ast.statements.DeclarationNodeAST;
 import com.compi.backend.symbols.*;
+
 import java.math.BigInteger;
 import java.util.Arrays;
 import java.util.List;
 
-/** Declaraciones e inicializadores con comprobación de formas y límites. */
+/**
+ * Declaraciones e inicializadores con comprobación de formas y límites.
+ */
 final class AstDeclarationAnalyzer {
     private final AstSemanticAnalyzer a;
-    AstDeclarationAnalyzer(AstSemanticAnalyzer analyzer) { a = analyzer; }
+
+    AstDeclarationAnalyzer(AstSemanticAnalyzer analyzer) {
+        a = analyzer;
+    }
 
     void global(AbstractStatementNodeAST node) {
         if (node instanceof DeclarationNodeAST declaration) {
@@ -82,8 +92,7 @@ final class AstDeclarationAnalyzer {
                 positionalFields(array.elements(), owner, array);
                 type = expected;
             } else type = arrayLiteral(array, expected);
-        }
-        else return a.evaluate(node);
+        } else return a.evaluate(node);
         return a.result(node, type);
     }
 
@@ -101,9 +110,12 @@ final class AstDeclarationAnalyzer {
             Type type = initializer(element, expectedRow);
             Type scalar = type.isArray() ? type.getElementType() : type;
             int[] shape = type.isArray() ? type.getSizes() : new int[0];
-            if (i == 0) { rowType = scalar; rowShape = shape; }
-            else {
-                if (!Arrays.equals(rowShape, shape)) a.report("El arreglo contiene filas de tamaños desiguales", element);
+            if (i == 0) {
+                rowType = scalar;
+                rowShape = shape;
+            } else {
+                if (!Arrays.equals(rowShape, shape))
+                    a.report("El arreglo contiene filas de tamaños desiguales", element);
                 if (rowType.isNumeric() && scalar.isNumeric()) {
                     if (Type.DOUBLE.equals(scalar)) rowType = Type.DOUBLE;
                 } else if (Type.isKnown(rowType) && Type.isKnown(scalar) && !rowType.equals(scalar)) {
@@ -143,23 +155,32 @@ final class AstDeclarationAnalyzer {
         Type target = n.typeName().isEmpty() ? expected : a.resolveType(Type.structType(n.typeName()), n);
         Symbol owner = target.isStruct() ? a.table.getStruct(target.getCustomTypeName())
                 : target.isClass() ? a.table.getClass(target.getCustomTypeName()) : null;
-        if (owner == null) { a.report("El inicializador requiere una estructura o clase definida", n); return Type.UNKNOWN; }
+        if (owner == null) {
+            a.report("El inicializador requiere una estructura o clase definida", n);
+            return Type.UNKNOWN;
+        }
         a.model.symbol(n, owner);
         if (!n.positional().isEmpty()) {
             positionalFields(n.positional(), owner, n);
         }
         n.named().forEach((name, value) -> {
             Symbol field = owner.getMember(name);
-            if (field == null || field.getCategory() != SymbolCategory.FIELD) { a.report("El campo «" + name + "» no existe en «" + owner.getName() + "»", n); initializer(value, Type.UNKNOWN); }
-            else a.compatible(field.getType(), initializer(value, field.getType()), value);
+            if (field == null || field.getCategory() != SymbolCategory.FIELD) {
+                a.report("El campo «" + name + "» no existe en «" + owner.getName() + "»", n);
+                initializer(value, Type.UNKNOWN);
+            } else a.compatible(field.getType(), initializer(value, field.getType()), value);
         });
         return target;
     }
 
     private void positionalFields(List<AbstractExpressionNodeAST> values, Symbol owner, ASTNode node) {
-        if (owner == null) { a.report("El inicializador requiere un tipo definido", node); return; }
+        if (owner == null) {
+            a.report("El inicializador requiere un tipo definido", node);
+            return;
+        }
         List<Symbol> fields = owner.getMembers().stream().filter(field -> field.getCategory() == SymbolCategory.FIELD).toList();
-        if (values.size() != fields.size()) a.report("Cantidad de campos incompatible para «" + owner.getName() + "»", node);
+        if (values.size() != fields.size())
+            a.report("Cantidad de campos incompatible para «" + owner.getName() + "»", node);
         for (int i = 0; i < values.size(); i++) {
             Type field = i < fields.size() ? fields.get(i).getType() : Type.UNKNOWN;
             a.compatible(field, initializer(values.get(i), field), values.get(i));

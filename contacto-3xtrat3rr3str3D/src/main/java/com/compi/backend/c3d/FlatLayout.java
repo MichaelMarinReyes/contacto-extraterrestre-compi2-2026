@@ -3,12 +3,8 @@ package com.compi.backend.c3d;
 import com.compi.backend.symbols.Symbol;
 import com.compi.backend.symbols.SymbolCategory;
 import com.compi.backend.symbols.SymbolTable;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.LinkedHashMap;
-import java.util.LinkedHashSet;
-import java.util.List;
-import java.util.Map;
+
+import java.util.*;
 
 /**
  * Distribución de memoria del main plano: celdas globales, frames por función y
@@ -16,7 +12,9 @@ import java.util.Map;
  */
 final class FlatLayout {
 
-    /** Nombre de la función de entrada (cuerpo principal del programa). */
+    /**
+     * Nombre de la función de entrada (cuerpo principal del programa).
+     */
     static final String ENTRY = "main";
 
     final Map<String, List<Quadruple>> bodies = new LinkedHashMap<>();
@@ -30,6 +28,66 @@ final class FlatLayout {
         signatures.putAll(parametersByFunction(symbolTable));
         assignFrames();
         assignGlobals(quadruples);
+    }
+
+    private static LinkedHashSet<String> operandsOf(List<Quadruple> instructions) {
+        LinkedHashSet<String> operands = new LinkedHashSet<>();
+        for (Quadruple instruction : instructions) {
+            operands.addAll(instructionOperands(instruction));
+        }
+        return operands;
+    }
+
+    private static List<String> instructionOperands(Quadruple instruction) {
+        List<String> operands = new ArrayList<>();
+        if (instruction.getArg1() != null) operands.add(instruction.getArg1());
+        if (instruction.getArg2() != null) operands.add(instruction.getArg2());
+        if (instruction.getResult() != null) operands.add(instruction.getResult());
+        return operands;
+    }
+
+    static boolean isGlobal(String value) {
+        return value.startsWith("g_");
+    }
+
+    static boolean isTemp(String value) {
+        return value.matches("t[0-9]+");
+    }
+
+    static boolean isLocal(String value) {
+        return value.startsWith("v_");
+    }
+
+    /**
+     * Firmas de las funciones y métodos a partir de la tabla de símbolos.
+     */
+    static Map<String, List<String>> parametersByFunction(SymbolTable symbolTable) {
+        Map<String, List<String>> signatures = new LinkedHashMap<>();
+        if (symbolTable == null) {
+            return signatures;
+        }
+        for (Symbol symbol : symbolTable.getAllSymbols()) {
+            if (symbol.getCategory() == SymbolCategory.FUNCTION) {
+                signatures.put(symbol.getName(),
+                        symbol.getParameters().stream().map(Symbol::getStorageName).toList());
+            }
+            if (symbol.getCategory() != SymbolCategory.CLASS) {
+                continue;
+            }
+            for (Symbol method : symbol.getMembers()) {
+                String name = FunctionRuntime.name(symbol.getName(), method.getName(),
+                        method.getParameters().size());
+                String scope = (method.getCategory() == SymbolCategory.CONSTRUCTOR
+                        ? "constructor_" : "method_") + name;
+                List<String> parameters = new ArrayList<>();
+                symbolTable.getAllSymbols().stream()
+                        .filter(value -> "this".equals(value.getName()) && scope.equals(value.getScope()))
+                        .findFirst().ifPresent(value -> parameters.add(value.getStorageName()));
+                method.getParameters().forEach(value -> parameters.add(value.getStorageName()));
+                signatures.put(name, parameters);
+            }
+        }
+        return signatures;
     }
 
     private void split(List<Quadruple> quadruples) {
@@ -86,23 +144,9 @@ final class FlatLayout {
         }
     }
 
-    private static LinkedHashSet<String> operandsOf(List<Quadruple> instructions) {
-        LinkedHashSet<String> operands = new LinkedHashSet<>();
-        for (Quadruple instruction : instructions) {
-            operands.addAll(instructionOperands(instruction));
-        }
-        return operands;
-    }
-
-    private static List<String> instructionOperands(Quadruple instruction) {
-        List<String> operands = new ArrayList<>();
-        if (instruction.getArg1() != null) operands.add(instruction.getArg1());
-        if (instruction.getArg2() != null) operands.add(instruction.getArg2());
-        if (instruction.getResult() != null) operands.add(instruction.getResult());
-        return operands;
-    }
-
-    /** Traduce un operando a su expresión C dentro del frame de la función indicada. */
+    /**
+     * Traduce un operando a su expresión C dentro del frame de la función indicada.
+     */
     String operand(String function, String value) {
         if (value == null) {
             return "0";
@@ -120,47 +164,5 @@ final class FlatLayout {
 
     int frame(String function) {
         return frames.getOrDefault(function, 1);
-    }
-
-    static boolean isGlobal(String value) {
-        return value.startsWith("g_");
-    }
-
-    static boolean isTemp(String value) {
-        return value.matches("t[0-9]+");
-    }
-
-    static boolean isLocal(String value) {
-        return value.startsWith("v_");
-    }
-
-    /** Firmas de las funciones y métodos a partir de la tabla de símbolos. */
-    static Map<String, List<String>> parametersByFunction(SymbolTable symbolTable) {
-        Map<String, List<String>> signatures = new LinkedHashMap<>();
-        if (symbolTable == null) {
-            return signatures;
-        }
-        for (Symbol symbol : symbolTable.getAllSymbols()) {
-            if (symbol.getCategory() == SymbolCategory.FUNCTION) {
-                signatures.put(symbol.getName(),
-                        symbol.getParameters().stream().map(Symbol::getStorageName).toList());
-            }
-            if (symbol.getCategory() != SymbolCategory.CLASS) {
-                continue;
-            }
-            for (Symbol method : symbol.getMembers()) {
-                String name = FunctionRuntime.name(symbol.getName(), method.getName(),
-                        method.getParameters().size());
-                String scope = (method.getCategory() == SymbolCategory.CONSTRUCTOR
-                        ? "constructor_" : "method_") + name;
-                List<String> parameters = new ArrayList<>();
-                symbolTable.getAllSymbols().stream()
-                        .filter(value -> "this".equals(value.getName()) && scope.equals(value.getScope()))
-                        .findFirst().ifPresent(value -> parameters.add(value.getStorageName()));
-                method.getParameters().forEach(value -> parameters.add(value.getStorageName()));
-                signatures.put(name, parameters);
-            }
-        }
-        return signatures;
     }
 }

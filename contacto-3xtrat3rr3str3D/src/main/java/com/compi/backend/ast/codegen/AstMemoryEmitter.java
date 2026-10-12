@@ -1,17 +1,27 @@
 package com.compi.backend.ast.codegen;
 
 import com.compi.backend.ast.AbstractExpressionNodeAST;
-import com.compi.backend.ast.expr.*;
-import com.compi.backend.c3d.*;
-import com.compi.backend.symbols.*;
+import com.compi.backend.ast.exprressions.IdentifierNodeAST;
+import com.compi.backend.ast.exprressions.IndexNodeAST;
+import com.compi.backend.ast.exprressions.MemberAccessNodeAST;
+import com.compi.backend.c3d.ArrayRuntime;
+import com.compi.backend.c3d.HeapRuntime;
+import com.compi.backend.c3d.QuadrupleOp;
+import com.compi.backend.symbols.Symbol;
+import com.compi.backend.symbols.SymbolCategory;
+
 import java.util.ArrayList;
 import java.util.List;
 
-/** Direcciones de destinos: cada acceso se evalúa una vez antes de escribirlo. */
+/**
+ * Direcciones de destinos: cada acceso se evalúa una vez antes de escribirlo.
+ */
 final class AstMemoryEmitter {
-    record Place(String address, boolean heap) { }
     private final AstCodeGenerator g;
-    AstMemoryEmitter(AstCodeGenerator generator) { g = generator; }
+
+    AstMemoryEmitter(AstCodeGenerator generator) {
+        g = generator;
+    }
 
     Place place(AbstractExpressionNodeAST n) {
         if (n instanceof IdentifierNodeAST) return symbolPlace(g.symbol(n));
@@ -44,19 +54,33 @@ final class AstMemoryEmitter {
         return new Place(ArrayRuntime.add(g.c3d, receiver.getStorageName(), symbol.getOffset()), true);
     }
 
-    String load(Symbol symbol) { return read(symbolPlace(symbol)); }
-    void store(Symbol symbol, String value) { write(symbolPlace(symbol), value); }
-    String read(Place place) { return place.heap() ? HeapRuntime.read(g.c3d, place.address()) : place.address(); }
+    String load(Symbol symbol) {
+        return read(symbolPlace(symbol));
+    }
+
+    void store(Symbol symbol, String value) {
+        write(symbolPlace(symbol), value);
+    }
+
+    String read(Place place) {
+        return place.heap() ? HeapRuntime.read(g.c3d, place.address()) : place.address();
+    }
+
     void write(Place place, String value) {
         if (place.heap()) g.c3d.emit(QuadrupleOp.HEAP_SET, place.address(), value, null);
         else g.c3d.emitAssign(place.address(), value);
     }
 
-    /** Congela valores mutables antes de evaluar otro operando con efectos laterales. */
+    /**
+     * Congela valores mutables antes de evaluar otro operando con efectos laterales.
+     */
     String capture(String value) {
         if (!value.startsWith("v_") && !value.startsWith("g_")) return value;
         String temp = g.c3d.newTemp();
         g.c3d.emitAssign(temp, value);
         return temp;
+    }
+
+    record Place(String address, boolean heap) {
     }
 }

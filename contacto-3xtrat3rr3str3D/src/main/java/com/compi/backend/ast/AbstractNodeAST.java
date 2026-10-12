@@ -2,7 +2,9 @@ package com.compi.backend.ast;
 
 import java.util.List;
 
-/** Base de todos los nodos: posicion y recorrido generico de hijos. */
+/**
+ * Base de todos los nodos: posicion y recorrido generico de hijos.
+ */
 public abstract class AbstractNodeAST implements ASTNode {
 
     private final int line;
@@ -24,9 +26,13 @@ public abstract class AbstractNodeAST implements ASTNode {
         return column;
     }
 
-    public String sourceFile() { return sourceFile; }
+    public String sourceFile() {
+        return sourceFile;
+    }
 
-    /** Asocia el archivo al árbol completo, sin conservar contextos de ANTLR. */
+    /**
+     * Asocia el archivo al árbol completo, sin conservar contextos de ANTLR.
+     */
     public void attachSource(String fileName) {
         sourceFile = fileName;
         for (ASTNode child : children()) {
@@ -34,7 +40,9 @@ public abstract class AbstractNodeAST implements ASTNode {
         }
     }
 
-    /** Nodos hijos directos, en orden de aparicion. */
+    /**
+     * Nodos hijos directos, en orden de aparicion.
+     */
     public abstract List<ASTNode> children();
 
     @Override

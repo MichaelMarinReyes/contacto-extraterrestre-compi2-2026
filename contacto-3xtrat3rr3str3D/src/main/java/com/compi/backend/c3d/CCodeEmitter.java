@@ -1,6 +1,7 @@
 package com.compi.backend.c3d;
 
 import com.compi.backend.symbols.SymbolTable;
+
 import java.util.List;
 import java.util.Set;
 
@@ -12,7 +13,8 @@ import java.util.Set;
  */
 public final class CCodeEmitter {
 
-    private CCodeEmitter() { }
+    private CCodeEmitter() {
+    }
 
     public static String generateCCode(List<Quadruple> quadruples, Set<String> declaredTemps,
                                        SymbolTable symbolTable) {

@@ -1,89 +1,94 @@
 package com.compi.backend.ast;
 
-import com.compi.backend.ast.decl.AttributeDefinitionNodeAST;
-import com.compi.backend.ast.decl.ClassDefinitionNodeAST;
-import com.compi.backend.ast.decl.ConstructorDefinitionNodeAST;
-import com.compi.backend.ast.decl.FieldDefinitionNodeAST;
-import com.compi.backend.ast.decl.FunctionDefinitionNodeAST;
-import com.compi.backend.ast.decl.MethodDefinitionNodeAST;
-import com.compi.backend.ast.decl.ParameterNodeAST;
-import com.compi.backend.ast.decl.StructDefinitionNodeAST;
-import com.compi.backend.ast.expr.ArrayLiteralNodeAST;
-import com.compi.backend.ast.expr.AssignmentExpressionNodeAST;
-import com.compi.backend.ast.expr.BinaryOperationNodeAST;
-import com.compi.backend.ast.expr.CallNodeAST;
-import com.compi.backend.ast.expr.IdentifierNodeAST;
-import com.compi.backend.ast.expr.IncrementNodeAST;
-import com.compi.backend.ast.expr.IndexNodeAST;
-import com.compi.backend.ast.expr.InstanceInitNodeAST;
-import com.compi.backend.ast.expr.LiteralNodeAST;
-import com.compi.backend.ast.expr.MemberAccessNodeAST;
-import com.compi.backend.ast.expr.NewArrayNodeAST;
-import com.compi.backend.ast.expr.NewObjectNodeAST;
-import com.compi.backend.ast.expr.ReadExpressionNodeAST;
-import com.compi.backend.ast.expr.TernaryNodeAST;
-import com.compi.backend.ast.expr.UnaryOperationNodeAST;
-import com.compi.backend.ast.stmt.AssignmentNodeAST;
-import com.compi.backend.ast.stmt.BlockNodeAST;
-import com.compi.backend.ast.stmt.BreakNodeAST;
-import com.compi.backend.ast.stmt.ContinueNodeAST;
-import com.compi.backend.ast.stmt.DeclarationNodeAST;
-import com.compi.backend.ast.stmt.DoWhileNodeAST;
-import com.compi.backend.ast.stmt.ElseIfNodeAST;
-import com.compi.backend.ast.stmt.ExpressionStatementNodeAST;
-import com.compi.backend.ast.stmt.ForNodeAST;
-import com.compi.backend.ast.stmt.IfNodeAST;
-import com.compi.backend.ast.stmt.ImportNodeAST;
-import com.compi.backend.ast.stmt.PrintNodeAST;
-import com.compi.backend.ast.stmt.ProgramNodeAST;
-import com.compi.backend.ast.stmt.ReadStatementNodeAST;
-import com.compi.backend.ast.stmt.ReturnNodeAST;
-import com.compi.backend.ast.stmt.SwitchCaseNodeAST;
-import com.compi.backend.ast.stmt.SwitchNodeAST;
-import com.compi.backend.ast.stmt.WhileNodeAST;
+import com.compi.backend.ast.declarations.*;
+import com.compi.backend.ast.exprressions.*;
+import com.compi.backend.ast.statements.*;
 
-/** Visitante tipado del AST (doble despacho). */
+/**
+ * Visitante tipado del AST (doble despacho).
+ */
 public interface ASTVisitor<R> {
-    R visit(com.compi.backend.ast.stmt.DefinitionStatementNodeAST node);
+    R visit(com.compi.backend.ast.statements.DefinitionStatementNodeAST node);
+
     R visit(LiteralNodeAST node);
+
     R visit(IdentifierNodeAST node);
+
     R visit(BinaryOperationNodeAST node);
+
     R visit(UnaryOperationNodeAST node);
+
     R visit(AssignmentExpressionNodeAST node);
+
     R visit(MemberAccessNodeAST node);
+
     R visit(IndexNodeAST node);
+
     R visit(CallNodeAST node);
+
     R visit(NewObjectNodeAST node);
+
     R visit(NewArrayNodeAST node);
+
     R visit(ArrayLiteralNodeAST node);
+
     R visit(TernaryNodeAST node);
+
     R visit(IncrementNodeAST node);
+
     R visit(ReadExpressionNodeAST node);
+
     R visit(InstanceInitNodeAST node);
+
     R visit(ProgramNodeAST node);
+
     R visit(BlockNodeAST node);
+
     R visit(DeclarationNodeAST node);
+
     R visit(AssignmentNodeAST node);
+
     R visit(IfNodeAST node);
+
     R visit(ElseIfNodeAST node);
+
     R visit(WhileNodeAST node);
+
     R visit(DoWhileNodeAST node);
+
     R visit(ForNodeAST node);
+
     R visit(SwitchNodeAST node);
+
     R visit(SwitchCaseNodeAST node);
+
     R visit(PrintNodeAST node);
+
     R visit(ReadStatementNodeAST node);
+
     R visit(ReturnNodeAST node);
+
     R visit(BreakNodeAST node);
+
     R visit(ContinueNodeAST node);
+
     R visit(ExpressionStatementNodeAST node);
+
     R visit(ImportNodeAST node);
+
     R visit(FunctionDefinitionNodeAST node);
+
     R visit(ParameterNodeAST node);
+
     R visit(StructDefinitionNodeAST node);
+
     R visit(FieldDefinitionNodeAST node);
+
     R visit(ClassDefinitionNodeAST node);
+
     R visit(MethodDefinitionNodeAST node);
+
     R visit(ConstructorDefinitionNodeAST node);
+
     R visit(AttributeDefinitionNodeAST node);
 }

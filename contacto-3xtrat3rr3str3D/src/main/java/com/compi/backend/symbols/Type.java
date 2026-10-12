@@ -60,19 +60,36 @@ public class Type {
         return new Type(DataType.ARRAY, null, elemType, sizes.length, sizes);
     }
 
-    public Type conTamanos(int[] nuevos) {
-        if (dataType != DataType.ARRAY) {
-            return this;
-        }
-        return new Type(DataType.ARRAY, null, elementType, nuevos.length, nuevos);
-    }
-
     public static Type structType(String name) {
         return new Type(DataType.STRUCT, name, null, 0, null);
     }
 
     public static Type classType(String name) {
         return new Type(DataType.CLASS, name, null, 0, null);
+    }
+
+    private static String labelDe(DataType type) {
+        return switch (type) {
+
+            case INT -> "int";
+            case DOUBLE -> "double";
+            case CHAR -> "char";
+            case BOOLEAN -> "booleano";
+            case STRING -> "cadena";
+            case VOID -> "vacío";
+            case NULL -> "nulo";
+            case STRUCT -> "estructura";
+            case CLASS -> "clase";
+            case ARRAY -> "arreglo";
+            case UNKNOWN -> "desconocido";
+        };
+    }
+
+    public Type conTamanos(int[] nuevos) {
+        if (dataType != DataType.ARRAY) {
+            return this;
+        }
+        return new Type(DataType.ARRAY, null, elementType, nuevos.length, nuevos);
     }
 
     public int[] getSizes() {
@@ -117,7 +134,6 @@ public class Type {
         }
         return arrayOf(elementType, Arrays.copyOfRange(s, quitadas, s.length));
     }
-
 
     public boolean sameShape(Type other) {
         if (other == null) {
@@ -196,22 +212,5 @@ public class Type {
             return customTypeName != null ? customTypeName : labelDe(dataType);
         }
         return labelDe(dataType);
-    }
-
-    private static String labelDe(DataType type) {
-        return switch (type) {
-
-            case INT -> "int";
-            case DOUBLE -> "double";
-            case CHAR -> "char";
-            case BOOLEAN -> "booleano";
-            case STRING -> "cadena";
-            case VOID -> "vacío";
-            case NULL -> "nulo";
-            case STRUCT -> "estructura";
-            case CLASS -> "clase";
-            case ARRAY -> "arreglo";
-            case UNKNOWN -> "desconocido";
-        };
     }
 }

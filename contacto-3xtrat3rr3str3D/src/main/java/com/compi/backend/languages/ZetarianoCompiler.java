@@ -1,25 +1,25 @@
 package com.compi.backend.languages;
-import com.compi.backend.ast.stmt.ProgramNodeAST;
-import com.compi.backend.languages.zetariano.ZetarianoAstBuilder;
 
 import com.compi.ZetarianoLexer;
 import com.compi.ZetarianoParser;
-import com.compi.backend.c3d.C3DGenerator;
+import com.compi.backend.ast.statements.ProgramNodeAST;
 import com.compi.backend.errors.CompilationError;
 import com.compi.backend.errors.ErrorType;
+import com.compi.backend.languages.zetariano.ZetarianoAstBuilder;
 import com.compi.backend.symbols.SymbolTable;
-import java.util.List;
 import org.antlr.v4.runtime.CharStreams;
 import org.antlr.v4.runtime.CommonTokenStream;
 import org.antlr.v4.runtime.tree.ParseTree;
 
+import java.util.List;
+
 public class ZetarianoCompiler extends AbstractLanguageCompiler {
+    private String sourceFileName;
+
     @Override
     public ProgramNodeAST buildAst(ParseTree tree, String sourceFile) {
         return constructAst(new ZetarianoAstBuilder(), tree, sourceFile);
     }
-
-    private String sourceFileName;
 
     @Override
     public String id() {
@@ -78,9 +78,9 @@ public class ZetarianoCompiler extends AbstractLanguageCompiler {
         int point = base.lastIndexOf('.');
         String esperado = point > 0 ? base.substring(0, point) : base;
 
-        com.compi.backend.ast.decl.ClassDefinitionNodeAST clazz = null;
+        com.compi.backend.ast.declarations.ClassDefinitionNodeAST clazz = null;
         for (var definition : program.definitions()) {
-            if (!(definition instanceof com.compi.backend.ast.decl.ClassDefinitionNodeAST c)) continue;
+            if (!(definition instanceof com.compi.backend.ast.declarations.ClassDefinitionNodeAST c)) continue;
             if (clazz == null) {
                 clazz = c;
             }

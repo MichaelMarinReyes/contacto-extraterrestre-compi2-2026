@@ -108,7 +108,9 @@ public final class LanguageCompilerFactory {
         return ext == null ? null : createCompiler(BY_EXTENSION.get(ext));
     }
 
-    /** Cada módulo necesita su propio directorio y metadatos del parser. */
+    /**
+     * Cada módulo necesita su propio directorio y metadatos del parser.
+     */
     private static LanguageCompiler createCompiler(String id) {
         return switch (id) {
             case "pig" -> new PigLatinCompiler();

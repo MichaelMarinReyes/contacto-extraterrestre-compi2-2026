@@ -1,25 +1,39 @@
 package com.compi.backend.languages.y;
 
 import com.compi.YParser;
-import com.compi.backend.ast.*;
+import com.compi.backend.ast.ASTNode;
+import com.compi.backend.ast.AbstractDefinitionNodeAST;
+import com.compi.backend.ast.AbstractExpressionNodeAST;
+import com.compi.backend.ast.AbstractStatementNodeAST;
 import com.compi.backend.ast.build.AbstractAstBuilder;
-import com.compi.backend.ast.decl.*;
-import com.compi.backend.ast.expr.*;
-import com.compi.backend.ast.stmt.*;
+import com.compi.backend.ast.declarations.FieldDefinitionNodeAST;
+import com.compi.backend.ast.declarations.FunctionDefinitionNodeAST;
+import com.compi.backend.ast.declarations.ParameterNodeAST;
+import com.compi.backend.ast.declarations.StructDefinitionNodeAST;
+import com.compi.backend.ast.exprressions.*;
+import com.compi.backend.ast.statements.*;
 import com.compi.backend.symbols.Type;
-import java.util.ArrayList;
-import java.util.List;
 import org.antlr.v4.runtime.ParserRuleContext;
 import org.antlr.v4.runtime.tree.TerminalNode;
 
-/** Normaliza bloques indentados, funciones y estructuras del lenguaje Y. */
+import java.util.ArrayList;
+import java.util.List;
+
+/**
+ * Normaliza bloques indentados, funciones y estructuras del lenguaje Y.
+ */
 public class YAstBuilder extends AbstractAstBuilder {
-    public YAstBuilder() { super(YParser.ruleNames); }
-    @Override protected String tokenName(TerminalNode node) {
+    public YAstBuilder() {
+        super(YParser.ruleNames);
+    }
+
+    @Override
+    protected String tokenName(TerminalNode node) {
         return YParser.VOCABULARY.getSymbolicName(node.getSymbol().getType());
     }
 
-    @Override protected ASTNode buildRule(String rule, ParserRuleContext c) {
+    @Override
+    protected ASTNode buildRule(String rule, ParserRuleContext c) {
         return switch (rule) {
             case "init", "condicion" -> unwrap(c);
             case "archivo" -> program(c);
@@ -31,8 +45,10 @@ public class YAstBuilder extends AbstractAstBuilder {
             case "asignacion" -> assignment(c);
             case "incremento_decremento" -> increment(c);
             case "si_sentencia" -> conditional(c);
-            case "mientras_sentencia" -> new WhileNodeAST(line(c), col(c), expr(c, "condicion"), statement(node(c, "bloque")));
-            case "hacer_mientras_sentencia" -> new DoWhileNodeAST(line(c), col(c), statement(node(c, "bloque")), expr(c, "condicion"));
+            case "mientras_sentencia" ->
+                    new WhileNodeAST(line(c), col(c), expr(c, "condicion"), statement(node(c, "bloque")));
+            case "hacer_mientras_sentencia" ->
+                    new DoWhileNodeAST(line(c), col(c), statement(node(c, "bloque")), expr(c, "condicion"));
             case "para_sentencia" -> new ForNodeAST(line(c), col(c), statement(visit(contexts(c).getFirst())),
                     expr(c, "condicion"), statement(node(c, "incremento_decremento")), statement(node(c, "bloque")));
             case "elegir_sentencia" -> selection(c);
@@ -125,7 +141,8 @@ public class YAstBuilder extends AbstractAstBuilder {
     }
 
     private ASTNode expression(ParserRuleContext c) {
-        if (one(c, "operador_negacion") != null) return new UnaryOperationNodeAST(line(c), col(c), "!", expr(c, "expresion"));
+        if (one(c, "operador_negacion") != null)
+            return new UnaryOperationNodeAST(line(c), col(c), "!", expr(c, "expresion"));
         for (String operator : List.of("operador_relacional", "operador_logico")) {
             if (one(c, operator) != null) {
                 List<ParserRuleContext> operands = all(c, "expresion");
@@ -137,7 +154,8 @@ public class YAstBuilder extends AbstractAstBuilder {
 
     private ASTNode primary(ParserRuleContext c) {
         if (has(c, "{")) return array(c);
-        if (has(c, "-") && one(c, "termino") != null) return new UnaryOperationNodeAST(line(c), col(c), "-", expr(c, "termino"));
+        if (has(c, "-") && one(c, "termino") != null)
+            return new UnaryOperationNodeAST(line(c), col(c), "-", expr(c, "termino"));
         if (!contexts(c).isEmpty()) return unwrap(c);
         if (!tokens(c, "ID").isEmpty()) return identifier(c, tokens(c, "ID").getFirst());
         return literal(c, c.getText());
@@ -154,7 +172,8 @@ public class YAstBuilder extends AbstractAstBuilder {
         for (ParserRuleContext branch : contexts(c)) {
             if (rule(branch).equals("sino_si_bloque") || rule(branch).equals("sino_bloque")) {
                 if (one(branch, "condicion") == null) otherwise = statement(node(branch, "bloque"));
-                else alternatives.add(new ElseIfNodeAST(line(branch), col(branch), expr(branch, "condicion"), statement(node(branch, "bloque"))));
+                else
+                    alternatives.add(new ElseIfNodeAST(line(branch), col(branch), expr(branch, "condicion"), statement(node(branch, "bloque"))));
             } else if (rule(branch).equals("contrario_bloque")) otherwise = statement(node(branch, "bloque"));
         }
         return new IfNodeAST(line(c), col(c), expr(c, "condicion"), statement(node(c, "bloque")), alternatives, otherwise);

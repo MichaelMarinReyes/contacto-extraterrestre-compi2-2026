@@ -2,9 +2,13 @@ package com.compi.backend.utils;
 
 import com.compi.backend.ast.ASTNode;
 import com.compi.backend.ast.AbstractNodeAST;
-import com.compi.backend.ast.decl.*;
-import com.compi.backend.ast.expr.*;
-import com.compi.backend.ast.stmt.*;
+import com.compi.backend.ast.declarations.*;
+import com.compi.backend.ast.exprressions.*;
+import com.compi.backend.ast.statements.AssignmentNodeAST;
+import com.compi.backend.ast.statements.DeclarationNodeAST;
+import com.compi.backend.ast.statements.ImportNodeAST;
+import com.compi.backend.ast.statements.PrintNodeAST;
+
 import java.util.IdentityHashMap;
 import java.util.Map;
 
@@ -73,7 +77,7 @@ public class ASTDotGenerator {
     private String detail(AbstractNodeAST node) {
         return switch (node) {
             case IdentifierNodeAST n -> n.name();
-            case LiteralNodeAST n -> n.kind() + " " + String.valueOf(n.value());
+            case LiteralNodeAST n -> n.kind() + " " + n.value();
             case BinaryOperationNodeAST n -> n.operator();
             case UnaryOperationNodeAST n -> n.operator();
             case AssignmentNodeAST n -> n.operator();

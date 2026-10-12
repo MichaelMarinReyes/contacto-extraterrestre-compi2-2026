@@ -1,26 +1,53 @@
 package com.compi.backend.ast.semantic;
 
-import com.compi.backend.ast.*;
-import com.compi.backend.ast.expr.*;
-import com.compi.backend.symbols.*;
+import com.compi.backend.ast.ASTNode;
+import com.compi.backend.ast.AbstractExpressionNodeAST;
+import com.compi.backend.ast.exprressions.*;
+import com.compi.backend.symbols.Symbol;
+import com.compi.backend.symbols.Type;
+import com.compi.backend.symbols.TypeCompatibility;
+
 import java.math.BigInteger;
 import java.util.List;
 
-/** Tipos y resolución de expresiones, llamadas y destinos de escritura. */
+/**
+ * Tipos y resolución de expresiones, llamadas y destinos de escritura.
+ */
 final class AstExpressionAnalyzer {
     private final AstSemanticAnalyzer a;
-    AstExpressionAnalyzer(AstSemanticAnalyzer analyzer) { a = analyzer; }
+
+    AstExpressionAnalyzer(AstSemanticAnalyzer analyzer) {
+        a = analyzer;
+    }
+
+    static BigInteger constant(AbstractExpressionNodeAST n) {
+        if (n instanceof LiteralNodeAST literal && literal.kind() == LiteralKind.INTEGER) {
+            return new BigInteger(literal.value().toString());
+        }
+        if (n instanceof UnaryOperationNodeAST unary && unary.operator().equals("-")) {
+            BigInteger value = constant(unary.operand());
+            return value == null ? null : value.negate();
+        }
+        return null;
+    }
 
     Type literal(LiteralNodeAST n) {
         return switch (n.kind()) {
-            case INTEGER -> Type.INT; case DECIMAL -> Type.DOUBLE; case STRING -> Type.STRING;
-            case CHARACTER -> Type.CHAR; case BOOLEAN -> Type.BOOLEAN; case NULL -> Type.NULL;
+            case INTEGER -> Type.INT;
+            case DECIMAL -> Type.DOUBLE;
+            case STRING -> Type.STRING;
+            case CHARACTER -> Type.CHAR;
+            case BOOLEAN -> Type.BOOLEAN;
+            case NULL -> Type.NULL;
         };
     }
 
     Type identifier(IdentifierNodeAST n) {
         Symbol symbol = a.table.resolve(n.name());
-        if (symbol == null) { a.report("Símbolo «" + n.name() + "» no declarado", n); return Type.UNKNOWN; }
+        if (symbol == null) {
+            a.report("Símbolo «" + n.name() + "» no declarado", n);
+            return Type.UNKNOWN;
+        }
         a.model.symbol(n, symbol);
         return symbol.getType();
     }
@@ -45,7 +72,10 @@ final class AstExpressionAnalyzer {
             if (Type.isKnown(operand) && !Type.BOOLEAN.equals(operand)) a.report("La negación requiere un booleano", n);
             return Type.BOOLEAN;
         }
-        if (Type.isKnown(operand) && !operand.isNumeric()) { a.report("El signo menos requiere un número", n); return Type.UNKNOWN; }
+        if (Type.isKnown(operand) && !operand.isNumeric()) {
+            a.report("El signo menos requiere un número", n);
+            return Type.UNKNOWN;
+        }
         return operand;
     }
 
@@ -54,7 +84,10 @@ final class AstExpressionAnalyzer {
         if (!Type.isKnown(target)) return Type.UNKNOWN;
         Symbol owner = owner(target);
         Symbol member = owner == null ? null : owner.getMember(n.member());
-        if (member == null) { a.report("El miembro «" + n.member() + "» no existe en «" + target.label() + "»", n); return Type.UNKNOWN; }
+        if (member == null) {
+            a.report("El miembro «" + n.member() + "» no existe en «" + target.label() + "»", n);
+            return Type.UNKNOWN;
+        }
         a.model.symbol(n, member);
         return member.getType();
     }
@@ -71,7 +104,10 @@ final class AstExpressionAnalyzer {
             Type type = a.evaluate(index);
             if (Type.isKnown(type) && !Type.INT.equals(type)) a.report("El índice debe ser entero", index);
             if (!Type.isKnown(target)) continue;
-            if (!target.isArray()) { a.report("El destino no es un arreglo o tiene demasiados índices", n); return Type.UNKNOWN; }
+            if (!target.isArray()) {
+                a.report("El destino no es un arreglo o tiene demasiados índices", n);
+                return Type.UNKNOWN;
+            }
             BigInteger value = constant(index);
             int[] sizes = target.getSizes();
             if (value != null && sizes.length > 0 && sizes[0] > 0
@@ -81,17 +117,6 @@ final class AstExpressionAnalyzer {
             target = target.desindexar(1);
         }
         return target;
-    }
-
-    static BigInteger constant(AbstractExpressionNodeAST n) {
-        if (n instanceof LiteralNodeAST literal && literal.kind() == LiteralKind.INTEGER) {
-            return new BigInteger(literal.value().toString());
-        }
-        if (n instanceof UnaryOperationNodeAST unary && unary.operator().equals("-")) {
-            BigInteger value = constant(unary.operand());
-            return value == null ? null : value.negate();
-        }
-        return null;
     }
 
     void requireTarget(AbstractExpressionNodeAST n) {
@@ -145,9 +170,13 @@ final class AstExpressionAnalyzer {
             if (a.currentClass != null) method = a.currentClass.getCallable(id.name(), args.size());
             if (method == null) method = a.table.getFunction(id.name());
         }
-        if (method == null) { a.report("Función o método «" + n.name() + "» no definido con " + args.size() + " argumentos", n); return Type.UNKNOWN; }
+        if (method == null) {
+            a.report("Función o método «" + n.name() + "» no definido con " + args.size() + " argumentos", n);
+            return Type.UNKNOWN;
+        }
         validateCall(method, args, n.arguments(), n);
-        a.model.symbol(n, method); a.model.symbol(n.callee(), method);
+        a.model.symbol(n, method);
+        a.model.symbol(n.callee(), method);
         a.model.scope(n.callee(), a.table.getCurrentScope());
         a.model.type(n.callee(), method.getType());
         return method.getReturnType() == null ? method.getType() : method.getReturnType();
@@ -156,9 +185,13 @@ final class AstExpressionAnalyzer {
     Type newObject(NewObjectNodeAST n) {
         List<Type> args = n.arguments().stream().map(a::evaluate).toList();
         Symbol owner = a.table.getClass(n.typeName());
-        if (owner == null) { a.report("Tipo «" + n.typeName() + "» no definido", n); return Type.UNKNOWN; }
+        if (owner == null) {
+            a.report("Tipo «" + n.typeName() + "» no definido", n);
+            return Type.UNKNOWN;
+        }
         Symbol constructor = owner.getCallable(n.typeName(), args.size());
-        if (constructor == null) a.report("No existe un constructor de «" + n.typeName() + "» con " + args.size() + " argumentos", n);
+        if (constructor == null)
+            a.report("No existe un constructor de «" + n.typeName() + "» con " + args.size() + " argumentos", n);
         else validateCall(constructor, args, n.arguments(), n);
         a.model.symbol(n, constructor);
         return owner.getType();

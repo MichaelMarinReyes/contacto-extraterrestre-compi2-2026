@@ -1,13 +1,20 @@
 package com.compi.backend.ast.codegen;
 
-import com.compi.backend.ast.*;
-import com.compi.backend.ast.decl.*;
-import com.compi.backend.c3d.*;
+import com.compi.backend.ast.AbstractNodeAST;
+import com.compi.backend.ast.AbstractStatementNodeAST;
+import com.compi.backend.ast.declarations.*;
+import com.compi.backend.c3d.FunctionRuntime;
+import com.compi.backend.c3d.QuadrupleOp;
 
-/** Emite cuerpos de funciones y métodos reutilizando sus símbolos y ámbitos. */
+/**
+ * Emite cuerpos de funciones y métodos reutilizando sus símbolos y ámbitos.
+ */
 final class AstDefinitionEmitter {
     private final AstCodeGenerator g;
-    AstDefinitionEmitter(AstCodeGenerator generator) { g = generator; }
+
+    AstDefinitionEmitter(AstCodeGenerator generator) {
+        g = generator;
+    }
 
     void classBody(ClassDefinitionNodeAST n) {
         ClassDefinitionNodeAST previous = g.currentClass;
@@ -17,10 +24,15 @@ final class AstDefinitionEmitter {
             for (AbstractNodeAST member : n.members()) {
                 if (!(member instanceof AttributeDefinitionNodeAST)) g.emit(member);
             }
-        } finally { g.table.exitScope(); g.currentClass = previous; }
+        } finally {
+            g.table.exitScope();
+            g.currentClass = previous;
+        }
     }
 
-    void function(FunctionDefinitionNodeAST n) { body(n, g.symbol(n).getName(), n.body(), false); }
+    void function(FunctionDefinitionNodeAST n) {
+        body(n, g.symbol(n).getName(), n.body(), false);
+    }
 
     void method(MethodDefinitionNodeAST n) {
         body(n, FunctionRuntime.name(g.currentClass.name(), g.symbol(n).getName(), n.parameters().size()), n.body(), false);
@@ -39,6 +51,8 @@ final class AstDefinitionEmitter {
             }
             g.emit(statements);
             g.c3d.emit(QuadrupleOp.FUNCTION_END, null, null, name);
-        } finally { g.table.exitScope(); }
+        } finally {
+            g.table.exitScope();
+        }
     }
 }

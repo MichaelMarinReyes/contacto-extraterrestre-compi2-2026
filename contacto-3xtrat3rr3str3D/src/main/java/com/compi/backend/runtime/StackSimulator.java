@@ -3,6 +3,7 @@ package com.compi.backend.runtime;
 import com.compi.backend.StackAction;
 import com.compi.backend.c3d.Quadruple;
 import com.compi.backend.c3d.QuadrupleOp;
+
 import java.util.ArrayList;
 import java.util.List;
 
@@ -51,11 +52,10 @@ public class StackSimulator {
         }
         switch (op) {
             case ADD, SUB, MUL, DIV, INT_DIV, MOD, AND, OR, CONCAT,
-                    IF_EQ, IF_NE, IF_LT, IF_LE, IF_GT, IF_GE -> binary(q);
+                 IF_EQ, IF_NE, IF_LT, IF_LE, IF_GT, IF_GE -> binary(q);
             case NOT, NEG, ARRAY_GET -> unaryPopPush(q);
             case ASSIGN, STACK_SET, HEAP_SET, SET_P, SET_H, PRINT_INT, PRINT_FLOAT,
-                    PRINT_CHAR, PRINT_STR, PRINTLN, PARAM, RETURN, IF_TRUE, IF_FALSE
-                    -> pop(1);
+                 PRINT_CHAR, PRINT_STR, PRINTLN, PARAM, RETURN, IF_TRUE, IF_FALSE -> pop(1);
             case ARRAY_SET -> pop(2);
             case STACK_GET, HEAP_GET, GET_P, GET_H -> push(q.getResult());
             case CALL -> maybePush(q.getResult());

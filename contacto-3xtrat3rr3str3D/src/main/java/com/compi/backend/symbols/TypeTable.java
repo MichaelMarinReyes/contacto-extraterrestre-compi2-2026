@@ -1,12 +1,10 @@
 package com.compi.backend.symbols;
 
-import java.util.ArrayList;
-import java.util.IdentityHashMap;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
-/** Tabla de tipos con referencias, dimensiones, límites y ámbitos léxicos. */
+/**
+ * Tabla de tipos con referencias, dimensiones, límites y ámbitos léxicos.
+ */
 public class TypeTable {
     private final Scope globalScope;
     private final Map<Scope, Map<String, TypeEntry>> scopedTypes = new IdentityHashMap<>();
@@ -71,7 +69,9 @@ public class TypeTable {
         return define(name, type, scope, null);
     }
 
-    /** Padre es opcional: los lenguajes actuales no declaran herencia de tipos. */
+    /**
+     * Padre es opcional: los lenguajes actuales no declaran herencia de tipos.
+     */
     public TypeEntry define(String name, Type type, Scope scope, Integer parentId) {
         if (parentId != null && !entries.containsKey(parentId)) {
             throw new IllegalArgumentException("El tipo padre no pertenece a esta tabla");
@@ -96,7 +96,9 @@ public class TypeTable {
         return entry;
     }
 
-    /** Registra tipos usados por símbolos; conserva formas de tamaños diferentes. */
+    /**
+     * Registra tipos usados por símbolos; conserva formas de tamaños diferentes.
+     */
     public TypeEntry register(Type type, Scope scope) {
         if (type == null) return null;
         if (!type.isArray() && !type.isClass() && !type.isStruct()) {

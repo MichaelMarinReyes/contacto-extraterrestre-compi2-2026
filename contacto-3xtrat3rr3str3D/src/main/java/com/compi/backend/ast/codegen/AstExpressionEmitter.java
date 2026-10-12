@@ -1,14 +1,23 @@
 package com.compi.backend.ast.codegen;
 
 import com.compi.backend.ast.AbstractExpressionNodeAST;
-import com.compi.backend.ast.expr.*;
-import com.compi.backend.c3d.*;
-import com.compi.backend.symbols.*;
+import com.compi.backend.ast.exprressions.*;
+import com.compi.backend.c3d.FunctionRuntime;
+import com.compi.backend.c3d.QuadrupleOp;
+import com.compi.backend.c3d.ValueRuntime;
+import com.compi.backend.symbols.Symbol;
+import com.compi.backend.symbols.SymbolCategory;
+import com.compi.backend.symbols.Type;
 
-/** Emisión de valores, operaciones, llamadas e incrementos. */
+/**
+ * Emisión de valores, operaciones, llamadas e incrementos.
+ */
 final class AstExpressionEmitter {
     private final AstCodeGenerator g;
-    AstExpressionEmitter(AstCodeGenerator generator) { g = generator; }
+
+    AstExpressionEmitter(AstCodeGenerator generator) {
+        g = generator;
+    }
 
     String literal(LiteralNodeAST n) {
         return switch (n.kind()) {
@@ -41,7 +50,9 @@ final class AstExpressionEmitter {
 
     private QuadrupleOp arithmetic(String operator, Type left, Type right) {
         return switch (operator) {
-            case "+" -> QuadrupleOp.ADD; case "-" -> QuadrupleOp.SUB; case "*" -> QuadrupleOp.MUL;
+            case "+" -> QuadrupleOp.ADD;
+            case "-" -> QuadrupleOp.SUB;
+            case "*" -> QuadrupleOp.MUL;
             case "/" -> Type.INT.equals(left) && Type.INT.equals(right) ? QuadrupleOp.INT_DIV : QuadrupleOp.DIV;
             case "%" -> QuadrupleOp.MOD;
             default -> throw new IllegalStateException("Operador aritmético desconocido: " + operator);
@@ -81,8 +92,11 @@ final class AstExpressionEmitter {
         String result = g.c3d.newTemp();
         String yes = g.c3d.newLabel(), no = g.c3d.newLabel(), end = g.c3d.newLabel();
         g.control.jump(n.condition(), yes, no);
-        g.c3d.emitLabel(yes); g.c3d.emitAssign(result, g.emit(n.thenExpr())); g.c3d.emitGoto(end);
-        g.c3d.emitLabel(no); g.c3d.emitAssign(result, g.emit(n.elseExpr()));
+        g.c3d.emitLabel(yes);
+        g.c3d.emitAssign(result, g.emit(n.thenExpr()));
+        g.c3d.emitGoto(end);
+        g.c3d.emitLabel(no);
+        g.c3d.emitAssign(result, g.emit(n.elseExpr()));
         g.c3d.emitLabel(end);
         return result;
     }
@@ -90,7 +104,8 @@ final class AstExpressionEmitter {
     String call(CallNodeAST n) {
         Symbol callable = g.model.symbolOf(n);
         if (callable == null && (n.name().equals("print") || n.name().equals("println"))) {
-            for (AbstractExpressionNodeAST arg : n.arguments()) g.c3d.emit(printOp(g.type(arg)), g.emit(arg), null, null);
+            for (AbstractExpressionNodeAST arg : n.arguments())
+                g.c3d.emit(printOp(g.type(arg)), g.emit(arg), null, null);
             if (n.name().equals("println")) g.c3d.emit(QuadrupleOp.PRINTLN, null, null, null);
             return "0";
         }
@@ -111,7 +126,8 @@ final class AstExpressionEmitter {
             g.c3d.emit(QuadrupleOp.PARAM, g.memory.capture(receiver), null, null);
             count++;
         }
-        for (AbstractExpressionNodeAST arg : n.arguments()) g.c3d.emit(QuadrupleOp.PARAM, g.memory.capture(g.emit(arg)), null, null);
+        for (AbstractExpressionNodeAST arg : n.arguments())
+            g.c3d.emit(QuadrupleOp.PARAM, g.memory.capture(g.emit(arg)), null, null);
         String result = g.c3d.newTemp();
         g.c3d.emit(QuadrupleOp.CALL, name, String.valueOf(count), result);
         return result;

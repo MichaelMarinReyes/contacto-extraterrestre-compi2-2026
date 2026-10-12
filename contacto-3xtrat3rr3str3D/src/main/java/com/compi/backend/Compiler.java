@@ -1,11 +1,8 @@
 package com.compi.backend;
 
-import com.compi.backend.c3d.C3DGenerator;
-import com.compi.backend.c3d.CCodeEmitter;
-import com.compi.backend.c3d.IntermediateCodeManager;
-import com.compi.backend.c3d.Mode;
-import com.compi.backend.c3d.Quadruple;
-import com.compi.backend.c3d.QuadrupleOp;
+import com.compi.backend.ast.semantic.SemanticModel;
+import com.compi.backend.ast.statements.ProgramNodeAST;
+import com.compi.backend.c3d.*;
 import com.compi.backend.errors.CompilationError;
 import com.compi.backend.errors.ErrorType;
 import com.compi.backend.languages.LanguageCompiler;
@@ -19,26 +16,17 @@ import com.compi.backend.symbols.Symbol;
 import com.compi.backend.symbols.SymbolTable;
 import com.compi.backend.symbols.TypeEntry;
 import com.compi.backend.utils.ASTDotGenerator;
-import com.compi.backend.ast.stmt.ProgramNodeAST;
-import com.compi.backend.ast.semantic.SemanticModel;
 import lombok.AccessLevel;
 import lombok.Getter;
+import org.antlr.v4.runtime.tree.ParseTree;
 
 import java.io.File;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
-import org.antlr.v4.runtime.tree.ParseTree;
 
 @Getter
 public class Compiler {
-
-    private String source = "";
-    private String language = "pig";
-    private Mode cMode = Mode.QUADRUPLES;
-
-    @Getter(AccessLevel.NONE)
-    private String sourceFileName;
 
     private final SymbolTable symbolTable = new SymbolTable();
     private final Stack processStack = new Stack();
@@ -46,10 +34,13 @@ public class Compiler {
     private final List<StackState> stackStates = new ArrayList<>();
     private final List<ParseStep> parseSteps = new ArrayList<>();
     private final IntermediateCodeManager icm = new IntermediateCodeManager();
-
     @Getter(AccessLevel.NONE)
     private final C3DGenerator c3dGenerator = new C3DGenerator();
-
+    private String source = "";
+    private String language = "pig";
+    private Mode cMode = Mode.QUADRUPLES;
+    @Getter(AccessLevel.NONE)
+    private String sourceFileName;
     private String astDot = "";
     private String translatedCode = "";
 
@@ -236,16 +227,15 @@ public class Compiler {
         for (StackState state : stackStates) {
             maxDepth = Math.max(maxDepth, state.depth());
         }
-        StringBuilder sb = new StringBuilder();
-        sb.append("Lenguaje        : ").append(compiler.displayName()).append('\n');
-        sb.append("Simbolos        : ").append(symbolTable.getAllSymbols().size()).append('\n');
-        sb.append("Cuartetas       : ").append(quadruples.size()).append('\n');
-        sb.append("Tripletes       : ").append(icm.getTriplets().size()).append('\n');
-        sb.append("Errores         : ").append(errors.size()).append('\n');
-        sb.append("Pila del parser : ").append(parseSteps.size()).append(" pasos\n");
-        sb.append("Pila maquina    : ").append(stackStates.size())
-                .append(" pasos (profundidad maxima ").append(maxDepth).append(")\n");
-        return sb.toString();
+        String sb = "Lenguaje        : " + compiler.displayName() + '\n' +
+                "Simbolos        : " + symbolTable.getAllSymbols().size() + '\n' +
+                "Cuartetas       : " + quadruples.size() + '\n' +
+                "Tripletes       : " + icm.getTriplets().size() + '\n' +
+                "Errores         : " + errors.size() + '\n' +
+                "Pila del parser : " + parseSteps.size() + " pasos\n" +
+                "Pila maquina    : " + stackStates.size() +
+                " pasos (profundidad maxima " + maxDepth + ")\n";
+        return sb;
     }
 
     public String getC3DCode() {

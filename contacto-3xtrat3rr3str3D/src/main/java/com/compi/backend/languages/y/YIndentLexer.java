@@ -13,7 +13,7 @@ import java.util.Stack;
 public class YIndentLexer extends YLexer {
     private final Stack<Integer> indentStack = new Stack<>();
     private final Queue<Token> pendingTokens = new LinkedList<>();
-    private boolean atStartOfLine = true;
+    private final boolean atStartOfLine = true;
     private Token lastToken = null;
     private int bracketLevel = 0;
 

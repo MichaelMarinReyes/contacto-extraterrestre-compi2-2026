@@ -1,6 +1,8 @@
 package com.compi.backend.symbols;
 
-/** Completa la distribución de un arreglo a partir del tipo de su inicializador. */
+/**
+ * Completa la distribución de un arreglo a partir del tipo de su inicializador.
+ */
 public final class ArrayLiteral {
 
     private ArrayLiteral() {

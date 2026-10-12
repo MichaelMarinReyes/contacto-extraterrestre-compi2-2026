@@ -2,13 +2,13 @@ package com.compi.backend.languages;
 
 import com.compi.PigLatinLexer;
 import com.compi.PigLatinParser;
+import com.compi.backend.ast.semantic.SemanticModel;
+import com.compi.backend.ast.statements.ImportNodeAST;
+import com.compi.backend.ast.statements.ProgramNodeAST;
 import com.compi.backend.c3d.C3DGenerator;
 import com.compi.backend.errors.CompilationError;
 import com.compi.backend.errors.ErrorType;
 import com.compi.backend.languages.piglatin.PigLatinAstBuilder;
-import com.compi.backend.ast.stmt.ProgramNodeAST;
-import com.compi.backend.ast.stmt.ImportNodeAST;
-import com.compi.backend.ast.semantic.SemanticModel;
 import com.compi.backend.symbols.SymbolTable;
 import org.antlr.v4.runtime.CharStreams;
 import org.antlr.v4.runtime.CommonTokenStream;
@@ -17,11 +17,7 @@ import org.antlr.v4.runtime.tree.ParseTree;
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
-import java.util.LinkedHashMap;
-import java.util.Collections;
+import java.util.*;
 
 public class PigLatinCompiler extends AbstractLanguageCompiler {
     private final Map<String, ProgramNodeAST> astImports = new LinkedHashMap<>();

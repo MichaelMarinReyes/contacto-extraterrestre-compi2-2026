@@ -3,23 +3,31 @@ package com.compi.backend.languages.zetariano;
 import com.compi.ZetarianoParser;
 import com.compi.backend.ast.*;
 import com.compi.backend.ast.build.AbstractAstBuilder;
-import com.compi.backend.ast.decl.*;
-import com.compi.backend.ast.expr.*;
-import com.compi.backend.ast.stmt.*;
+import com.compi.backend.ast.declarations.*;
+import com.compi.backend.ast.exprressions.*;
+import com.compi.backend.ast.statements.*;
 import com.compi.backend.symbols.Type;
+import org.antlr.v4.runtime.ParserRuleContext;
+import org.antlr.v4.runtime.tree.TerminalNode;
+
 import java.util.ArrayList;
 import java.util.List;
-import org.antlr.v4.runtime.ParserRuleContext;
-import org.antlr.v4.runtime.tree.*;
 
-/** Construye clases, accesos y expresiones de Zetariano conservando su estructura. */
+/**
+ * Construye clases, accesos y expresiones de Zetariano conservando su estructura.
+ */
 public class ZetarianoAstBuilder extends AbstractAstBuilder {
-    public ZetarianoAstBuilder() { super(ZetarianoParser.ruleNames); }
-    @Override protected String tokenName(TerminalNode node) {
+    public ZetarianoAstBuilder() {
+        super(ZetarianoParser.ruleNames);
+    }
+
+    @Override
+    protected String tokenName(TerminalNode node) {
         return ZetarianoParser.VOCABULARY.getSymbolicName(node.getSymbol().getType());
     }
 
-    @Override protected ASTNode buildRule(String rule, ParserRuleContext c) {
+    @Override
+    protected ASTNode buildRule(String rule, ParserRuleContext c) {
         return switch (rule) {
             case "programa" -> new ProgramNodeAST(line(c), col(c), List.of(),
                     all(c, "claseDef").stream().map(child -> (AbstractDefinitionNodeAST) visit(child)).toList(), List.of(), List.of());
@@ -34,8 +42,10 @@ public class ZetarianoAstBuilder extends AbstractAstBuilder {
             case "incrementoDecremento" -> increment(c, false);
             case "sentenciaIf" -> conditional(c);
             case "sentenciaSwitch" -> selection(c);
-            case "sentenciaWhile" -> new WhileNodeAST(line(c), col(c), expr(c, "expresion"), statement(node(c, "bloque")));
-            case "sentenciaDoWhile" -> new DoWhileNodeAST(line(c), col(c), statement(node(c, "bloque")), expr(c, "expresion"));
+            case "sentenciaWhile" ->
+                    new WhileNodeAST(line(c), col(c), expr(c, "expresion"), statement(node(c, "bloque")));
+            case "sentenciaDoWhile" ->
+                    new DoWhileNodeAST(line(c), col(c), statement(node(c, "bloque")), expr(c, "expresion"));
             case "sentenciaFor" -> new ForNodeAST(line(c), col(c), statement(node(c, "forInit")), expr(c, "expresion"),
                     statement(node(c, "forUpdate")), statement(node(c, "bloque")));
             case "retorno" -> new ReturnNodeAST(line(c), col(c), expr(c, "expresion"));
@@ -43,7 +53,8 @@ public class ZetarianoAstBuilder extends AbstractAstBuilder {
             case "continuar" -> new ContinueNodeAST(line(c), col(c));
             case "llamadaFuncionSemilla" -> call(c);
             case "accesoMiembro" -> memberAccess(c);
-            case "literalArreglo" -> new ArrayLiteralNodeAST(line(c), col(c), contexts(c).stream().map(this::expr).toList());
+            case "literalArreglo" ->
+                    new ArrayLiteralNodeAST(line(c), col(c), contexts(c).stream().map(this::expr).toList());
             case "expresion" -> expression(c);
             default -> throw new IllegalArgumentException("Regla Zetariano sin AST: " + rule);
         };
@@ -80,7 +91,8 @@ public class ZetarianoAstBuilder extends AbstractAstBuilder {
                     tokens(param, "ID").getFirst(), false));
         }
         AbstractStatementNodeAST body = statement(node(c, "bloque"));
-        if (rule(c).equals("constructorDef")) return new ConstructorDefinitionNodeAST(line(c), col(c), tokens(c, "ID").getFirst(), parameters, body);
+        if (rule(c).equals("constructorDef"))
+            return new ConstructorDefinitionNodeAST(line(c), col(c), tokens(c, "ID").getFirst(), parameters, body);
         return new MethodDefinitionNodeAST(line(c), col(c), type(one(c, "tipoDato").getText(), true),
                 tokens(c, "ID").getFirst(), parameters, body);
     }
@@ -103,7 +115,8 @@ public class ZetarianoAstBuilder extends AbstractAstBuilder {
         AbstractExpressionNodeAST target = target(c);
         AbstractExpressionNodeAST value = expr(all(c, "expresion").getLast());
         String operator = assignmentOperator(c);
-        if (rule(c).equals("asignacionExpresion")) return new AssignmentExpressionNodeAST(line(c), col(c), target, operator, value);
+        if (rule(c).equals("asignacionExpresion"))
+            return new AssignmentExpressionNodeAST(line(c), col(c), target, operator, value);
         return new AssignmentNodeAST(line(c), col(c), target, operator, value);
     }
 
@@ -114,7 +127,8 @@ public class ZetarianoAstBuilder extends AbstractAstBuilder {
     private AbstractExpressionNodeAST memberAccess(ParserRuleContext c) {
         AbstractExpressionNodeAST result = identifier(c, tokens(c, "ID").getFirst());
         for (ParserRuleContext member : all(c, "miembroAcceso")) {
-            if (has(member, ".")) result = new MemberAccessNodeAST(line(member), col(member), result, tokens(member, "ID").getFirst(), null);
+            if (has(member, "."))
+                result = new MemberAccessNodeAST(line(member), col(member), result, tokens(member, "ID").getFirst(), null);
             List<AbstractExpressionNodeAST> indices = expressions(member, "expresion");
             if (!indices.isEmpty()) result = new IndexNodeAST(line(member), col(member), result, indices);
         }
@@ -137,10 +151,13 @@ public class ZetarianoAstBuilder extends AbstractAstBuilder {
             return new NewObjectNodeAST(line(c), col(c), tokens(c, "ID").getFirst(), arguments(c, "argumentos", "expresion"), null);
         }
         if (has(c, "++") || has(c, "--")) return increment(c, true);
-        if (operands.size() == 3) return new TernaryNodeAST(line(c), col(c), expr(operands.get(0)), expr(operands.get(1)), expr(operands.get(2)));
-        if (operands.size() == 2) return binary(c, expr(operands.getFirst()), c.getChild(1).getText(), expr(operands.getLast()));
+        if (operands.size() == 3)
+            return new TernaryNodeAST(line(c), col(c), expr(operands.get(0)), expr(operands.get(1)), expr(operands.get(2)));
+        if (operands.size() == 2)
+            return binary(c, expr(operands.getFirst()), c.getChild(1).getText(), expr(operands.getLast()));
         if (operands.size() == 1) {
-            if (has(c, "-") || has(c, "!")) return new UnaryOperationNodeAST(line(c), col(c), c.getChild(0).getText(), expr(operands.getFirst()));
+            if (has(c, "-") || has(c, "!"))
+                return new UnaryOperationNodeAST(line(c), col(c), c.getChild(0).getText(), expr(operands.getFirst()));
             return expr(operands.getFirst());
         }
         if (!contexts(c).isEmpty()) {
@@ -154,8 +171,9 @@ public class ZetarianoAstBuilder extends AbstractAstBuilder {
         List<ParserRuleContext> conditions = all(c, "expresion");
         List<ParserRuleContext> bodies = all(c, "bloque");
         List<ElseIfNodeAST> alternatives = new ArrayList<>();
-        for (int i = 1; i < conditions.size(); i++) alternatives.add(new ElseIfNodeAST(line(conditions.get(i)),
-                col(conditions.get(i)), expr(conditions.get(i)), statement(visit(bodies.get(i)))));
+        for (int i = 1; i < conditions.size(); i++)
+            alternatives.add(new ElseIfNodeAST(line(conditions.get(i)),
+                    col(conditions.get(i)), expr(conditions.get(i)), statement(visit(bodies.get(i)))));
         return new IfNodeAST(line(c), col(c), expr(conditions.getFirst()), statement(visit(bodies.getFirst())), alternatives,
                 bodies.size() > conditions.size() ? statement(visit(bodies.getLast())) : null);
     }

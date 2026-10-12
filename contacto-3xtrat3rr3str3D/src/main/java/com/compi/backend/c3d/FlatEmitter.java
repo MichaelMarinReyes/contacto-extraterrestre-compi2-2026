@@ -24,6 +24,26 @@ final class FlatEmitter {
         this.layout = layout;
     }
 
+    private static int characterCode(String content, int index) {
+        char value = content.charAt(index);
+        if (value == '\\' && index + 1 < content.length()) {
+            char next = content.charAt(index + 1);
+            return switch (next) {
+                case 'n' -> '\n';
+                case 't' -> '\t';
+                case 'r' -> '\r';
+                case '\\' -> '\\';
+                case '"' -> '"';
+                default -> '\\';
+            };
+        }
+        return value;
+    }
+
+    private static String safe(String name) {
+        return name.replaceAll("[^A-Za-z0-9_]", "_");
+    }
+
     String build() {
         out.append(prologue());
         out.append("\nint main(void) {\n");
@@ -83,6 +103,8 @@ final class FlatEmitter {
         }
     }
 
+    // --- Control de flujo -------------------------------------------------
+
     private void emitBody(List<Quadruple> instructions) {
         for (Quadruple instruction : instructions) {
             emitOne(instruction);
@@ -91,13 +113,11 @@ final class FlatEmitter {
 
     private void emitOne(Quadruple q) {
         switch (q.getOp()) {
-            case LABEL, GOTO, IF_TRUE, IF_FALSE, IF_EQ, IF_NE, IF_LT, IF_LE, IF_GT, IF_GE ->
-                    emitControl(q);
+            case LABEL, GOTO, IF_TRUE, IF_FALSE, IF_EQ, IF_NE, IF_LT, IF_LE, IF_GT, IF_GE -> emitControl(q);
             case PARAM, CALL, RETURN, STACK_SET -> emitFunction(q);
             case ASSIGN -> emitAssign(q);
             case ADD, SUB, MUL, DIV, INT_DIV, MOD, AND, OR, NOT, NEG -> emitArithmetic(q);
-            case ARRAY_GET, ARRAY_SET, HEAP_GET, HEAP_SET, STACK_GET, SET_P, GET_P, SET_H, GET_H ->
-                    emitMemory(q);
+            case ARRAY_GET, ARRAY_SET, HEAP_GET, HEAP_SET, STACK_GET, SET_P, GET_P, SET_H, GET_H -> emitMemory(q);
             case CONCAT -> emitConcat(q);
             case PRINT_STR -> emitPrintString(q);
             case READ_STR -> emitReadText(q);
@@ -106,7 +126,7 @@ final class FlatEmitter {
         }
     }
 
-    // --- Control de flujo -------------------------------------------------
+    // --- Llamadas y retornos ---------------------------------------------
 
     private void emitControl(Quadruple q) {
         String result = q.getResult();
@@ -134,8 +154,6 @@ final class FlatEmitter {
         out.append("    }\n");
     }
 
-    // --- Llamadas y retornos ---------------------------------------------
-
     private void emitFunction(Quadruple q) {
         switch (q.getOp()) {
             case PARAM -> pending.add(operand(q.getArg1()));
@@ -147,7 +165,8 @@ final class FlatEmitter {
                 emitReturn();
             }
             case STACK_SET -> emitStackSet(q);
-            default -> { }
+            default -> {
+            }
         }
     }
 
@@ -159,6 +178,8 @@ final class FlatEmitter {
             line("stack[(int)" + operand(q.getArg1()) + "] = " + operand(q.getArg2()) + ";");
         }
     }
+
+    // --- Variables y operaciones -----------------------------------------
 
     private void emitCall(Quadruple q) {
         String name = q.getArg1();
@@ -196,8 +217,6 @@ final class FlatEmitter {
         returnValueSet = false;
     }
 
-    // --- Variables y operaciones -----------------------------------------
-
     private void emitAssign(Quadruple q) {
         String source = q.getArg1();
         if (source != null && source.startsWith("\"")) {
@@ -221,6 +240,8 @@ final class FlatEmitter {
         }
     }
 
+    // --- Rutinas de soporte en línea (sin funciones C) --------------------
+
     private void emitMemory(Quadruple q) {
         String a = operand(q.getArg1());
         String b = operand(q.getArg2());
@@ -235,7 +256,8 @@ final class FlatEmitter {
             case GET_P -> line(r + " = P;");
             case SET_H -> line("H = " + a + ";");
             case GET_H -> line(r + " = H;");
-            default -> { }
+            default -> {
+            }
         }
     }
 
@@ -250,8 +272,6 @@ final class FlatEmitter {
             default -> line(a + " = 0;");
         }
     }
-
-    // --- Rutinas de soporte en línea (sin funciones C) --------------------
 
     private void emitConcat(Quadruple q) {
         String first = uid();
@@ -362,6 +382,8 @@ final class FlatEmitter {
         assign(result, "_ra");
     }
 
+    // --- Utilidades -------------------------------------------------------
+
     private void writeString(String result, String literal) {
         String content = literal.substring(1, literal.length() - 1);
         line(result + " = H;");
@@ -377,24 +399,6 @@ final class FlatEmitter {
         line("heap[(int)H] = 0;");
         line("H = H + 1;");
     }
-
-    private static int characterCode(String content, int index) {
-        char value = content.charAt(index);
-        if (value == '\\' && index + 1 < content.length()) {
-            char next = content.charAt(index + 1);
-            return switch (next) {
-                case 'n' -> '\n';
-                case 't' -> '\t';
-                case 'r' -> '\r';
-                case '\\' -> '\\';
-                case '"' -> '"';
-                default -> '\\';
-            };
-        }
-        return value;
-    }
-
-    // --- Utilidades -------------------------------------------------------
 
     private boolean isRuntime(String name) {
         return "number_to_text".equals(name) || "char_to_text".equals(name)
@@ -422,9 +426,5 @@ final class FlatEmitter {
 
     private String uid() {
         return "_l" + nextUid++;
-    }
-
-    private static String safe(String name) {
-        return name.replaceAll("[^A-Za-z0-9_]", "_");
     }
 }

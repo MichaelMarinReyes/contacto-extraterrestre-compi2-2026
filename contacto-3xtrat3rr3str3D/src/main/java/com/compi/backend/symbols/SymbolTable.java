@@ -3,20 +3,11 @@ package com.compi.backend.symbols;
 import lombok.AccessLevel;
 import lombok.Getter;
 
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.IdentityHashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
 
 @Getter
 public class SymbolTable {
-    private Scope currentScope;
     private final Scope globalScope;
-
     @Getter(AccessLevel.NONE)
     private final Map<String, Symbol> structs = new HashMap<>();
     @Getter(AccessLevel.NONE)
@@ -26,14 +17,14 @@ public class SymbolTable {
     @Getter(AccessLevel.NONE)
     private final Map<String, Symbol> functions = new HashMap<>();
     private final TypeTable typeTable;
-
     @Getter(AccessLevel.NONE)
     private final List<Scope> closedScopes = new ArrayList<>();
-    private boolean generatingCode;
     @Getter(AccessLevel.NONE)
     private final Map<Symbol, Scope> typeScopes = new IdentityHashMap<>();
     @Getter(AccessLevel.NONE)
     private final Map<com.compi.backend.ast.ASTNode, Scope> astScopes = new IdentityHashMap<>();
+    private Scope currentScope;
+    private boolean generatingCode;
 
     public SymbolTable() {
         this.globalScope = new Scope("global", null);
@@ -76,7 +67,9 @@ public class SymbolTable {
         }
     }
 
-    public Scope scopeOf(com.compi.backend.ast.ASTNode node) { return astScopes.get(node); }
+    public Scope scopeOf(com.compi.backend.ast.ASTNode node) {
+        return astScopes.get(node);
+    }
 
     public void clear() {
         currentScope = globalScope;
@@ -92,10 +85,17 @@ public class SymbolTable {
         astScopes.clear();
     }
 
-    /** Reutiliza los símbolos comprobados, sin volver a declararlos durante C3D. */
-    public void beginCodeGeneration() { generatingCode = true; }
+    /**
+     * Reutiliza los símbolos comprobados, sin volver a declararlos durante C3D.
+     */
+    public void beginCodeGeneration() {
+        generatingCode = true;
+    }
 
-    public void endCodeGeneration() { generatingCode = false; currentScope = globalScope; }
+    public void endCodeGeneration() {
+        generatingCode = false;
+        currentScope = globalScope;
+    }
 
     public boolean define(Symbol symbol) {
 
@@ -171,7 +171,9 @@ public class SymbolTable {
         if (symbol.getReturnType() != null) typeTable.register(symbol.getReturnType(), scope);
     }
 
-    /** Incluye los tipos de firmas y miembros añadidos después de registrar su dueño. */
+    /**
+     * Incluye los tipos de firmas y miembros añadidos después de registrar su dueño.
+     */
     public List<TypeEntry> getTypeEntries() {
         for (Symbol owner : structs.values()) registerNestedTypes(owner, typeScopes.get(owner));
         for (Map<String, Symbol> local : localStructs.values()) {
