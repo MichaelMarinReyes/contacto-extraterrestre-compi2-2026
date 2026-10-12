@@ -23,6 +23,18 @@ public class PigLatinCompiler extends AbstractLanguageCompiler {
     private final Map<String, ProgramNodeAST> astImports = new LinkedHashMap<>();
     private final Map<String, SemanticModel> semanticImports = new LinkedHashMap<>();
 
+    /**
+     * Los módulos importados se generan después de analizarlos todos, para que
+     * el despacho virtual conozca toda la jerarquía de clases. La cola es por
+     * hilo porque cada compilación puede anidar importaciones.
+     */
+    private static final ThreadLocal<java.util.List<PendingGeneration>> PENDING =
+            ThreadLocal.withInitial(java.util.ArrayList::new);
+    private static final ThreadLocal<Integer> IMPORT_DEPTH = ThreadLocal.withInitial(() -> 0);
+
+    private record PendingGeneration(LanguageCompiler compiler, ProgramNodeAST ast) {
+    }
+
     @Override
     public ProgramNodeAST buildAst(ParseTree tree, String sourceFile) {
         return constructAst(new PigLatinAstBuilder(), tree, sourceFile);
@@ -82,10 +94,29 @@ public class PigLatinCompiler extends AbstractLanguageCompiler {
         }
         astImports.clear();
         semanticImports.clear();
-        for (ImportNodeAST impCtx : tree.imports()) {
-            nuevos.addAll(loadImport(impCtx, symbolTable, generator, errors, cargados));
+        IMPORT_DEPTH.set(IMPORT_DEPTH.get() + 1);
+        try {
+            for (ImportNodeAST impCtx : tree.imports()) {
+                nuevos.addAll(loadImport(impCtx, symbolTable, generator, errors, cargados));
+            }
+        } finally {
+            int depth = IMPORT_DEPTH.get() - 1;
+            IMPORT_DEPTH.set(depth);
+            if (depth == 0) flushPending(symbolTable, generator);
         }
         return nuevos;
+    }
+
+    /** Genera el código de todos los módulos una vez cargada la jerarquía completa. */
+    private void flushPending(SymbolTable symbolTable, C3DGenerator generator) {
+        java.util.List<PendingGeneration> pending = PENDING.get();
+        try {
+            for (PendingGeneration generation : pending) {
+                generation.compiler().generateIntermediate(generation.ast(), symbolTable, generator);
+            }
+        } finally {
+            pending.clear();
+        }
     }
 
     private List<String> loadImport(ImportNodeAST impCtx,
@@ -149,7 +180,7 @@ public class PigLatinCompiler extends AbstractLanguageCompiler {
             semanticImports.putAll(target.importedSemanticModels());
         }
         if (sink.isEmpty()) {
-            target.generateIntermediate(importedAst, symbolTable, generator);
+            PENDING.get().add(new PendingGeneration(target, importedAst));
         }
         for (CompilationError e : sink) {
             errors.add(e.inFile(found.getPath()));

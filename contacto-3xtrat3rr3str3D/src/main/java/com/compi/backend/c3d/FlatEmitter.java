@@ -69,6 +69,7 @@ final class FlatEmitter {
                 #include <string.h>
                 double stack[100000];
                 double heap[100000];
+                double otype[100000];
                 double H = 0;
                 double P = 0;
                 double RET = 0;
@@ -117,7 +118,8 @@ final class FlatEmitter {
             case PARAM, CALL, RETURN, STACK_SET -> emitFunction(q);
             case ASSIGN -> emitAssign(q);
             case ADD, SUB, MUL, DIV, INT_DIV, MOD, AND, OR, NOT, NEG -> emitArithmetic(q);
-            case ARRAY_GET, ARRAY_SET, HEAP_GET, HEAP_SET, STACK_GET, SET_P, GET_P, SET_H, GET_H -> emitMemory(q);
+            case ARRAY_GET, ARRAY_SET, HEAP_GET, HEAP_SET, STACK_GET, SET_P, GET_P, SET_H, GET_H,
+                 TYPE_GET, TYPE_SET -> emitMemory(q);
             case CONCAT -> emitConcat(q);
             case PRINT_STR -> emitPrintString(q);
             case READ_STR -> emitReadText(q);
@@ -251,6 +253,8 @@ final class FlatEmitter {
             case ARRAY_SET -> line(a + "[(int)" + b + "] = " + r + ";");
             case HEAP_GET -> line(r + " = heap[(int)" + a + "];");
             case HEAP_SET -> line("heap[(int)" + a + "] = " + b + ";");
+            case TYPE_GET -> line(r + " = otype[(int)" + a + "];");
+            case TYPE_SET -> line("otype[(int)" + a + "] = " + b + ";");
             case STACK_GET -> line(r + " = stack[(int)" + a + "];");
             case SET_P -> line("P = " + a + ";");
             case GET_P -> line(r + " = P;");

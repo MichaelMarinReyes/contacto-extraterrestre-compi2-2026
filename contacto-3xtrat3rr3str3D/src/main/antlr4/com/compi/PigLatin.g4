@@ -12,7 +12,8 @@ variables: VARIABILES MAYOR_QUE (declaracion | arreglo_declaracion)+;
 declaracion: ESTO VARIABLE DOS_PUNTOS? tipo_dato expresion PUNTO_COMA
            | ESTO VARIABLE DOS_PUNTOS? TEXTUM CADENA_TEXTO PUNTO_COMA
            | ESTO VARIABLE DOS_PUNTOS? LITTERA CARACTER PUNTO_COMA
-           | ESTO VARIABLE DOS_PUNTOS? NOVUS VARIABLE PARENTESIS_IZQ argumentos? PARENTESIS_DER PUNTO_COMA
+           | ESTO VARIABLE DOS_PUNTOS? NOVUS VARIABLE PARENTESIS_IZQ argumentos? PARENTESIS_DER (DOS_PUNTOS VARIABLE)? PUNTO_COMA
+           | ESTO VARIABLE DOS_PUNTOS? NULL (DOS_PUNTOS VARIABLE)? PUNTO_COMA
            | ESTO VARIABLE DOS_PUNTOS? VARIABLE structura_instanciacion PUNTO_COMA
            | ESTO VARIABLE DOS_PUNTOS? VARIABLE expresion PUNTO_COMA
            | ESTO VARIABLE DOS_PUNTOS? ASIGNACION (expresion | condicion) PUNTO_COMA
@@ -58,6 +59,7 @@ termino: VARIABLE
        | CARACTER
        | VERUM
        | FALSUS
+       | NULL
        | llamada_funcion
        | NOVUS VARIABLE PARENTESIS_IZQ argumentos? PARENTESIS_DER
        | PARENTESIS_IZQ expresion PARENTESIS_DER
@@ -155,6 +157,7 @@ VARIABILES: 'VARIABILES';
 MUNERA: 'MUNERA';
 MAIOR: 'MAIOR';
 NOVUS: 'novus';
+NULL: 'null';
 
 // Palabras clave para tipos de datos
 NUMERUS: 'numerus';

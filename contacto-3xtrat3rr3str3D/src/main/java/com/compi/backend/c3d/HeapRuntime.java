@@ -18,12 +18,27 @@ public final class HeapRuntime {
                 : type.isStruct() ? symbols.getStruct(type.getCustomTypeName()) : null;
     }
 
+    /** Número de campos propios más los heredados de toda la jerarquía. */
+    public static int fieldCount(Symbol owner) {
+        int count = 0;
+        for (Symbol current = owner; current != null; current = current.getParentClass()) {
+            for (Symbol member : current.getMembers()) {
+                if (member.getCategory() == SymbolCategory.FIELD) count++;
+            }
+        }
+        return count;
+    }
+
     public static int fieldOffset(Symbol owner, String name) {
+        java.util.List<Symbol> chain = new java.util.ArrayList<>();
+        for (Symbol current = owner; current != null; current = current.getParentClass()) chain.add(0, current);
         int offset = 0;
-        for (Symbol field : owner.getMembers()) {
-            if (field.getCategory() != SymbolCategory.FIELD) continue;
-            if (field.getName().equals(name)) return offset;
-            offset++;
+        for (Symbol current : chain) {
+            for (Symbol field : current.getMembers()) {
+                if (field.getCategory() != SymbolCategory.FIELD) continue;
+                if (field.getName().equals(name)) return offset;
+                offset++;
+            }
         }
         throw new IllegalStateException("No existe el campo «" + name + "» en «" + owner.getName() + "»");
     }
@@ -35,11 +50,14 @@ public final class HeapRuntime {
     }
 
     public static String allocateObject(C3DGenerator generator, Symbol owner) {
-        int count = (int) owner.getMembers().stream()
-                .filter(member -> member.getCategory() == SymbolCategory.FIELD).count();
+        int count = fieldCount(owner);
         String base = ArrayRuntime.allocate(generator, Math.max(count, 1));
         for (int i = 0; i < count; i++) {
             generator.emit(QuadrupleOp.HEAP_SET, ArrayRuntime.add(generator, base, i), "0", null);
+        }
+        // Marca de tipo para el despacho virtual de métodos.
+        if (owner != null && owner.getCategory() == SymbolCategory.CLASS) {
+            generator.emit(QuadrupleOp.TYPE_SET, base, String.valueOf(owner.getTypeTag()), null);
         }
         return base;
     }

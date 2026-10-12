@@ -44,10 +44,12 @@ final class AstExpressionAnalyzer {
 
     Type identifier(IdentifierNodeAST n) {
         Symbol symbol = a.table.resolve(n.name());
+        if (symbol == null && a.currentClass != null) symbol = a.inheritedField(a.currentClass, n.name());
         if (symbol == null) {
             a.report("Símbolo «" + n.name() + "» no declarado", n);
             return Type.UNKNOWN;
         }
+        a.checkAccess(symbol, n);
         a.model.symbol(n, symbol);
         return symbol.getType();
     }
@@ -88,6 +90,7 @@ final class AstExpressionAnalyzer {
             a.report("El miembro «" + n.member() + "» no existe en «" + target.label() + "»", n);
             return Type.UNKNOWN;
         }
+        a.checkAccess(member, n);
         a.model.symbol(n, member);
         return member.getType();
     }
@@ -153,8 +156,8 @@ final class AstExpressionAnalyzer {
         if (!Type.isKnown(yes) || !Type.isKnown(no)) return Type.UNKNOWN;
         if (yes.equals(no)) return yes;
         if (yes.isNumeric() && no.isNumeric()) return Type.DOUBLE;
-        if (yes.isAssignableTo(no)) return no;
-        if (no.isAssignableTo(yes)) return yes;
+        if (a.assignable(no, yes)) return no;
+        if (a.assignable(yes, no)) return yes;
         a.report("Las ramas del ternario tienen tipos incompatibles", n);
         return Type.UNKNOWN;
     }
@@ -164,10 +167,11 @@ final class AstExpressionAnalyzer {
         Symbol method = null;
         if (n.callee() instanceof MemberAccessNodeAST member) {
             Symbol owner = owner(a.evaluate(member.target()));
-            if (owner != null) method = owner.getCallable(member.member(), args.size());
+            if (owner != null) method = owner.resolveMethod(member.member(), args.size());
+            if (method != null) a.checkAccess(method, n.callee());
         } else if (n.callee() instanceof IdentifierNodeAST id) {
             if (List.of("print", "println").contains(id.name()) && a.language.equals("zet")) return Type.VOID;
-            if (a.currentClass != null) method = a.currentClass.getCallable(id.name(), args.size());
+            if (a.currentClass != null) method = a.currentClass.resolveMethod(id.name(), args.size());
             if (method == null) method = a.table.getFunction(id.name());
         }
         if (method == null) {

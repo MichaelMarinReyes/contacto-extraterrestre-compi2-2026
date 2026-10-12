@@ -113,16 +113,18 @@ final class AstExpressionEmitter {
         String name = callable.getName();
         int count = n.arguments().size();
         if (callable.getCategory() == SymbolCategory.METHOD) {
-            String owner;
+            Symbol owner;
             String receiver;
             if (n.callee() instanceof MemberAccessNodeAST member) {
-                owner = g.type(member.target()).getCustomTypeName();
+                owner = g.table.getClass(g.type(member.target()).getCustomTypeName());
                 receiver = g.emit(member.target());
             } else {
-                owner = g.currentClass.name();
+                owner = g.table.getClass(g.currentClass.name());
                 receiver = g.table.resolve("this").getStorageName();
             }
-            name = FunctionRuntime.name(owner, name, count);
+            java.util.Map<Integer, String> targets = virtualTargets(owner, callable, count);
+            if (targets.size() > 1) return dispatch(n, receiver, targets, count);
+            name = label(callable);
             g.c3d.emit(QuadrupleOp.PARAM, g.memory.capture(receiver), null, null);
             count++;
         }
@@ -130,6 +132,59 @@ final class AstExpressionEmitter {
             g.c3d.emit(QuadrupleOp.PARAM, g.memory.capture(g.emit(arg)), null, null);
         String result = g.c3d.newTemp();
         g.c3d.emit(QuadrupleOp.CALL, name, String.valueOf(count), result);
+        return result;
+    }
+
+    /** Etiqueta C3D de un método según la clase que realmente lo declara. */
+    private String label(Symbol method) {
+        Symbol owner = method.getOwnerClass() == null ? g.table.getClass(g.currentClass.name()) : method.getOwnerClass();
+        return FunctionRuntime.name(owner.getName(), method.getName(), method.getParameters().size());
+    }
+
+    /** Etiqueta concreta para cada tipo de la jerarquía; más de una exige despacho virtual. */
+    private java.util.Map<Integer, String> virtualTargets(Symbol owner, Symbol callable, int count) {
+        java.util.Map<Integer, String> targets = new java.util.LinkedHashMap<>();
+        if (owner == null) return targets;
+        for (Symbol clazz : g.table.getClasses()) {
+            if (!isDescendant(clazz, owner)) continue;
+            Symbol method = clazz.resolveMethod(callable.getName(), count);
+            if (method != null && method.getOwnerClass() != null) targets.put(clazz.getTypeTag(), label(method));
+        }
+        return targets;
+    }
+
+    private boolean isDescendant(Symbol clazz, Symbol root) {
+        for (Symbol current = clazz; current != null; current = current.getParentClass())
+            if (current == root) return true;
+        return false;
+    }
+
+    /** Selecciona en ejecución el método según la marca de tipo del receptor. */
+    private String dispatch(CallNodeAST n, String receiver, java.util.Map<Integer, String> targets, int count) {
+        String recv = g.memory.capture(receiver);
+        java.util.List<String> arguments = new java.util.ArrayList<>();
+        for (AbstractExpressionNodeAST argument : n.arguments())
+            arguments.add(g.memory.capture(g.emit(argument)));
+        String tag = g.c3d.newTemp();
+        g.c3d.emit(QuadrupleOp.TYPE_GET, recv, null, tag);
+        String result = g.c3d.newTemp();
+        String end = g.c3d.newLabel();
+        java.util.List<String> branches = new java.util.ArrayList<>();
+        for (Integer value : targets.keySet()) {
+            String branch = g.c3d.newLabel();
+            branches.add(branch);
+            g.c3d.emit(QuadrupleOp.IF_EQ, tag, String.valueOf(value), branch);
+        }
+        g.c3d.emitGoto(branches.get(0));
+        int index = 0;
+        for (String target : targets.values()) {
+            g.c3d.emitLabel(branches.get(index++));
+            g.c3d.emit(QuadrupleOp.PARAM, recv, null, null);
+            for (String argument : arguments) g.c3d.emit(QuadrupleOp.PARAM, argument, null, null);
+            g.c3d.emit(QuadrupleOp.CALL, target, String.valueOf(count + 1), result);
+            g.c3d.emitGoto(end);
+        }
+        g.c3d.emitLabel(end);
         return result;
     }
 

@@ -91,9 +91,72 @@ public final class AstSemanticAnalyzer extends AbstractASTVisitor<Type> {
     }
 
     void compatible(Type expected, Type actual, ASTNode node) {
-        if (Type.isKnown(expected) && Type.isKnown(actual) && !actual.isAssignableTo(expected)) {
+        if (Type.isKnown(expected) && Type.isKnown(actual) && !assignable(expected, actual)) {
             report("Tipos incompatibles: se esperaba «" + expected.label() + "» y se obtuvo «" + actual.label() + "»", node);
         }
+    }
+
+    /**
+     * Compatibilidad de asignación que además acepta una subclase donde se
+     * espera cualquiera de sus superclases.
+     */
+    boolean assignable(Type expected, Type actual) {
+        if (actual.isAssignableTo(expected)) return true;
+        return subclassOf(actual, expected);
+    }
+
+    /**
+     * Comprueba la visibilidad de un miembro respecto de la clase actual:
+     * {@code private} solo desde su clase y {@code protected} desde su clase o
+     * una subclase.
+     */
+    void checkAccess(Symbol member, ASTNode node) {
+        if (member == null || member.getAccess() == null) return;
+        Symbol declaring = member.getOwnerClass();
+        if (declaring == null) return;
+        switch (member.getAccess()) {
+            case "PRIVATE" -> {
+                if (currentClass != declaring)
+                    report("El miembro «" + member.getName() + "» es privado y solo se accede desde «"
+                            + declaring.getName() + "»", node);
+            }
+            case "PROTECTED" -> {
+                if (!isSubclass(currentClass, declaring))
+                    report("El miembro «" + member.getName() + "» es protegido y solo se accede desde «"
+                            + declaring.getName() + "» o sus subclases", node);
+            }
+            default -> {
+            }
+        }
+    }
+
+    /** Indica si «candidate» es «ancestor» o hereda de él. */
+    boolean isSubclass(Symbol candidate, Symbol ancestor) {
+        for (Symbol current = candidate; current != null; current = current.getParentClass())
+            if (current == ancestor) return true;
+        return false;
+    }
+
+    /** Busca un atributo heredado por nombre a lo largo de la jerarquía. */
+    Symbol inheritedField(Symbol clazz, String name) {
+        for (Symbol current = clazz; current != null; current = current.getParentClass()) {
+            for (Symbol member : current.getMembers()) {
+                if (member.getCategory() == SymbolCategory.FIELD && member.getName().equals(name)) return member;
+            }
+        }
+        return null;
+    }
+
+    /** Indica si «actual» es la misma clase que «expected» o una subclase suya. */
+    boolean subclassOf(Type actual, Type expected) {
+        if (!actual.isClass() || !expected.isClass()) return false;
+        Symbol target = table.getClass(expected.getCustomTypeName());
+        if (target == null) return false;
+        for (Symbol current = table.getClass(actual.getCustomTypeName()); current != null;
+             current = current.getParentClass()) {
+            if (current == target) return true;
+        }
+        return false;
     }
 
     void condition(AbstractExpressionNodeAST node) {

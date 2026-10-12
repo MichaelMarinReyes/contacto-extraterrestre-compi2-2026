@@ -13,55 +13,55 @@ import java.util.List;
 import java.util.Map;
 
 public interface LanguageCompiler {
-    String id();
+    public String id();
 
-    String displayName();
+    public String displayName();
 
-    List<String> extensions();
+    public List<String> extensions();
 
-    ParseTree parse(String source, List<CompilationError> errors);
+    public ParseTree parse(String source, List<CompilationError> errors);
 
-    ProgramNodeAST buildAst(ParseTree tree, String sourceFile);
+    public ProgramNodeAST buildAst(ParseTree tree, String sourceFile);
 
-    default Map<String, ProgramNodeAST> importedAsts() {
+    public default Map<String, ProgramNodeAST> importedAsts() {
         return Map.of();
     }
 
-    default Map<String, SemanticModel> importedSemanticModels() {
+    public default Map<String, SemanticModel> importedSemanticModels() {
         return Map.of();
     }
 
-    default Vocabulary vocabulary() {
+    public default Vocabulary vocabulary() {
         return null;
     }
 
-    default String[] ruleNames() {
+    public default String[] ruleNames() {
         return null;
     }
 
-    void analyze(ProgramNodeAST tree, SymbolTable symbolTable, List<CompilationError> errors);
+    public void analyze(ProgramNodeAST tree, SymbolTable symbolTable, List<CompilationError> errors);
 
-    SemanticModel semanticModel();
+    public SemanticModel semanticModel();
 
-    void generateIntermediate(ProgramNodeAST tree, SymbolTable symbolTable, C3DGenerator generator);
+    public void generateIntermediate(ProgramNodeAST tree, SymbolTable symbolTable, C3DGenerator generator);
 
-    default List<String> loadImports(ProgramNodeAST tree, SymbolTable symbolTable,
+    public default List<String> loadImports(ProgramNodeAST tree, SymbolTable symbolTable,
                                      C3DGenerator generator, List<CompilationError> errors) {
         return loadImports(tree, symbolTable, generator, errors, new ArrayList<>());
     }
 
-    default List<String> loadImports(ProgramNodeAST tree, SymbolTable symbolTable,
+    public default List<String> loadImports(ProgramNodeAST tree, SymbolTable symbolTable,
                                      C3DGenerator generator, List<CompilationError> errors,
                                      List<String> yaCargados) {
         return List.of();
     }
 
-    default void setWorkingDirectory(java.io.File directory) {
+    public default void setWorkingDirectory(java.io.File directory) {
     }
 
-    default void setProjectDirectory(java.io.File directory) {
+    public default void setProjectDirectory(java.io.File directory) {
     }
 
-    default void setSourceFileName(String fileName) {
+    public default void setSourceFileName(String fileName) {
     }
 }

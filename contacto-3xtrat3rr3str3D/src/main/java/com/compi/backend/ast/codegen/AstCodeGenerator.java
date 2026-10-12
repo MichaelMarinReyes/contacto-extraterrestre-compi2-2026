@@ -46,9 +46,18 @@ public final class AstCodeGenerator extends AbstractASTVisitor<String> {
     public void generate(ProgramNodeAST program) {
         table.beginCodeGeneration();
         try {
+            assignTypeTags();
             emit(program);
         } finally {
             table.endCodeGeneration();
+        }
+    }
+
+    /** Asigna una marca de tipo única por clase para el despacho virtual. */
+    private void assignTypeTags() {
+        int tag = 1;
+        for (Symbol clazz : table.getClasses()) {
+            clazz.setTypeTag(tag++);
         }
     }
 

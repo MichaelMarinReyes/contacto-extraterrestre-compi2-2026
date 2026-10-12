@@ -8,9 +8,9 @@ public interface ASTNode {
     /**
      * Doble despacho: invoca el metodo del visitante correspondiente a este tipo.
      */
-    void accept(ASTVisitor<?> visitor);
+    public void accept(ASTVisitor<?> visitor);
 
-    int line();
+    public int line();
 
-    int column();
+    public int column();
 }

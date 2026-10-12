@@ -84,7 +84,7 @@ public class PigLatinAstBuilder extends AbstractAstBuilder {
         if (one(c, "tipo_dato") != null) declared = type(one(c, "tipo_dato").getText(), false);
         else if (has(c, "textum")) declared = Type.STRING;
         else if (has(c, "littera")) declared = Type.CHAR;
-        else if (ids.size() > 1) declared = type(ids.get(1), has(c, "novus"));
+        else if (declaredObjectType(c, ids) != null) declared = declaredObjectType(c, ids);
         AbstractExpressionNodeAST value = initializer(c);
         if (value instanceof InstanceInitNodeAST init && init.typeName().isEmpty()) {
             value = new InstanceInitNodeAST(init.line(), init.column(), ids.get(1), init.positional(), init.named(), init.arrayRef(), init.duplicateFields());
@@ -97,11 +97,21 @@ public class PigLatinAstBuilder extends AbstractAstBuilder {
         return new DeclarationNodeAST(line(c), col(c), declared, ids.getFirst(), fixedDimensions(c, "NUMERO_ENTERO"), value);
     }
 
+    /** Tipo declarado para objeto: explícito tras {@code novus ... : Tipo} o tras {@code null : Tipo}. */
+    private Type declaredObjectType(ParserRuleContext c, List<String> ids) {
+        if (ids.size() < 2) return null;
+        if (has(c, "novus")) return type(ids.size() >= 3 ? ids.get(2) : ids.get(1), true);
+        if (has(c, "null")) return type(ids.get(1), true);
+        return type(ids.get(1), false);
+    }
+
     private AbstractExpressionNodeAST initializer(ParserRuleContext c) {
         if (has(c, "novus")) {
             List<String> ids = tokens(c, "VARIABLE");
-            return new NewObjectNodeAST(line(c), col(c), ids.getLast(), arguments(c, "argumentos", "expresion"), null);
+            String constructor = ids.size() >= 2 ? ids.get(1) : ids.getLast();
+            return new NewObjectNodeAST(line(c), col(c), constructor, arguments(c, "argumentos", "expresion"), null);
         }
+        if (has(c, "null")) return literal(c, "null");
         for (String name : List.of("expresion", "condicion", "structura_instanciacion", "arreglo_literal")) {
             if (one(c, name) != null) return expr(c, name);
         }

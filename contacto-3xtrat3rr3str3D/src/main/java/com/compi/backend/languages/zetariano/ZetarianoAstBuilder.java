@@ -31,8 +31,12 @@ public class ZetarianoAstBuilder extends AbstractAstBuilder {
         return switch (rule) {
             case "programa" -> new ProgramNodeAST(line(c), col(c), List.of(),
                     all(c, "claseDef").stream().map(child -> (AbstractDefinitionNodeAST) visit(child)).toList(), List.of(), List.of());
-            case "claseDef" -> new ClassDefinitionNodeAST(line(c), col(c), tokens(c, "ID").getFirst(),
-                    all(c, "miembroClase").stream().map(child -> (AbstractNodeAST) visit(child)).toList(), has(c, "public"));
+            case "claseDef" -> {
+                List<String> names = tokens(c, "ID");
+                yield new ClassDefinitionNodeAST(line(c), col(c), names.getFirst(),
+                        names.size() > 1 ? names.get(1) : null,
+                        all(c, "miembroClase").stream().map(child -> (AbstractNodeAST) visit(child)).toList(), has(c, "public"));
+            }
             case "miembroClase", "forInit", "forUpdate" -> unwrap(c);
             case "sentencia" -> statementRule(c);
             case "bloque" -> block(c, "sentencia");
@@ -75,11 +79,17 @@ public class ZetarianoAstBuilder extends AbstractAstBuilder {
         return unwrap(c);
     }
 
+    /** Modificador de acceso declarado sobre un miembro; ausencia implica acceso de paquete. */
+    private AccessModifier accessOf(ParserRuleContext c) {
+        ParserRuleContext modifier = one(c, "modificadorAcceso");
+        return modifier == null ? AccessModifier.DEFAULT : AccessModifier.from(modifier.getText());
+    }
+
     private ASTNode declaration(ParserRuleContext c) {
         Type type = type(one(c, "tipoDato").getText(), true);
         String name = tokens(c, "ID").getFirst();
         if (rule(c).equals("atributoDef")) return new AttributeDefinitionNodeAST(line(c), col(c), type, name,
-                dimensions(c), expr(c, "expresion"));
+                dimensions(c), expr(c, "expresion"), accessOf(c));
         return new DeclarationNodeAST(line(c), col(c), type, name, dimensions(c), expr(c, "expresion"));
     }
 
@@ -91,10 +101,11 @@ public class ZetarianoAstBuilder extends AbstractAstBuilder {
                     tokens(param, "ID").getFirst(), false));
         }
         AbstractStatementNodeAST body = statement(node(c, "bloque"));
+        AccessModifier access = accessOf(c);
         if (rule(c).equals("constructorDef"))
-            return new ConstructorDefinitionNodeAST(line(c), col(c), tokens(c, "ID").getFirst(), parameters, body);
+            return new ConstructorDefinitionNodeAST(line(c), col(c), tokens(c, "ID").getFirst(), parameters, body, access);
         return new MethodDefinitionNodeAST(line(c), col(c), type(one(c, "tipoDato").getText(), true),
-                tokens(c, "ID").getFirst(), parameters, body);
+                tokens(c, "ID").getFirst(), parameters, body, access, has(c, "@Override"));
     }
 
     private AbstractExpressionNodeAST target(ParserRuleContext c) {
@@ -125,7 +136,7 @@ public class ZetarianoAstBuilder extends AbstractAstBuilder {
     }
 
     private AbstractExpressionNodeAST memberAccess(ParserRuleContext c) {
-        AbstractExpressionNodeAST result = identifier(c, tokens(c, "ID").getFirst());
+        AbstractExpressionNodeAST result = identifier(c, has(c, "this") ? "this" : tokens(c, "ID").getFirst());
         for (ParserRuleContext member : all(c, "miembroAcceso")) {
             if (has(member, "."))
                 result = new MemberAccessNodeAST(line(member), col(member), result, tokens(member, "ID").getFirst(), null);
@@ -145,6 +156,7 @@ public class ZetarianoAstBuilder extends AbstractAstBuilder {
 
     private ASTNode expression(ParserRuleContext c) {
         List<ParserRuleContext> operands = all(c, "expresion");
+        if (has(c, "this")) return identifier(c, "this");
         if (has(c, "new")) {
             if (one(c, "tipoDato") != null) return new NewArrayNodeAST(line(c), col(c),
                     type(one(c, "tipoDato").getText(), true), expressions(c, "expresion"));

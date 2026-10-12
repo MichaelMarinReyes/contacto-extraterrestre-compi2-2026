@@ -2,6 +2,7 @@ package com.compi.backend.ast.declarations;
 
 import com.compi.backend.ast.ASTNode;
 import com.compi.backend.ast.ASTVisitor;
+import com.compi.backend.ast.AccessModifier;
 import com.compi.backend.ast.AbstractDefinitionNodeAST;
 import com.compi.backend.ast.AbstractStatementNodeAST;
 
@@ -16,16 +17,23 @@ public class ConstructorDefinitionNodeAST extends AbstractDefinitionNodeAST {
     private final List<ParameterNodeAST> parameters;
     private final AbstractStatementNodeAST body;
     private final String name;
+    private final AccessModifier access;
 
     public ConstructorDefinitionNodeAST(int line, int column, List<ParameterNodeAST> parameters, AbstractStatementNodeAST body) {
         this(line, column, "", parameters, body);
     }
 
     public ConstructorDefinitionNodeAST(int line, int column, String name, List<ParameterNodeAST> parameters, AbstractStatementNodeAST body) {
+        this(line, column, name, parameters, body, AccessModifier.DEFAULT);
+    }
+
+    public ConstructorDefinitionNodeAST(int line, int column, String name, List<ParameterNodeAST> parameters,
+                                        AbstractStatementNodeAST body, AccessModifier access) {
         super(line, column);
         this.name = name;
         this.parameters = parameters;
         this.body = body;
+        this.access = access;
     }
 
     @Override
@@ -51,5 +59,9 @@ public class ConstructorDefinitionNodeAST extends AbstractDefinitionNodeAST {
 
     public AbstractStatementNodeAST body() {
         return body;
+    }
+
+    public AccessModifier access() {
+        return access;
     }
 }

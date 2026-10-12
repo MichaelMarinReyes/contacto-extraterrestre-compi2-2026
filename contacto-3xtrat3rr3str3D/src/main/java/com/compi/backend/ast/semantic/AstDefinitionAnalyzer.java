@@ -28,10 +28,13 @@ final class AstDefinitionAnalyzer {
             if (node instanceof ClassDefinitionNodeAST cls) {
                 if (a.table.getClass(cls.name()) != null)
                     a.report("La clase «" + cls.name() + "» ya está declarada", cls);
-                else
+                else {
                     a.table.addClass(a.symbol(cls.name(), Type.classType(cls.name()), SymbolCategory.CLASS, 0, false, cls));
+                }
             }
         }
+        linkParents(program);
+        validateHierarchy(program);
         for (AbstractDefinitionNodeAST node : program.definitions()) {
             if (node instanceof StructDefinitionNodeAST struct) structure(struct);
         }
@@ -47,6 +50,35 @@ final class AstDefinitionAnalyzer {
             }
         }
         a.currentClass = previous;
+    }
+
+    /** Enlaza cada clase con su superclase declarada y valida ciclos de herencia. */
+    private void linkParents(ProgramNodeAST program) {
+        for (AbstractDefinitionNodeAST node : program.definitions()) {
+            if (!(node instanceof ClassDefinitionNodeAST cls) || cls.parentName() == null) continue;
+            Symbol child = a.table.getClass(cls.name());
+            Symbol parent = a.table.getClass(cls.parentName());
+            if (parent == null) {
+                a.report("La superclase «" + cls.parentName() + "» no está definida", cls);
+            } else if (parent == child) {
+                a.report("Una clase no puede heredar de sí misma", cls);
+            } else {
+                child.setParentClass(parent);
+            }
+        }
+    }
+
+    private void validateHierarchy(ProgramNodeAST program) {
+        for (AbstractDefinitionNodeAST node : program.definitions()) {
+            if (!(node instanceof ClassDefinitionNodeAST cls)) continue;
+            java.util.Set<Symbol> visited = java.util.Collections.newSetFromMap(new java.util.IdentityHashMap<>());
+            for (Symbol current = a.table.getClass(cls.name()); current != null; current = current.getParentClass()) {
+                if (!visited.add(current)) {
+                    a.report("Herencia cíclica detectada en la clase «" + cls.name() + "»", cls);
+                    break;
+                }
+            }
+        }
     }
 
     void structure(StructDefinitionNodeAST n) {
@@ -112,15 +144,42 @@ final class AstDefinitionAnalyzer {
     }
 
     private void registerClassFields(ClassDefinitionNodeAST n) {
-        int offset = 0;
+        int offset = inheritedFieldCount(a.currentClass);
         for (AbstractNodeAST member : n.members())
             if (member instanceof AttributeDefinitionNodeAST field) {
                 Type type = a.declarations.declared(field.type(), field.dimensions(), field);
                 Symbol symbol = a.symbol(field.name(), type, SymbolCategory.FIELD, offset++, false, field);
-                if (a.currentClass.getMember(field.name()) != null)
+                symbol.setOwnerClass(a.currentClass);
+                symbol.setAccess(field.access() == null ? null : field.access().name());
+                if (a.currentClass.getCallable(field.name(), 0) != null || ownField(a.currentClass, field.name()) != null)
                     a.report("El atributo «" + field.name() + "» ya está declarado", field);
+                else if (inheritedField(a.currentClass, field.name()) != null)
+                    a.report("El atributo «" + field.name() + "» oculta uno heredado de la superclase", field);
                 a.currentClass.addMember(symbol);
             }
+    }
+
+    private Symbol ownField(Symbol owner, String name) {
+        for (Symbol member : owner.getMembers())
+            if (member.getCategory() == SymbolCategory.FIELD && member.getName().equals(name)) return member;
+        return null;
+    }
+
+    private Symbol inheritedField(Symbol owner, String name) {
+        for (Symbol parent = owner.getParentClass(); parent != null; parent = parent.getParentClass()) {
+            Symbol field = ownField(parent, name);
+            if (field != null) return field;
+        }
+        return null;
+    }
+
+    private int inheritedFieldCount(Symbol owner) {
+        int count = 0;
+        for (Symbol parent = owner.getParentClass(); parent != null; parent = parent.getParentClass()) {
+            for (Symbol member : parent.getMembers())
+                if (member.getCategory() == SymbolCategory.FIELD) count++;
+        }
+        return count;
     }
 
     private void publishFields(ClassDefinitionNodeAST n) {
@@ -142,13 +201,30 @@ final class AstDefinitionAnalyzer {
     }
 
     private void registerMethod(String name, Type type, SymbolCategory category, List<ParameterNodeAST> parameters, AbstractNodeAST node) {
+        if (node instanceof MethodDefinitionNodeAST method) {
+            Symbol inherited = a.currentClass.getInheritedMethod(name, parameters.size());
+            if (method.override() && inherited == null)
+                a.report("El método «" + name + "» lleva @Override pero no sobrescribe ningún método base", node);
+            else if (!method.override() && inherited != null)
+                a.report("El método «" + name + "» sobrescribe un método base; agregue @Override", node);
+        }
         if (a.currentClass.getCallable(name, parameters.size()) != null) {
             a.report("Firma repetida de «" + name + "» con " + parameters.size() + " parámetros", node);
             return;
         }
         String scope = (category == SymbolCategory.CONSTRUCTOR ? "constructor_" : "method_")
                 + FunctionRuntime.name(a.currentClass.getName(), name, parameters.size());
-        a.currentClass.addMember(signature(name, type, category, parameters, node, scope, 1));
+        Symbol method = signature(name, type, category, parameters, node, scope, 1);
+        method.setOwnerClass(a.currentClass);
+        method.setAccess(accessOf(node));
+        a.currentClass.addMember(method);
+    }
+
+    private String accessOf(AbstractNodeAST node) {
+        if (node instanceof MethodDefinitionNodeAST method) return method.access() == null ? null : method.access().name();
+        if (node instanceof ConstructorDefinitionNodeAST constructor)
+            return constructor.access() == null ? null : constructor.access().name();
+        return null;
     }
 
     void functionBody(FunctionDefinitionNodeAST n) {

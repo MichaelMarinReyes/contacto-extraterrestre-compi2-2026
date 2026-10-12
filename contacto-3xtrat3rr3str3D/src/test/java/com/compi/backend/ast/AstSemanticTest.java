@@ -122,7 +122,15 @@ class AstSemanticTest {
             "zet, 'class C { void f() { boolean x = true + false; } }', Operand",
             "zet, 'class C { C() {} void f() { C x = new C(1); } }', constructor",
             "zet, 'class C { Otra() {} }', constructor",
-            "zet, 'class C { int f(int n) { return n; } int f(int n) { return n; } }', Firma"
+            "zet, 'class C { int f(int n) { return n; } int f(int n) { return n; } }', Firma",
+            "zet, 'class A { int f() { return 1; } } class B extends A { int f() { return 2; } }', @Override",
+            "zet, 'class A { } class B extends A { public @Override int g() { return 1; } }', @Override",
+            "zet, 'class B extends Inexistente { }', superclase",
+            "zet, 'class A extends A { }', heredar de sí misma",
+            "zet, 'class A { int x; } class B extends A { int x; }', oculta",
+            "zet, 'class A { private int x; } class B { void f(A a) { int y = a.x; } }', privado",
+            "zet, 'class A { protected int x; } class B { void f(A a) { int y = a.x; } }', protegido",
+            "zet, 'class A { private int g() { return 1; } } class B { void f(A a) { int y = a.g(); } }', privado"
     })
     void semanticFailuresProduceLocatedDiagnosticsWithoutExecutableC(String language, String source, String message) {
         Compiler compiler = new Compiler();
@@ -218,6 +226,21 @@ class AstSemanticTest {
         NewObjectNodeAST allocation = flatten(ast).stream().filter(NewObjectNodeAST.class::isInstance)
                 .map(NewObjectNodeAST.class::cast).findFirst().orElseThrow();
         assertEquals(SymbolCategory.CONSTRUCTOR, model.symbolOf(allocation).getCategory());
+    }
+
+    @Test
+    void protectedAndPrivateMembersAreReachableFromTheirAllowedContexts() {
+        Compiler compiler = new Compiler();
+        assertTrue(compiler.compile("""
+                class Base {
+                    protected int valor;
+                    private int secreto() { return 1; }
+                    int propio() { return secreto(); }
+                }
+                class Hija extends Base {
+                    int leer() { return valor + this.propio(); }
+                }
+                """, "zet"), compiler.getErrors().toString());
     }
 
     @Test

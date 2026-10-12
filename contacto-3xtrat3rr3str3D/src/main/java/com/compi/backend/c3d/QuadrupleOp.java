@@ -43,6 +43,9 @@ public enum QuadrupleOp {
     HEAP_SET("heap_set"),
     HEAP_GET("heap_get"),
 
+    TYPE_SET("type_set"),
+    TYPE_GET("type_get"),
+
     SET_P("set_P"),
     GET_P("get_P"),
     SET_H("set_H"),

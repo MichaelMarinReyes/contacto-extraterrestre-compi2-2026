@@ -3,20 +3,22 @@ grammar Zetariano;
 // GRAMÁTICA
 programa: claseDef+ EOF;
 
-claseDef: PUBLIC? CLASS ID LBRACE miembroClase* RBRACE;
+claseDef: PUBLIC? CLASS ID (EXTENDS ID)? LBRACE miembroClase* RBRACE;
 
 miembroClase: atributoDef
                 | constructorDef
                 | metodoDef
                 ;
 
-atributoDef: tipoDato ID (LBRACK RBRACK)* (ASSIGN expresion)? SEMICOLON
-           | tipoDato LBRACK RBRACK (LBRACK RBRACK)* ID (ASSIGN expresion)? SEMICOLON
+atributoDef: modificadorAcceso? tipoDato ID (LBRACK RBRACK)* (ASSIGN expresion)? SEMICOLON
+           | modificadorAcceso? tipoDato LBRACK RBRACK (LBRACK RBRACK)* ID (ASSIGN expresion)? SEMICOLON
            ;
 
-constructorDef: PUBLIC? ID LPAREN parametros? RPAREN bloque;
+constructorDef: modificadorAcceso? ID LPAREN parametros? RPAREN bloque;
 
-metodoDef: PUBLIC? tipoDato ID LPAREN parametros? RPAREN bloque;
+metodoDef: modificadorAcceso? OVERRIDE? tipoDato ID LPAREN parametros? RPAREN bloque;
+
+modificadorAcceso: PUBLIC | PRIVATE | PROTECTED;
 
 parametros: parametro (COMMA parametro)*;
 parametro: tipoDato ID;
@@ -93,6 +95,7 @@ expresion: MINUS expresion # NegExpr
          | NEW tipoDato LBRACK expresion RBRACK (LBRACK expresion RBRACK)* # NewArrayExpr
          | literalArreglo # LiteralArregloExpr
          | NULL # NullExpr
+         | THIS # ThisExpr
          | ID # IdExpr
          | accesoMiembro # MemberAccessExpr
          | LITERAL_ENTERO # IntLiteralExpr
@@ -108,7 +111,7 @@ expresion: MINUS expresion # NegExpr
 literalArreglo: LBRACE (expresion | literalArreglo)
                       (COMMA (expresion | literalArreglo))* RBRACE;
 
-accesoMiembro: ID miembroAcceso+;
+accesoMiembro: (ID | THIS) miembroAcceso+;
 
 miembroAcceso: DOT ID (LBRACK expresion RBRACK)*
              | LBRACK expresion RBRACK (LBRACK expresion RBRACK)*
@@ -125,6 +128,11 @@ tipoDato: INT_TYPE
 
 // LEXER
 PUBLIC: 'public';
+PRIVATE: 'private';
+PROTECTED: 'protected';
+EXTENDS: 'extends';
+OVERRIDE: '@Override';
+THIS: 'this';
 CLASS: 'class';
 VOID: 'void';
 NEW: 'new';

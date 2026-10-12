@@ -2,6 +2,7 @@ package com.compi.backend.ast.declarations;
 
 import com.compi.backend.ast.ASTNode;
 import com.compi.backend.ast.ASTVisitor;
+import com.compi.backend.ast.AccessModifier;
 import com.compi.backend.ast.AbstractDefinitionNodeAST;
 import com.compi.backend.ast.AbstractExpressionNodeAST;
 import com.compi.backend.symbols.Type;
@@ -18,13 +19,20 @@ public class AttributeDefinitionNodeAST extends AbstractDefinitionNodeAST {
     private final String name;
     private final List<AbstractExpressionNodeAST> dimensions;
     private final AbstractExpressionNodeAST initializer;
+    private final AccessModifier access;
 
     public AttributeDefinitionNodeAST(int line, int column, Type type, String name, List<AbstractExpressionNodeAST> dimensions, AbstractExpressionNodeAST initializer) {
+        this(line, column, type, name, dimensions, initializer, AccessModifier.DEFAULT);
+    }
+
+    public AttributeDefinitionNodeAST(int line, int column, Type type, String name, List<AbstractExpressionNodeAST> dimensions,
+                                      AbstractExpressionNodeAST initializer, AccessModifier access) {
         super(line, column);
         this.type = type;
         this.name = name;
         this.dimensions = dimensions;
         this.initializer = initializer;
+        this.access = access;
     }
 
     @Override
@@ -54,5 +62,9 @@ public class AttributeDefinitionNodeAST extends AbstractDefinitionNodeAST {
 
     public AbstractExpressionNodeAST initializer() {
         return initializer;
+    }
+
+    public AccessModifier access() {
+        return access;
     }
 }

@@ -155,6 +155,11 @@ public class SymbolTable {
         return classes.get(name);
     }
 
+    /** Clases registradas, en orden de declaración. */
+    public java.util.Collection<Symbol> getClasses() {
+        return classes.values();
+    }
+
     public void addFunction(Symbol function) {
         function.setScopeIfAbsent(function.getName());
         functions.put(function.getName(), function);

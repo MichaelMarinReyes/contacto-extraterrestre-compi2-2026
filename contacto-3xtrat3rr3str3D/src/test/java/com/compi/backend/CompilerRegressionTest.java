@@ -264,6 +264,39 @@ class CompilerRegressionTest {
         assertEquals("1,1,0,1\n", execute(compiler, ""));
     }
 
+    @Test
+    void inheritanceOverridesAndThisDispatchDynamically() throws Exception {
+        Files.writeString(temporaryDirectory.resolve("Animal.z"), """
+                public class Animal {
+                    public String nombre;
+                    public Animal(String n) { this.nombre = n; }
+                    public String sonido() { return "generico"; }
+                    public String describir() { return nombre + " dice " + sonido(); }
+                }
+                """);
+        Files.writeString(temporaryDirectory.resolve("Perro.z"), """
+                public class Perro extends Animal {
+                    public Perro(String n) { this.nombre = n; }
+                    public @Override String sonido() { return "guau"; }
+                }
+                """);
+        Compiler compiler = new Compiler();
+        compiler.setWorkingDirectory(temporaryDirectory.toFile());
+        assertTrue(compiler.compile("""
+                import Animal.z
+                import Perro.z
+                VARIABILES>
+                esto a : novus Perro("Rex") : Animal;
+                esto b : novus Animal("Generico") : Animal;
+                MAIOR>
+                >> a.describir();
+                >> b.describir();
+                >> a.sonido();
+                FINIS;
+                """, "pig"), compiler.getErrors().toString());
+        assertEquals("Rex dice guau\nGenerico dice generico\nguau\n", execute(compiler, ""));
+    }
+
     private Compiler compileFile(Path source, Mode mode) throws Exception {
         Compiler compiler = new Compiler();
         compiler.setCMode(mode);

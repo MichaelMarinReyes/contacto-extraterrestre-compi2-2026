@@ -21,6 +21,18 @@ public class Symbol {
 
     private List<Symbol> members = new ArrayList<>();
 
+    /** Clase de la que hereda esta clase, o {@code null}. */
+    private Symbol parentClass;
+
+    /** Clase que declara este miembro; permite resolver la etiqueta C3D correcta. */
+    private Symbol ownerClass;
+
+    /** Identificador de tipo en tiempo de ejecución para el despacho virtual. */
+    private int typeTag;
+
+    /** Visibilidad declarada del miembro ({@code PUBLIC}, {@code PRIVATE}, ...). */
+    private String access;
+
     private int line = -1;
     private int column = -1;
     private String scope;
@@ -55,13 +67,15 @@ public class Symbol {
         member.setScopeIfAbsent(name);
     }
 
+    /** Busca un miembro propio o heredado de la clase. */
     public Symbol getMember(String memberName) {
         for (Symbol s : members) {
             if (s.getName().equals(memberName)) return s;
         }
-        return null;
+        return parentClass == null ? null : parentClass.getMember(memberName);
     }
 
+    /** Busca un método o constructor propio. */
     public Symbol getCallable(String memberName, int argumentCount) {
         for (Symbol member : members) {
             if (member.name.equals(memberName) && member.parameters.size() == argumentCount
@@ -69,6 +83,26 @@ public class Symbol {
                 return member;
         }
         return null;
+    }
+
+    /** Resuelve un método propio o heredado (el más específico primero). */
+    public Symbol resolveMethod(String memberName, int argumentCount) {
+        for (Symbol member : members) {
+            if (member.name.equals(memberName) && member.parameters.size() == argumentCount
+                    && member.category == SymbolCategory.METHOD)
+                return member;
+        }
+        return parentClass == null ? null : parentClass.getInheritedMethod(memberName, argumentCount);
+    }
+
+    /** Busca un método heredado de las superclases; los constructores no se heredan. */
+    public Symbol getInheritedMethod(String memberName, int argumentCount) {
+        for (Symbol member : members) {
+            if (member.name.equals(memberName) && member.parameters.size() == argumentCount
+                    && member.category == SymbolCategory.METHOD)
+                return member;
+        }
+        return parentClass == null ? null : parentClass.getInheritedMethod(memberName, argumentCount);
     }
 
     public Symbol inFile(String fileName) {

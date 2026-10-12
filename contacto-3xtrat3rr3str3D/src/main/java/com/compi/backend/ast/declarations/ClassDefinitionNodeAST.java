@@ -14,6 +14,7 @@ import java.util.List;
 public class ClassDefinitionNodeAST extends AbstractDefinitionNodeAST {
 
     private final String name;
+    private final String parentName;
     private final List<AbstractNodeAST> members;
     private final boolean publicClass;
 
@@ -22,9 +23,15 @@ public class ClassDefinitionNodeAST extends AbstractDefinitionNodeAST {
     }
 
     public ClassDefinitionNodeAST(int line, int column, String name, List<AbstractNodeAST> members, boolean publicClass) {
+        this(line, column, name, null, members, publicClass);
+    }
+
+    public ClassDefinitionNodeAST(int line, int column, String name, String parentName,
+                                  List<AbstractNodeAST> members, boolean publicClass) {
         super(line, column);
         this.publicClass = publicClass;
         this.name = name;
+        this.parentName = parentName;
         this.members = members;
     }
 
@@ -42,6 +49,11 @@ public class ClassDefinitionNodeAST extends AbstractDefinitionNodeAST {
 
     public String name() {
         return name;
+    }
+
+    /** Nombre de la superclase declarada con {@code extends}, o {@code null}. */
+    public String parentName() {
+        return parentName;
     }
 
     public boolean publicClass() {
