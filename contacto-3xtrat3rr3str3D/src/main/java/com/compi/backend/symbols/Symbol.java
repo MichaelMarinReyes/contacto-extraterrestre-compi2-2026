@@ -2,7 +2,6 @@ package com.compi.backend.symbols;
 
 import lombok.Getter;
 import lombok.Setter;
-import org.antlr.v4.runtime.ParserRuleContext;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -73,14 +72,6 @@ public class Symbol {
 
     public Symbol inFile(String fileName) {
         this.sourceFile = fileName;
-        return this;
-    }
-
-    public Symbol at(ParserRuleContext ctx) {
-        if (ctx != null && ctx.getStart() != null) {
-            this.line = ctx.getStart().getLine();
-            this.column = ctx.getStart().getCharPositionInLine() + 1;
-        }
         return this;
     }
 

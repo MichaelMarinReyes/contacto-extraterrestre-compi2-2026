@@ -19,7 +19,6 @@ import javax.swing.JOptionPane;
 
 /** Coordina compilación, publicación de resultados y navegación a sus posiciones. */
 final class CompilationActions {
-    private static final String MAIN_FILE = "main.pig";
     private final MainWindow window;
     private final Compiler compiler = new Compiler();
     private Mode currentCMode = Mode.QUADRUPLES;
@@ -42,61 +41,41 @@ final class CompilationActions {
     }
 
     void compile() {
-        clearResults();
         List<File> targets = compileTargets();
         if (targets.isEmpty()) {
-            window.getConsoleDock().setConsole("No hay nada que compilar.\n"
-                    + "Abre una carpeta de proyecto o un archivo de código.\n");
-            window.navText("Sin archivos que compilar");
+            clearResults();
+            window.getConsoleDock().setConsole("No hay ningún archivo .pig para iniciar el programa.\n"
+                    + "Abre o crea un archivo PigLatin con su sección MAIOR.\n");
+            window.navText("Sin entrada .pig");
             return;
         }
+        File entry = targets.size() == 1 ? targets.get(0) : window.promptEntryFile(targets);
+        if (entry == null) return;
+        clearResults();
         File container = window.currentContainer();
-        window.getConsoleDock().setConsole(compilationHeader(targets, container));
+        window.getConsoleDock().setConsole(compilationHeader(entry, container));
         compiler.setCMode(currentCMode);
         compiler.setWorkingDirectory(container);
-        List<FileResult> results = new ArrayList<>(targets.size());
-        for (File file : targets) results.add(compileOne(file));
-        publishResults(results);
+        publishResults(List.of(compileOne(entry)));
     }
 
-    private String compilationHeader(List<File> targets, File container) {
-        File main = targets.stream().filter(CompilationActions::isMainFile).findFirst().orElse(null);
-        StringBuilder header = new StringBuilder();
-        header.append("Compilando ").append(targets.size())
-                .append(targets.size() == 1 ? " archivo" : " archivos")
-                .append(container != null ? " de " + container.getName() : " abiertos").append("...\n");
-        if (main != null) header.append("Punto de partida: ").append(main.getName())
-                .append(" (se lee primero; sus imports se cargan antes)\n");
-        else if (container != null) header.append("No hay ningún ").append(MAIN_FILE)
-                .append(" en el proyecto: se compilan los archivos por orden de nombre\n");
-        return header.toString();
+    private String compilationHeader(File entry, File container) {
+        return "Compilando " + entry.getName()
+                + (container == null ? "" : " de " + container.getName()) + "...\n"
+                + "Punto de partida: " + entry.getAbsolutePath() + "\n"
+                + "Se cargan sus importaciones .y y .z antes de generar C.\n";
     }
 
     private List<File> compileTargets() {
         List<File> targets = window.getFileTree().allSourceFiles();
-        if (!targets.isEmpty()) return startingAtMain(targets);
-        for (EditorPanel editor : window.getEditorTabs().getAllEditors()) {
-            File file = editor.getFile();
-            if (file != null && file.isFile()) targets.add(file);
+        if (targets.isEmpty()) {
+            for (EditorPanel editor : window.getEditorTabs().getAllEditors()) {
+                File file = editor.getFile();
+                if (file != null && file.isFile()) targets.add(file);
+            }
         }
-        return targets;
-    }
-
-    private static List<File> startingAtMain(List<File> targets) {
-        File main = null;
-        for (File file : targets) {
-            if (!isMainFile(file)) continue;
-            if (main == null || file.getAbsolutePath().length() < main.getAbsolutePath().length()) main = file;
-        }
-        if (main == null) return targets;
-        List<File> ordered = new ArrayList<>(targets.size());
-        ordered.add(main);
-        for (File file : targets) if (!file.equals(main)) ordered.add(file);
-        return ordered;
-    }
-
-    private static boolean isMainFile(File file) {
-        return file != null && MAIN_FILE.equalsIgnoreCase(file.getName());
+        return targets.stream().filter(file -> "pig".equals(LanguageCompilerFactory.detectLanguageId(file.getName())))
+                .distinct().sorted(java.util.Comparator.comparing(File::getAbsolutePath)).toList();
     }
 
     private FileResult compileOne(File file) {
@@ -117,7 +96,9 @@ final class CompilationActions {
         }
         boolean ok = compiler.compile(source, language, file.getAbsolutePath());
         List<CompilationError> errors = new ArrayList<>();
-        for (CompilationError error : compiler.getErrors()) errors.add(error.inFile(file.getName()));
+        for (CompilationError error : compiler.getErrors()) {
+            errors.add(error.getFileName() == null ? error.inFile(file.getAbsolutePath()) : error);
+        }
         List<Symbol> symbols = new ArrayList<>(compiler.getSymbols());
         for (Symbol symbol : symbols) if (symbol.getSourceFile() == null) symbol.inFile(file.getName());
         return new FileResult(file, language, ok, compiler.getAstDot(), symbols,
@@ -130,13 +111,15 @@ final class CompilationActions {
     private void publishResults(List<FileResult> results) {
         List<CompilationError> errors = new ArrayList<>();
         for (FileResult result : results) errors.addAll(result.errors());
-        FileResult focus = focusedResult(results);
-        lastTargets = results.stream().map(FileResult::file).toList();
+        FileResult focus = results.get(0);
+        lastTargets = new ArrayList<>();
+        lastTargets.add(focus.file());
+        for (String imported : focus.imports()) lastTargets.add(new File(imported));
         lastFocusFile = focus == null ? null : focus.file();
         publishToolResults(focus, aggregatedSymbols(results), errors);
         publishCode(focus, errors);
         publishStatus(results, errors);
-        String warning = errors.isEmpty() ? writeCFile(results) : "";
+        String warning = errors.isEmpty() ? writeCFile(focus) : "";
         window.getConsoleDock().appendConsole(buildReport(results, errors, focus));
         window.getConsoleDock().appendConsole(warning);
     }
@@ -183,18 +166,10 @@ final class CompilationActions {
         window.navText(errors.size() + (errors.size() == 1 ? " error de compilación" : " errores de compilación"));
     }
 
-    private String writeCFile(List<FileResult> results) {
+    private String writeCFile(FileResult principal) {
         File container = window.currentContainer();
-        if (container == null || results.isEmpty()) return "";
-        FileResult principal = null;
-        for (FileResult result : results) {
-            if (isMainFile(result.file())) {
-                principal = result;
-                break;
-            }
-            if (principal == null && result.ok()) principal = result;
-        }
-        if (principal == null || principal.cCode() == null || principal.cCode().isBlank()) return "";
+        if (container == null) container = principal.file().getAbsoluteFile().getParentFile();
+        if (!principal.ok() || principal.cCode() == null || principal.cCode().isBlank()) return "";
         String name = principal.file().getName();
         int point = name.lastIndexOf('.');
         File target = new File(container, (point > 0 ? name.substring(0, point) : name) + ".c");
@@ -217,6 +192,8 @@ final class CompilationActions {
 
     private File fileNamed(String name) {
         if (name == null) return null;
+        File direct = new File(name);
+        if (direct.isAbsolute() && direct.isFile()) return direct;
         for (File file : lastTargets) if (file.getName().equals(name)) return file;
         return null;
     }
@@ -269,16 +246,6 @@ final class CompilationActions {
         return lastFocusFile;
     }
 
-    private FileResult focusedResult(List<FileResult> results) {
-        EditorPanel active = window.getEditorTabs().getActiveEditor();
-        if (active != null && active.getFile() != null) {
-            for (FileResult result : results) if (result.file().equals(active.getFile())) return result;
-        }
-        for (FileResult result : results) if (isMainFile(result.file())) return result;
-        for (FileResult result : results) if (!result.astDot().isBlank()) return result;
-        return results.isEmpty() ? null : results.get(0);
-    }
-
     private List<Symbol> aggregatedSymbols(List<FileResult> results) {
         List<Symbol> symbols = new ArrayList<>();
         Set<String> seen = new HashSet<>();
@@ -296,12 +263,6 @@ final class CompilationActions {
                 + symbol.getLine() + "|" + symbol.getColumn();
     }
 
-    private String focusReason(FileResult focus) {
-        EditorPanel active = window.getEditorTabs().getActiveEditor();
-        if (active != null && active.getFile() != null && focus.file().equals(active.getFile())) return "pestaña activa";
-        return isMainFile(focus.file()) ? MAIN_FILE + " (principal)" : "primer archivo del proyecto";
-    }
-
     private String buildReport(List<FileResult> results, List<CompilationError> errors, FileResult focus) {
         StringBuilder text = new StringBuilder();
         for (FileResult result : results) appendFileReport(text, result);
@@ -314,7 +275,7 @@ final class CompilationActions {
         }
         if (focus != null) {
             text.append("\n--- Salidas de ").append(focus.file().getName()).append(" (")
-                    .append(focusReason(focus)).append(") ---\n").append(focus.translated());
+                    .append("entrada PigLatin seleccionada").append(") ---\n").append(focus.translated());
             text.append("\nAST generado: ").append(focus.astDot().isBlank() ? "no" : "sí")
                     .append("   Símbolos: ").append(focus.symbols().size())
                     .append("   Pila del parser: ").append(focus.steps().size()).append(" pasos\n");
@@ -324,7 +285,7 @@ final class CompilationActions {
 
     private void appendFileReport(StringBuilder text, FileResult result) {
         text.append(result.ok() ? "  OK    " : "  ERROR ").append(result.file().getName());
-        if (isMainFile(result.file())) text.append("  <- principal");
+        text.append("  <- entrada .pig");
         text.append("  (").append(UiTheme.prettifyLanguage(result.language())).append(')');
         if (!result.ok()) text.append("  ").append(result.errors().size())
                 .append(result.errors().size() == 1 ? " error" : " errores");

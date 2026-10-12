@@ -11,6 +11,7 @@ import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.io.File;
 import java.util.ArrayList;
+import java.util.List;
 import javax.swing.AbstractAction;
 import javax.swing.JButton;
 import javax.swing.JComboBox;
@@ -275,6 +276,21 @@ public class MainWindow extends JFrame {
                 LanguageCompilerFactory.allowedExtensions().toArray(new String[0])));
         if (workspace.lastContainer() != null) chooser.setCurrentDirectory(workspace.lastContainer());
         return approve(chooser) ? chooser.getSelectedFile() : null;
+    }
+
+    /** Elige una entrada PigLatin mostrando rutas para distinguir nombres repetidos. */
+    File promptEntryFile(List<File> candidates) {
+        File container = currentContainer();
+        List<String> labels = candidates.stream().map(file -> container == null
+                ? file.getAbsolutePath() : container.toPath().toAbsolutePath().normalize()
+                        .relativize(file.toPath().toAbsolutePath().normalize()).toString()).toList();
+        EditorPanel active = editorTabs.getActiveEditor();
+        int suggested = active == null ? -1 : candidates.indexOf(active.getFile());
+        Object choice = JOptionPane.showInputDialog(this,
+                "Hay varios archivos .pig. Selecciona el punto de partida del programa:",
+                "Seleccionar entrada PigLatin", JOptionPane.QUESTION_MESSAGE, null,
+                labels.toArray(), labels.get(suggested < 0 ? 0 : suggested));
+        return choice == null ? null : candidates.get(labels.indexOf(choice.toString()));
     }
 
     File promptDirectory(String title, File start, File selected, String approveText, boolean allowCreate) {

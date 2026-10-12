@@ -49,6 +49,7 @@ package "com.compi.frontend" {
     ~ buildNewFileDialog(File) : NewFileDialog
     ~ clearToolViews() : void
     ~ currentContainer() : File
+    ~ promptEntryFile(List<File>) : File
   }
   class WorkspaceActions {
     - window : MainWindow
@@ -75,6 +76,9 @@ package "com.compi.frontend" {
     ~ jumpToError(int) : void
     ~ jumpToSymbol(int) : void
     - compileOne(File) : FileResult
+    - compileTargets() : List<File>
+    - compilationHeader(File, File) : String
+    - writeCFile(FileResult) : String
   }
   class TopToolbar {
     + {static} BAR_HEIGHT : int
@@ -1328,7 +1332,6 @@ package "com.compi.backend.symbols" {
     + getMember(String) : Symbol
     + getCallable(String, int) : Symbol
     + getStorageName() : String
-    + at(ParserRuleContext) : Symbol
     + inFile(String) : Symbol
     + inLanguage(String) : Symbol
     + markWorking() : Symbol
@@ -1415,15 +1418,9 @@ package "com.compi.backend.symbols" {
     + {static} checkLogical(Type, Type) : Type
     + {static} checkRelational(Type, Type, String) : Type
   }
-  class CallValidator {
-    - CallValidator()
-    + {static} report(String, ParserRuleContext, List<CompilationError>) : void
-    + {static} validate(Symbol, List<Type>, ParserRuleContext, List<CompilationError>) : void
-  }
   class ArrayLiteral {
     - ArrayLiteral()
     + {static} completeSizes(Type, Type) : Type
-    + {static} validate(String, Type, Type, ParserRuleContext) : CompilationError
   }
   enum DataType {
     + {static} INT : DataType
@@ -1667,10 +1664,14 @@ package "com.compi.backend.errors" {
     - {static} CLASES : Map<String, String>
     - Diagnostic()
     + {static} fromAntlr(Vocabulary, String, Token) : String
-    + {static} alreadyDeclaredVariable(String, ParserRuleContext) : CompilationError
-    + {static} duplicateParameter(String, ParserRuleContext) : CompilationError
-    + {static} incompatibleAssignment(Type, Type, ParserRuleContext) : CompilationError
-    + {static} indexOutOfRange(String, int, int, ParserRuleContext) : CompilationError
+    - {static} data(String) : String
+    - {static} found(String) : String
+    - {static} trimmed(String) : String
+    - {static} list(Vocabulary, String) : String
+    - {static} esperado(Vocabulary, String) : String
+    - {static} symbolicOf(String) : String
+    - {static} literal(Vocabulary, String) : String
+    - {static} cola(String) : String
   }
   enum ErrorType {
     + {static} LEXICAL : ErrorType
@@ -1753,18 +1754,6 @@ package "com.compi.backend.runtime" {
   }
 }
 package "com.compi.backend.utils" {
-  class ParseTreeDotGenerator {
-    - ids : Map<ParseTree, Integer>
-    - sb : StringBuilder
-    - counter : int
-    + ParseTreeDotGenerator()
-    + build(ParseTree, String) : String
-    - escape(String) : String
-    - label(ParseTree) : String
-    - ruleName(ParserRuleContext) : String
-    - sanitize(String) : String
-    - visit(ParseTree) : int
-  }
   class ASTDotGenerator {
     - ids : Map<AbstractNodeAST, Integer>
     - sb : StringBuilder
@@ -1786,6 +1775,7 @@ MainWindow *-- CompilationActions
 CompilationActions *-- Compiler
 WorkspaceActions ..> MainWindow
 CompilationActions ..> MainWindow
+CompilationActions ..> PigLatinCompiler : entrada .pig seleccionada
 MainWindow *-- TopToolbar
 MainWindow *-- FileTreePanel
 MainWindow *-- EditorTabs

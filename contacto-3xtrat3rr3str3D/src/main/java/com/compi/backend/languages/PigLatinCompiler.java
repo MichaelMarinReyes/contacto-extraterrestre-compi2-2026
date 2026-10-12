@@ -9,12 +9,10 @@ import com.compi.backend.languages.piglatin.PigLatinAstBuilder;
 import com.compi.backend.ast.stmt.ProgramNodeAST;
 import com.compi.backend.ast.stmt.ImportNodeAST;
 import com.compi.backend.ast.semantic.SemanticModel;
-import com.compi.backend.symbols.Symbol;
 import com.compi.backend.symbols.SymbolTable;
 import org.antlr.v4.runtime.CharStreams;
 import org.antlr.v4.runtime.CommonTokenStream;
 import org.antlr.v4.runtime.tree.ParseTree;
-import org.antlr.v4.runtime.tree.TerminalNode;
 
 import java.io.File;
 import java.io.IOException;

@@ -1,15 +1,14 @@
 package com.compi.backend.errors;
 
-import com.compi.backend.symbols.Type;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-import org.antlr.v4.runtime.ParserRuleContext;
 import org.antlr.v4.runtime.Token;
 import org.antlr.v4.runtime.Vocabulary;
 
+/** Traduce los diagnósticos léxicos y sintácticos de ANTLR al español. */
 public final class Diagnostic {
 
     private static final char OPEN_QUOTE = '«';
@@ -195,149 +194,4 @@ public final class Diagnostic {
         return text.isBlank() ? original : text;
     }
 
-    private static CompilationError en(String message, int line, int column) {
-        return new CompilationError(ErrorType.SEMANTIC, message, line, column);
-    }
-
-    private static CompilationError en(String message, ParserRuleContext ctx) {
-        if (ctx == null || ctx.getStart() == null) {
-            return en(message, -1, -1);
-        }
-        return en(message, ctx.getStart().getLine(), ctx.getStart().getCharPositionInLine());
-    }
-
-    private static String type(Type t) {
-        return t == null ? "?" : t.label();
-    }
-
-    public static CompilationError undeclaredVariable(String name, ParserRuleContext ctx) {
-        return en("Variable no declarada: " + name, ctx);
-    }
-
-    public static CompilationError undefinedType(String name, ParserRuleContext ctx) {
-        return en("Tipo no definido: " + name
-                + ". No es un tipo primitivo ni una estructura declarada", ctx);
-    }
-
-    public static CompilationError alreadyDeclaredVariable(String name, ParserRuleContext ctx) {
-        return en("Variable ya declarada: " + name
-                + ". En este ámbito ya existe un símbolo con ese nombre", ctx);
-    }
-
-    public static CompilationError globalAlreadyDeclared(String name,
-                                                             ParserRuleContext ctx) {
-        return en("Variable global ya declarada: " + name, ctx);
-    }
-
-    public static CompilationError undefinedFunction(String name, ParserRuleContext ctx) {
-        return en("Llamada a función no definida: " + name, ctx);
-    }
-
-    public static CompilationError unresolvedSymbol(String name, ParserRuleContext ctx) {
-        return en("Símbolo no encontrado: " + name
-                + ". No hay ninguna variable, función ni tipo con ese nombre", ctx);
-    }
-
-    public static CompilationError memberDoesNotExist(String member, String type,
-                                                    ParserRuleContext ctx) {
-        return en("Miembro inexistente: " + member
-                + ". El tipo " + type + " no tiene ese atributo", ctx);
-    }
-
-    public static CompilationError incompatibleAssignment(Type target, Type origin,
-                                                           ParserRuleContext ctx) {
-        return en("Asignación incompatible: no se puede asignar " + data(type(origin))
-                + " a una variable de tipo " + data(type(target)), ctx);
-    }
-
-    public static CompilationError inicializacionIncompatible(String name, Type esperado,
-                                                              Type obtenido,
-                                                              ParserRuleContext ctx) {
-        return en("Tipo incompatible en la declaración de " + name + ": se esperaba "
-                + data(type(esperado)) + " y se escribió " + data(type(obtenido)), ctx);
-    }
-
-    public static CompilationError wrongReturnType(Type esperado, Type obtenido,
-                                                        ParserRuleContext ctx) {
-        return en("Tipo de retorno erróneo: se esperaba " + data(type(esperado))
-                + " pero se retorna " + data(type(obtenido)), ctx);
-    }
-
-    public static CompilationError duplicateParameter(String name, ParserRuleContext ctx) {
-        return en("Parámetro duplicado: " + name
-                + ". La función ya declara otro parámetro con ese nombre", ctx);
-    }
-
-    public static CompilationError invalidConstructorName(String name, String clazz,
-                                                              ParserRuleContext ctx) {
-        return en("Nombre de constructor erróneo: " + data(name)
-                + ". El constructor debe llamarse como la clase: " + data(clazz), ctx);
-    }
-
-    public static CompilationError nonBooleanCondition(String condition, ParserRuleContext ctx) {
-        return en("La condición " + data(condition) + " debe ser booleana", ctx);
-    }
-
-    public static CompilationError nonBooleanNegationOperator(ParserRuleContext ctx) {
-        return en("El operador " + data("!") + " solo se puede aplicar a una expresión booleana",
-                ctx);
-    }
-
-    public static CompilationError nonNumericMinusOperator(ParserRuleContext ctx) {
-        return en("El operador " + data("-") + " solo se puede aplicar a una expresión numérica",
-                ctx);
-    }
-
-    public static CompilationError notAnArray(String name, Type type,
-                                                ParserRuleContext ctx) {
-        return en("No se puede indexar " + data(name) + ": es de tipo "
-                + data(type(type)) + " y un arreglo es lo unico que lleva índice", ctx);
-    }
-
-    public static CompilationError indexDimensions(String name, int indices,
-                                                        int declaradas,
-                                                        ParserRuleContext ctx) {
-        return en("El acceso " + data(name) + " usa " + data(String.valueOf(indices))
-                + " índice" + (indices == 1 ? "" : "s")
-                + " pero el arreglo tiene " + data(String.valueOf(declaradas))
-                + " dimensión" + (declaradas == 1 ? "" : "es"), ctx);
-    }
-
-    public static CompilationError initializerShape(String name, int declaradas,
-                                                         int encontradas,
-                                                         ParserRuleContext ctx) {
-        return en("La forma no coincide con la declaración de " + data(name) + ": se declararon "
-                + data(String.valueOf(declaradas)) + " dimensión"
-                + (declaradas == 1 ? "" : "es") + " pero el inicializador tiene "
-                + data(String.valueOf(encontradas)), ctx);
-    }
-
-    public static CompilationError filasDesiguales(String name, int row, int esperadas,
-                                                   int encontradas,
-                                                   ParserRuleContext ctx) {
-        return en("La fila " + data(String.valueOf(row)) + " de " + data(name) + " tiene "
-                + data(String.valueOf(encontradas)) + " elemento"
-                + (encontradas == 1 ? "" : "s") + " y se declararon "
-                + data(String.valueOf(esperadas)), ctx);
-    }
-
-    public static CompilationError incompatibleElement(String name, Type esperado,
-                                                         Type obtenido,
-                                                         ParserRuleContext ctx) {
-        return en("Elemento de " + data(name) + " de tipo " + data(type(esperado))
-                + ": no se puede guardar un valor de tipo " + data(type(obtenido)), ctx);
-    }
-
-    public static CompilationError indexOutOfRange(String name, int index, int limit,
-                                                      ParserRuleContext ctx) {
-        return en("Índice fuera de rango: " + data(name) + "[" + data(String.valueOf(index))
-                + "] y la dimensión va de 0 a " + data(String.valueOf(limit - 1)), ctx);
-    }
-
-    public static CompilationError sizelessArray(String name,
-                                                    ParserRuleContext ctx) {
-        return en("No se puede reservar memoria para " + data(name)
-                + ": su tamaño no se conoce. Decláralo con el tamaño"
-                + " (por ejemplo [3][2]) o inicialízalo con valores", ctx);
-    }
 }

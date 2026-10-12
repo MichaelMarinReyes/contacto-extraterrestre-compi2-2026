@@ -9,8 +9,8 @@ import java.util.IdentityHashMap;
 import java.util.Map;
 
 /**
- * Convierte el AST propio en un grafo DOT (Graphviz), con el mismo formato que
- * {@link ParseTreeDotGenerator}: nodos {@code n<id>} y aristas {@code n<id> -> n<id>}.
+ * Convierte el AST propio en un grafo DOT (Graphviz): nodos {@code n<id>}
+ * y aristas {@code n<id> -> n<id>} compatibles con el panel gráfico.
  */
 public class ASTDotGenerator {
 
