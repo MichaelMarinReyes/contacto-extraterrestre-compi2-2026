@@ -2,6 +2,7 @@ package com.compi.backend.riscv;
 
 import java.util.ArrayList;
 import java.util.concurrent.TimeUnit;
+import java.util.function.BooleanSupplier;
 import rars.ErrorList;
 import rars.api.Options;
 import rars.api.Program;
@@ -20,6 +21,13 @@ public class RiscvRunner {
     /** Límite de instrucciones simuladas; acota los lazos infinitos. */
     private static final int MAX_STEPS = 20_000_000;
 
+    /**
+     * Instrucciones por tramo. La simulación se ejecuta en bloques de este
+     * tamaño para poder atender una solicitud de parada entre tramos sin
+     * recurrir a APIs internas de RARS.
+     */
+    private static final int CHUNK_STEPS = 500_000;
+
     /** Resultado de una ejecución: bandera, salidas, razón y tiempo. */
     public record Result(boolean ok, String stdout, String stderr, String reason,
                          int exitCode, long elapsedMillis, String message) { }
@@ -29,6 +37,17 @@ public class RiscvRunner {
      * El IDE la invoca desde un hilo de trabajo para no bloquear la interfaz.
      */
     public Result run(String assembly, String input) {
+        return run(assembly, input, () -> false);
+    }
+
+    /**
+     * Igual que {@link #run(String, String)} pero consulta {@code stopRequested}
+     * entre tramos: cuando devuelve {@code true} la simulación se interrumpe y el
+     * resultado queda con la razón {@code DETENIDO} y la salida producida hasta
+     * ese momento. La solicitud se lee en el mismo hilo que simula, por lo que
+     * no requiere acceso concurrente a las estructuras de RARS.
+     */
+    public Result run(String assembly, String input, BooleanSupplier stopRequested) {
         long start = System.nanoTime();
         if (assembly == null || assembly.isBlank()) {
             return new Result(false, "", "", null, -1, elapsed(start),
@@ -36,7 +55,7 @@ public class RiscvRunner {
         }
         Options options = new Options();
         options.startAtMain = true;
-        options.maxSteps = MAX_STEPS;
+        options.maxSteps = CHUNK_STEPS;
         options.pseudo = true;
         Program program = new Program(options);
         try {
@@ -46,7 +65,18 @@ public class RiscvRunner {
                         describe(errors));
             }
             program.setup(new ArrayList<>(), input == null ? "" : input);
-            Simulator.Reason reason = program.simulate();
+            long executed = 0;
+            Simulator.Reason reason;
+            while (true) {
+                if (stopRequested != null && stopRequested.getAsBoolean()) {
+                    return new Result(true, program.getSTDOUT(), program.getSTDERR(),
+                            "DETENIDO", program.getExitCode(), elapsed(start), null);
+                }
+                reason = program.simulate();
+                if (reason != Simulator.Reason.MAX_STEPS) break;
+                executed += CHUNK_STEPS;
+                if (executed >= MAX_STEPS) break;
+            }
             return new Result(true, program.getSTDOUT(), program.getSTDERR(),
                     reason == null ? null : reason.toString(), program.getExitCode(),
                     elapsed(start), null);

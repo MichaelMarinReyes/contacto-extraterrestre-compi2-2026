@@ -22,7 +22,7 @@ ensamblador RISC-V** sobre los productos del Proyecto 1 (AST, C3D y C).
 6. Crear un archivo
 7. Guardar el trabajo
 8. Compilar y consultar resultados
-9. Ejecutar el ensamblador RISC-V en RARS
+9. Ejecutar el ensamblador RISC-V (simulador interno)
 10. Paneles de herramientas
 11. Atajos de teclado
 12. Situaciones frecuentes
@@ -193,7 +193,8 @@ Es el equivalente a pulsar **Run** en IntelliJ o NetBeans.
    **Entrada del programa** de la pestaña **Simulador** antes de ejecutar.
 4. Pulse **Ejecutar** (o `Ctrl+R`). La pestaña **Simulador** se selecciona sola
    y muestra en su área de salida la ejecución del programa (**cómo** corre),
-   igual que la consola de RARS.
+   igual que la consola de RARS. Mientras corre, el propio botón cambia a
+   **Detener**: púlselo para interrumpir la ejecución sin añadir más botones.
 5. Al terminar se indica la razón de terminación (p. ej. `NORMAL_TERMINATION`),
    el código de salida y el tiempo en milisegundos. Si el programa excede el
    límite de pasos se reporta un posible lazo infinito.
@@ -203,6 +204,10 @@ Consejos:
 - **Entrada adelantada**: el simulador embebido recibe la entrada de una vez;
   escriba todos los valores (números, texto, opciones de menú) separados por
   saltos de línea en el campo **Entrada** antes de pulsar **Ejecutar**.
+- **Detener una ejecución**: mientras el programa corre, el botón **Ejecutar**
+  pasa a llamarse **Detener** (mismo botón, también `Ctrl+R`). Al pulsarlo se
+  corta la simulación y se conserva la salida producida hasta ese punto, con la
+  razón `DETENIDO`. Es útil para un lazo infinito o una espera larga.
 - **Errores de ensamblaje**: si el `.s` no ensambla, en la pestaña **Simulador**
   se listan los diagnósticos con su número de línea.
 - **Ver generado y ver ejecución**: las pestañas **Ensamblador** y **Simulador**
@@ -240,7 +245,7 @@ Abra la ventana flotante mediante **Herramientas** o los atajos `Ctrl+1` a
 
 - `Ctrl+N` archivo nuevo · `Ctrl+O` abrir archivo
 - `Ctrl+S` guardar pestaña · `Ctrl+Mayús+S` guardar todas
-- `Ctrl+B` compilar · `Ctrl+R` ejecutar el ensamblador en el simulador interno
+- `Ctrl+B` compilar · `Ctrl+R` ejecutar/detener el ensamblador en el simulador interno
 - `Ctrl+W` cerrar pestaña
 - `Ctrl+1` Árbol AST · `Ctrl+2` Símbolos · `Ctrl+3` Pila · `Ctrl+4` Errores
 - `Escape` cancelar diálogo de archivo nuevo
@@ -265,7 +270,10 @@ Abra la ventana flotante mediante **Herramientas** o los atajos `Ctrl+1` a
   **Simulador** todos los valores que el programa leerá, uno por línea, y
   vuelva a pulsar **Ejecutar**.
 - **Sale «Límite de pasos superado»**: el programa quedó en un lazo infinito o
-  es demasiado largo; revise la lógica de sus ciclos.
+  es demasiado largo; revise la lógica de sus ciclos, o detenga antes con el
+  botón **Detener** mientras corre.
+- **El botón dice Detener y quiero volver a ejecutar**: espere a que la ejecución
+  actual termine (o deténgala); al acabar el botón vuelve solo a **Ejecutar**.
 - **Una salida parece vacía**: ejecutó Compilar y la pestaña consultada depende
   del archivo enfocado; verifique el archivo activo.
 

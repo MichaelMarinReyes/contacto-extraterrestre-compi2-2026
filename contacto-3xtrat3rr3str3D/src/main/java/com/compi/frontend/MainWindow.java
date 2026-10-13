@@ -155,7 +155,7 @@ public class MainWindow extends JFrame {
         initViewActions();
         initToolToggle();
         compileButton.addActionListener(event -> compilation.compile());
-        runButton.addActionListener(event -> compilation.runRiscv());
+        runButton.addActionListener(event -> compilation.runOrStopRiscv());
         cModeCombo.addActionListener(event -> compilation.setMode(
                 "Tripletes".equals(String.valueOf(cModeCombo.getSelectedItem())) ? Mode.TRIPLETS : Mode.QUADRUPLES));
         topToolbar.onRiscvToggled(compilation::setRiscvEnabled);
@@ -164,6 +164,18 @@ public class MainWindow extends JFrame {
         sidebarPanel.setMinimumSize(new Dimension(100, TopToolbar.BAR_HEIGHT));
         sidebarPanel.setMaximumSize(new Dimension(Integer.MAX_VALUE, TopToolbar.BAR_HEIGHT));
         sidebarPanel.add(topToolbar, BorderLayout.CENTER);
+    }
+
+    /**
+     * Ajusta el botón Ejecutar/Detener según haya o no una simulación en curso.
+     * Lo invoca {@link CompilationActions} al arrancar y al terminar.
+     */
+    void setRunningState(boolean running) {
+        runButton.setText(running ? "Detener" : "Ejecutar");
+        runButton.setIcon(running ? IdeIcons.stop() : IdeIcons.run());
+        runButton.setToolTipText(running
+                ? "Detener la ejecución en curso"
+                : "Ejecutar el ensamblador en el simulador interno (RARS)");
     }
 
     private void initFileActions() {
@@ -247,7 +259,7 @@ public class MainWindow extends JFrame {
         bind("control O", workspace::openFile);
         bind("control S", workspace::save);
         bind("control B", compilation::compile);
-        bind("control R", compilation::runRiscv);
+        bind("control R", compilation::runOrStopRiscv);
         bind("control W", () -> editorTabs.closeActive());
         bind("control shift S", () -> editorTabs.saveAll());
         bind("control 1", () -> showToolView(ToolWindowDock.View.AST));

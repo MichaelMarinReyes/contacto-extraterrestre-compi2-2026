@@ -28,6 +28,7 @@ final class CompilationActions {
     private File lastFocusFile;
     private String lastRiscvCode = "";
     private SwingWorker<RiscvRunner.Result, Void> riscvWorker;
+    private volatile boolean stopRequested;
 
     private record FileResult(File file, String language, boolean ok,
                               String astDot, List<Symbol> symbols, List<TypeEntry> types, List<ParseStep> steps,
@@ -213,17 +214,28 @@ final class CompilationActions {
     }
 
     /**
+     * Punto de entrada del botón Ejecutar/Detener y del atajo Ctrl+R. Si hay una
+     * ejecución en curso solicita detenerla; en caso contrario arranca una nueva.
+     */
+    void runOrStopRiscv() {
+        if (riscvWorker != null && !riscvWorker.isDone()) {
+            if (stopRequested) return;
+            stopRequested = true;
+            window.getConsoleDock().appendRunOutput("\n[Deteniendo ejecución…]\n");
+            window.navText("Deteniendo ejecución…");
+            return;
+        }
+        runRiscv();
+    }
+
+    /**
      * Ejecuta el ensamblador RISC-V generado en el simulador interno (RARS
      * embebido) y publica el resultado en la vista Simulador. Corre en un hilo
-     * de trabajo para no bloquear la interfaz.
+     * de trabajo para no bloquear la interfaz y puede detenerse desde el botón.
      */
     void runRiscv() {
         ConsoleDock console = window.getConsoleDock();
         console.select(ConsoleDock.View.RUN);
-        if (riscvWorker != null && !riscvWorker.isDone()) {
-            console.setRunOutput("Ya hay una ejecución en curso; espera a que termine.\n");
-            return;
-        }
         if (lastRiscvCode == null || lastRiscvCode.isBlank()) {
             console.setRunOutput("No hay ensamblador generado para ejecutar.\n"
                     + "Compila primero con la casilla RISC-V marcada (botón Compilar).\n");
@@ -232,12 +244,14 @@ final class CompilationActions {
         }
         String assembly = lastRiscvCode;
         String input = console.getRunInput();
+        stopRequested = false;
         console.setRunOutput("Ejecutando el ensamblador en el simulador interno (RARS)…\n");
         window.navText("Ejecutando ensamblador…");
+        window.setRunningState(true);
         riscvWorker = new SwingWorker<>() {
             @Override
             protected RiscvRunner.Result doInBackground() {
-                return new RiscvRunner().run(assembly, input);
+                return new RiscvRunner().run(assembly, input, () -> stopRequested);
             }
 
             @Override
@@ -261,15 +275,32 @@ final class CompilationActions {
             if (result.stderr() != null && !result.stderr().isBlank()) {
                 console.appendRunOutput(result.stderr());
             }
-            console.appendRunOutput("\n[Ejecución terminada: " + result.reason() + ", código "
+            String label = reasonLabel(result.reason());
+            console.appendRunOutput("\n[Ejecución " + label + ", código "
                     + result.exitCode() + ", " + result.elapsedMillis() + " ms]\n");
-            console.setStatus("Ejecución RISC-V: " + result.reason()
+            console.setStatus("Ejecución RISC-V: " + label
                     + " (código " + result.exitCode() + ")");
-            window.navText("Ejecución: " + result.reason());
+            window.navText("Ejecución: " + label);
         } catch (Exception e) {
             console.appendRunOutput("Error interno al ejecutar: " + e + "\n");
             window.navText("Ejecución con error");
+        } finally {
+            window.setRunningState(false);
         }
+    }
+
+    /** Traduce la razón de RARS a un texto breve para la consola y la barra. */
+    private static String reasonLabel(String reason) {
+        if (reason == null) return "sin razón";
+        return switch (reason) {
+            case "NORMAL_TERMINATION" -> "terminada normalmente";
+            case "DETENIDO" -> "detenida por el usuario";
+            case "MAX_STEPS" -> "límite de pasos alcanzado (posible lazo infinito)";
+            case "BREAKPOINT" -> "detenida en un punto de interrupción";
+            case "CLIFF_TERMINATION" -> "llegó al final del código";
+            case "EXCEPTION" -> "terminó con excepción";
+            default -> reason;
+        };
     }
 
     void clearResults() {

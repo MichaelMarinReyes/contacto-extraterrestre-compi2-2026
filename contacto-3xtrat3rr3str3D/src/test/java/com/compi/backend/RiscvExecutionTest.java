@@ -3,6 +3,7 @@ package com.compi.backend;
 import com.compi.backend.riscv.RiscvRunner;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import static org.junit.jupiter.api.Assertions.*;
@@ -74,6 +75,21 @@ class RiscvExecutionTest {
         assertTrue(result.stdout().contains("Bienvenido Ana"), result.stdout());
         assertTrue(result.stdout().contains("Hasta luego, Ana"), result.stdout());
         assertEquals("NORMAL_TERMINATION", result.reason());
+    }
+
+    @Test
+    void laEjecucionSeDetieneConLaSolicitudDeParada() throws Exception {
+        String source = "VARIABILES>\n"
+                + "esto i : numerus 0;\n"
+                + "MAIOR>\n"
+                + "dum (verum) {\n"
+                + "} finis;\n"
+                + "FINIS;\n";
+        String asm = compileSourceToRiscv(source, temporaryDirectory);
+        AtomicInteger checks = new AtomicInteger();
+        RiscvRunner.Result result = new RiscvRunner().run(asm, "", () -> checks.incrementAndGet() > 1);
+        assertTrue(result.ok(), result.message());
+        assertEquals("DETENIDO", result.reason());
     }
 
     @Test

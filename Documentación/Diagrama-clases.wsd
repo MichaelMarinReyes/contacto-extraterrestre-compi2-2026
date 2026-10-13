@@ -72,11 +72,13 @@ package "com.compi.frontend" {
     - lastFocusFile : File
     - lastRiscvCode : String
     - riscvWorker : SwingWorker<RiscvRunner.Result, Void>
+    - stopRequested : volatile boolean
     ~ CompilationActions(MainWindow)
     ~ compile() : void
     ~ clearResults() : void
     ~ jumpToError(int) : void
     ~ jumpToSymbol(int) : void
+    ~ runOrStopRiscv() : void
     ~ runRiscv() : void
     - compileOne(File) : FileResult
     - compileTargets() : List<File>
@@ -1817,7 +1819,9 @@ package "com.compi.backend.riscv" {
   }
   class RiscvRunner {
     - {static} MAX_STEPS : int
+    - {static} CHUNK_STEPS : int
     + run(String, String) : Result
+    + run(String, String, BooleanSupplier) : Result
   }
   class "RiscvRunner.Result" as RiscvResult <<record>> {
     + ok : boolean
@@ -1832,7 +1836,9 @@ package "com.compi.backend.riscv" {
     Ensambla y ejecuta el .s con el
     simulador RARS 1.6 embebido
     (lib/rars1_6.jar, paquete rars.api,
-    licencia MIT).
+    licencia MIT). Ejecuta por tramos
+    (CHUNK_STEPS) y admite una solicitud
+    de parada cooperativa ("DETENIDO").
   end note
 }
 package "com.compi.backend.errors" {

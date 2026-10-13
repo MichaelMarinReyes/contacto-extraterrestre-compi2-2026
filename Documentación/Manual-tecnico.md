@@ -245,7 +245,7 @@ lo **ensambla y ejecuta internamente** (sección 9.6) sin salir del IDE.
 | `RiscvMemory` | `HEAP_GET/SET` y `ARRAY_GET/SET` (completitud) |
 | `RiscvRuntime` | Rutinas inline: imprimir, leer, `number_to_text` |
 | `RiscvWriter` | Acumula las líneas del ensamblador |
-| `RiscvRunner` | Ensambla y ejecuta el `.s` con RARS embebido (`rars.api`) |
+| `RiscvRunner` | Ensambla y ejecuta el `.s` con RARS embebido; admite parada cooperativa por tramos |
 
 Nota de compatibilidad RARS: las constantes se emiten dentro de `.data` porque
 RARS no reconoce `.rodata`, y las ramas condicionales del lenguaje se emiten
@@ -294,14 +294,26 @@ embebido (`lib/rars1_6.jar`, paquete público `rars.api`):
 
 1. Crea un `rars.api.Program` nuevo por ejecución con `Options`
    (`startAtMain = true` — arranca en `main:` —, `pseudo = true` y
-   `maxSteps = 20 000 000` para acotar lazos infinitos).
+   `maxSteps = 500 000` **por tramo**; el total se acota a 20 000 000).
 2. `assembleString(ensamblador)` ensambla desde el texto; los errores se
    convierten en un diagnóstico conciso («Línea N: mensaje») en `Result`.
 3. `setup(args, stdin)` inyecta la entrada del usuario (el campo **Entrada** de
-   la vista Simulador) y `simulate()` corre hasta terminar.
+   la vista Simulador) y `simulate()` corre por tramos hasta terminar.
 4. `Result(ok, stdout, stderr, reason, exitCode, elapsedMillis, message)`
    captura la salida con `getSTDOUT()/getSTDERR()` y la razón de terminación
-   (`NORMAL_TERMINATION`, `MAX_STEPS`...).
+   (`NORMAL_TERMINATION`, `MAX_STEPS`, `DETENIDO`...).
+
+**Parada cooperativa** (`run(assembly, input, stopRequested)`): en vez de una
+sola llamada a `simulate()`, se ejecuta en tramos de `CHUNK_STEPS` (500 000
+instrucciones) y se consulta un `BooleanSupplier` entre tramos. Es la vía
+segura con la API pública: `Simulator.stopExecution()` existe, pero `Program`
+relee su hilo interno tras `simulate()` y esa llamada desde el EDT puede
+provocar una condición de carrera (`NullPointerException`). El `Program` se
+crea una vez y las llamadas sucesivas a `simulate()` continúan desde el PC
+actual, acumulando la salida; cuando la solicitud es verdadera se devuelve
+`reason = "DETENIDO"` con la salida parcial. `CompilationActions` mantiene la
+bandera `volatile stopRequested` (escrita en el EDT, leída en el hilo de
+trabajo, sin tocar estructuras de RARS desde varios hilos).
 
 Solo puede haber un `Program` en `setup` a la vez; por eso cada ejecución crea
 uno nuevo y `CompilationActions` impide lanzamientos simultáneos (corre sobre
@@ -320,12 +332,16 @@ MIT y no está en Maven Central, de ahí el `systemPath` al jar versionado.
   "Resumen"; `setRunOutput`/`appendRunOutput`/`getRunInput` para el ciclo de
   ejecución.
 - `CompilationActions`: publica `riscvCode` en la vista y escribe
-  `NombreDelArchivo.s` en la raíz del proyecto junto al `.c`; `runRiscv()`
-  lanza `RiscvRunner` en un `SwingWorker`, selecciona la vista Simulador y
-  publica la salida, la razón de terminación y el estado en la barra inferior.
+  `NombreDelArchivo.s` en la raíz del proyecto junto al `.c`; `runOrStopRiscv()`
+  (botón **Ejecutar/Detener** y `Ctrl+R`) arranca `runRiscv()` o marca
+  `stopRequested` si ya hay una ejecución; `runRiscv()` lanza `RiscvRunner` en un
+  `SwingWorker`, selecciona la vista Simulador y publica la salida, la razón de
+  terminación y el estado en la barra inferior.
 - `TopToolbar`/`MainWindow`: casilla **RISC-V** y botón **Ejecutar** en la
   barra superior (activados por defecto, con atajo `Ctrl+R`), cableados desde
-  el constructor de `MainWindow` (sin tocar `initComponents`).
+  el constructor de `MainWindow` (sin tocar `initComponents`). `setRunningState`
+  alterna el mismo botón entre **Ejecutar** (icono ▷) y **Detener** (icono ■)
+  según haya o no una simulación en curso; `IdeIcons.stop()` dibuja el cuadro.
 
 ---
 

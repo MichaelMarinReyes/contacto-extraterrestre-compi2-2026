@@ -9,16 +9,38 @@
   `assembleString` → `setup(args, stdin)` → `simulate()`; `Result` con
   `stdout/stderr/reason/exitCode/elapsedMillis` o diagnóstico conciso de
   ensamblaje («Línea N: mensaje»).
-- `RiscvExecutionTest` (5 casos): Minimo corre y emite `Hola Mundo`; un
+- `RiscvExecutionTest` (6 casos): Minimo corre y emite `Hola Mundo`; un
   programa con `a <<`/`b <<` consume la entrada y suma; la Calculadora completa
   (imports + funciones) ensambla, ejecuta y termina con `NORMAL_TERMINATION`;
+  un bucle infinito se detiene con la solicitud de parada (`DETENIDO`);
   instrucción inválida y `.s` vacío reportan error.
 - IDE: botón **Ejecutar** (+ atajo `Ctrl+R`) en `TopToolbar`, pestaña
   **Simulador** en `ConsoleDock` (salida + campo de entrada), `runRiscv()` en
   `CompilationActions` con `SwingWorker` (no bloquea la interfaz y evita
   ejecuciones simultáneas). `initComponents` intacto.
-- Regresión: `mvn clean verify` verde (104 pruebas) y `check_java_size.py` OK
+- Botón **Ejecutar/Detener** reutilizado: no se añaden botones; mientras hay
+  una simulación en curso el mismo botón pasa a **Detener** (icono ■) y corta la
+  ejecución conservando la salida parcial. Ver «Parada cooperativa».
+- Regresión: `mvn clean verify` verde (105 pruebas) y `check_java_size.py` OK
   (150 fuentes).
+
+### Parada cooperativa (botón Detener)
+
+RARS no ofrece una cancelación segura desde otro hilo: `Simulator.stopExecution()`
+es público, pero `Program.simulate()` relee su hilo interno al terminar y esa
+llamada desde el EDT compite con el hilo de simulación (posible
+`NullPointerException`). Por eso la parada se implementa con la API pública:
+
+- `RiscvRunner.run(assembly, input, stopRequested)` ejecuta la simulación en
+  **tramos** de `CHUNK_STEPS` (500 000 instrucciones) reutilizando la misma
+  instancia `Program`; cada llamada a `simulate()` continúa desde el PC actual y
+  acumula la salida, con el tope global `MAX_STEPS` (20 M).
+- Entre tramos se consulta un `BooleanSupplier`. Si devuelve `true`, se retorna
+  `Result` con `reason = "DETENIDO"` y la salida producida hasta el momento.
+- `CompilationActions` guarda la petición en un `volatile boolean stopRequested`
+  (escrito en el EDT, leído en el `SwingWorker`); `runOrStopRiscv()` decide entre
+  arrancar y detener, y `MainWindow.setRunningState(boolean)` cambia el texto,
+  el icono (`IdeIcons.stop()`) y la ayuda del mismo botón.
 
 ### Compatibilidad RARS descubierta al integrar (arreglada en el emisor)
 
@@ -166,7 +188,7 @@ pequeño. RARS/Venus externos quedan documentados como comprobación opcional.
    `ReadString`…). — **hecho** (pestaña **Simulador** con campo de entrada;
    entrada adelantada en la API `setup(stdin)`)
 5. **Regresión completa**: `mvn clean verify` verde y `check_java_size.py` OK.
-   — **hecho** (104 pruebas, 150 fuentes)
+   — **hecho** (105 pruebas, 150 fuentes)
 6. **Documentación**: actualizar el Manual de usuario (sección Ejecutar y
    atajos), el Manual técnico (submódulo de ejecución y dependencia `lib/`),
    `Fase-2-riscv.md` y el diagrama de clases si la nueva clase lo amerita;

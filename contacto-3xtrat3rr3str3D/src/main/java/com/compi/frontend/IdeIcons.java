@@ -101,6 +101,14 @@ public final class IdeIcons {
         });
     }
 
+    public static Icon stop() {
+        return glyph(SIZE, (g, s, c) -> {
+            g.setColor(c);
+            double m = s * .26;
+            g.fill(new Rectangle2D.Double(m, m, s - 2 * m, s - 2 * m));
+        });
+    }
+
     public static Icon ast() {
         return glyph(SIZE, (g, s, c) -> {
             g.setColor(c);

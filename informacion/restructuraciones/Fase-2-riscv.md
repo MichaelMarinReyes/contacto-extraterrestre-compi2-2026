@@ -110,12 +110,14 @@ Todas se emiten **inline** en cada punto de uso (sin llamadas), lo que deja libr
   `appendRunOutput`, `getRunInput`).
 - `CompilationActions`: publica el ensamblador en la vista y, si la compilación
   es exitosa, escribe `nombre.s` en la raíz del proyecto junto al `.c` ya
-  existente (con el mismo manejo de contenedor actual). `runRiscv()` lanza el
-  simulador embebido en un `SwingWorker` y publica salida/razón/tiempo.
+  existente (con el mismo manejo de contenedor actual). `runOrStopRiscv()`
+  arranca `runRiscv()`, que lanza el simulador embebido en un `SwingWorker` y
+  publica salida/razón/tiempo, o pide detenerlo mientras corre.
 - `TopToolbar`/`MainWindow`: casilla **RISC-V** y botón **Ejecutar** (+ atajo
   `Ctrl+R`) en la barra superior; `RiscvRunner` ensambla y ejecuta el `.s` con
-  RARS embebido (`rars.api`); se cablean desde el constructor de `MainWindow`
-  sin tocar `initComponents`.
+  RARS embebido (`rars.api`) y admite parada cooperativa (el botón pasa a
+  **Detener** mientras corre, vía `MainWindow.setRunningState`); se cablean
+  desde el constructor de `MainWindow` sin tocar `initComponents`.
 - Test `RiscvAssemblyTest`: verifica estructura del `.s` (`.globl main`, `main:`,
   `stack/heap/otype`, `ecall`, `L_dispatch`, `L_ret_*`, `fadd.d`/`fdiv.d`,
   `feq.d`, rutinas inline), determinismo de la salida y el conmutador de
@@ -131,7 +133,8 @@ Todas se emiten **inline** en cada punto de uso (sin llamadas), lo que deja libr
    `NombreDelArchivo.s` en la raíz del proyecto.
 3. Escribir la entrada (si la hay) en el campo de la pestaña **Simulador** y
    pulsar **Ejecutar** (o `Ctrl+R`); el IDE ensambla y corre el `.s` con el
-   RARS embebido y muestra la salida en esa pestaña.
+   RARS embebido y muestra la salida en esa pestaña. Mientras corre, el mismo
+   botón cambia a **Detener** para interrumpirlo conservando la salida parcial.
 4. (Opcional) Abrir el `.s` en RARS de escritorio (`File › Open`), *Assemble*
    y *Run* como comprobación externa manual.
 
