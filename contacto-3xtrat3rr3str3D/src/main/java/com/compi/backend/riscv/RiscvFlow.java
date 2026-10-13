@@ -33,7 +33,7 @@ final class RiscvFlow {
         access.load(value, "fa0");
         access.loadConstant("0", "fa1");
         ctx.out.line("feq.d t0, fa0, fa1");
-        ctx.out.line((whenTrue ? "beq " : "bne ") + "t0, x0, " + target);
+        farBranch(whenTrue ? "beq" : "bne", "t0", "x0", target);
     }
 
     private void compareJump(Quadruple q) {
@@ -53,12 +53,27 @@ final class RiscvFlow {
 
     private void branch(String setOp, String condition, String target) {
         ctx.out.line(setOp + " t0, fa0, fa1");
-        ctx.out.line(condition + " t0, x0, " + target);
+        farBranch(condition, "t0", "x0", target);
     }
 
     private void branchReversed(String setOp, String target) {
         ctx.out.line(setOp + " t0, fa1, fa0");
-        ctx.out.line("bne t0, x0, " + target);
+        farBranch("bne", "t0", "x0", target);
+    }
+
+    /**
+     * Las ramas condicionales del lenguaje pueden apuntar a etiquetas lejanas y
+     * RARS limita las B_FORMAT a ±4096 bytes (error fatal de ensamblaje). Para
+     * garantizar que todo {@code .s} producido ensamble en el simulador interno,
+     * la condición se invierte hacia una etiqueta local y el destino se alcanza
+     * con un salto incondicional {@code j} (rango de ±1 MiB).
+     */
+    private void farBranch(String opcode, String rs, String rt, String target) {
+        String inverted = "bne".equals(opcode) ? "beq" : "bne";
+        String skip = ctx.uid() + "_skip";
+        ctx.out.line(inverted + " " + rs + ", " + rt + ", " + skip);
+        ctx.out.line("j " + target);
+        ctx.out.label(skip);
     }
 
     void function(Quadruple q) {
@@ -150,7 +165,7 @@ final class RiscvFlow {
         ctx.out.line("fcvt.w.d t0, ft0");
         for (int id : ctx.callSites) {
             ctx.out.line("li t1, " + id);
-            ctx.out.line("beq t0, t1, L_ret_" + id);
+            farBranch("beq", "t0", "t1", "L_ret_" + id);
         }
         ctx.out.line("j L_end");
     }

@@ -179,25 +179,46 @@ siguiente compilación cuando se marque otra vez.
 
 ---
 
-## 9. Ejecutar el ensamblador RISC-V en RARS
+## 9. Ejecutar el ensamblador RISC-V (simulador interno)
 
-El archivo `.s` generado es ensamblador RISC-V RV32IMF/D autocontenido, pensado
-para **RARS** (RISC-V Assembler and Runtime Simulator):
+El IDE compila y **ejecuta el ensamblador dentro de la aplicación**: el módulo
+`RiscvRunner` embebe el simulador **RARS 1.6** (licencia MIT) y corre el `.s`
+generado sin salir del IDE, sin usar `gcc` ni abrir una terminal o RARS aparte.
+Es el equivalente a pulsar **Run** en IntelliJ o NetBeans.
 
-1. Compile con la casilla **RISC-V** marcada; confirme en la pestaña
-   **Ensamblador** que el código se generó y anote la ruta del archivo `.s`
-   indicada en la consola.
-2. Abra RARS y cargue el archivo: `File → Open`, seleccione `NombreDelArchivo.s`.
-3. Pulse **Assemble** (icono con engranaje o `F8`); sin errores, puede ejecutar.
-4. Pulse **Run** (icono de ejecutar o `F5`). RARS inicia la ejecución en
-   `main:` por defecto y muestra en su consola las salidas del programa
-   (`>>` en PigLatin, `imprimir` en Y, `println`/`print` en Zetariano).
+1. Compile con la casilla **RISC-V** marcada (botón **Compilar** o `Ctrl+B`).
+2. En la pestaña **Ensamblador** pueden leerse línea por línea las instrucciones
+   generadas; ahí se ve **qué** se generó.
+3. Si el programa lee entrada (`<<`, `leer`, `readln`), escríbala en el campo
+   **Entrada del programa** de la pestaña **Simulador** antes de ejecutar.
+4. Pulse **Ejecutar** (o `Ctrl+R`). La pestaña **Simulador** se selecciona sola
+   y muestra en su área de salida la ejecución del programa (**cómo** corre),
+   igual que la consola de RARS.
+5. Al terminar se indica la razón de terminación (p. ej. `NORMAL_TERMINATION`),
+   el código de salida y el tiempo en milisegundos. Si el programa excede el
+   límite de pasos se reporta un posible lazo infinito.
 
-Los programas interactivos usan `ecall` de RARS para lecturas (`ReadInt`,
-`ReadDouble`, `ReadString`, `ReadChar`); responda las peticiones en la caja de
-entrada de RARS cuando el programa se detenga esperando datos.
+Consejos:
 
-[CAPTURA: RARS con el programa ensamblado y la consola de salida]
+- **Entrada adelantada**: el simulador embebido recibe la entrada de una vez;
+  escriba todos los valores (números, texto, opciones de menú) separados por
+  saltos de línea en el campo **Entrada** antes de pulsar **Ejecutar**.
+- **Errores de ensamblaje**: si el `.s` no ensambla, en la pestaña **Simulador**
+  se listan los diagnósticos con su número de línea.
+- **Ver generado y ver ejecución**: las pestañas **Ensamblador** y **Simulador**
+  son independientes; alterne entre ellas con un clic para comparar el código
+  con su comportamiento.
+
+[CAPTURA: pestaña Simulador con la salida de una ejecución]
+
+### 9.1 Comprobación opcional con RARS externo
+
+El resultado interno usa el mismo simulador que RARS de escritorio (misma
+versión, embebida), así que su comportamiento es equivalente. Si además se
+quiere una comprobación manual externa, el `.s` escrito por Compilar sigue
+siendo totalmente funcional: ábralo en RARS, **Assemble** y **Run**; para los
+programas interactivos, responda en la consola de RARS cuando el programa se
+detenga esperando datos.
 
 ---
 
@@ -219,7 +240,8 @@ Abra la ventana flotante mediante **Herramientas** o los atajos `Ctrl+1` a
 
 - `Ctrl+N` archivo nuevo · `Ctrl+O` abrir archivo
 - `Ctrl+S` guardar pestaña · `Ctrl+Mayús+S` guardar todas
-- `Ctrl+B` compilar · `Ctrl+W` cerrar pestaña
+- `Ctrl+B` compilar · `Ctrl+R` ejecutar el ensamblador en el simulador interno
+- `Ctrl+W` cerrar pestaña
 - `Ctrl+1` Árbol AST · `Ctrl+2` Símbolos · `Ctrl+3` Pila · `Ctrl+4` Errores
 - `Escape` cancelar diálogo de archivo nuevo
 
@@ -236,10 +258,14 @@ Abra la ventana flotante mediante **Herramientas** o los atajos `Ctrl+1` a
 - **No aparece la pestaña Ensamblador o el `.s` no se escribió**: verifique que
   la casilla **RISC-V** esté marcada, que la compilación fue correcta (sin
   errores) y que consulta la pestaña correcta.
-- **RARS no arranca en el programa**: confirme que abrió el `.s` correcto y
-  presionó Assemble antes de Run; RARS inicia en `main` por defecto.
-- **RARS pide entrada y no avanza**: el programa usa lectura (`<<`, `leer`,
-  `readln`); escriba el valor en el cuadro de entrada de RARS.
+- **Ejecutar no hace nada o dice «sin ensamblador»**: primero compile con la
+  casilla **RISC-V** marcada; el botón **Ejecutar** usa el último `.s` generado.
+- **El programa pide entrada y avanza directo al final**: el simulador recibe
+  la entrada adelantada; escriba en el campo **Entrada** de la pestaña
+  **Simulador** todos los valores que el programa leerá, uno por línea, y
+  vuelva a pulsar **Ejecutar**.
+- **Sale «Límite de pasos superado»**: el programa quedó en un lazo infinito o
+  es demasiado largo; revise la lógica de sus ciclos.
 - **Una salida parece vacía**: ejecutó Compilar y la pestaña consultada depende
   del archivo enfocado; verifique el archivo activo.
 
@@ -254,5 +280,7 @@ Abra la ventana flotante mediante **Herramientas** o los atajos `Ctrl+1` a
 5. Revise Consola y Resumen; consulte Tripletes, Cuartetas, Código 3D, Código C
    o **Ensamblador** según lo que necesite.
 6. Si hay errores, corríjalos y vuelva a compilar.
-7. Para ver el programa correr, abra el `.s` en **RARS**, Assemble y Run.
+7. Para ver el programa correr, escriba la entrada (si la hay) en la pestaña
+   **Simulador** y pulse **Ejecutar** (`Ctrl+R`); la salida aparece en esa
+   pestaña y el estado en la barra inferior.
 8. Use AST, Símbolos y Pila para inspeccionar el análisis del archivo enfocado.

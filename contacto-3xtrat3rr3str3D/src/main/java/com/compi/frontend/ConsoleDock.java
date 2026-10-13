@@ -19,6 +19,7 @@ public class ConsoleDock extends JPanel {
         C3D("Código 3D", null),
         C_CODE("Código C", null),
         ASSEMBLY("Ensamblador", null),
+        RUN("Simulador", IdeIcons.run()),
         SUMMARY("Resumen", null);
 
         private final String title;
@@ -45,6 +46,8 @@ public class ConsoleDock extends JPanel {
     private final JTextArea c3dArea = area();
     private final JTextArea cCodeArea = area();
     private final JTextArea assemblyArea = area();
+    private final JTextArea runOutput = area();
+    private final JTextArea runInput = inputArea();
     private final JTextArea summaryArea = area();
 
     private final JLabel statusLabel = new JLabel(" ");
@@ -62,6 +65,7 @@ public class ConsoleDock extends JPanel {
         tabs.addTab(View.C3D.title(), new Scroller(c3dArea));
         tabs.addTab(View.C_CODE.title(), new Scroller(cCodeArea));
         tabs.addTab(View.ASSEMBLY.title(), new Scroller(assemblyArea));
+        tabs.addTab(View.RUN.title(), buildRunPanel());
         tabs.addTab(View.SUMMARY.title(), new Scroller(summaryArea));
 
         add(tabs, BorderLayout.CENTER);
@@ -90,6 +94,31 @@ public class ConsoleDock extends JPanel {
         a.setSelectedTextColor(java.awt.Color.WHITE);
         a.setBorder(UiTheme.pad(4, 8, 4, 8));
         return a;
+    }
+
+    private static JTextArea inputArea() {
+        JTextArea a = area();
+        a.setEditable(true);
+        a.setRows(3);
+        return a;
+    }
+
+    /** Panel del simulador interno: salida de la ejecución y campo de entrada. */
+    private JPanel buildRunPanel() {
+        JPanel panel = new JPanel(new BorderLayout());
+        panel.setBackground(UiTheme.editorBg());
+        panel.add(new Scroller(runOutput), BorderLayout.CENTER);
+
+        JPanel south = new JPanel(new BorderLayout(0, 2));
+        south.setBackground(UiTheme.editorBg());
+        south.setBorder(UiTheme.pad(3, 8, 3, 8));
+        JLabel label = new JLabel("Entrada del programa (escríbela antes de Ejecutar):");
+        label.setFont(UiTheme.sans(11));
+        label.setForeground(UiTheme.dim());
+        south.add(label, BorderLayout.NORTH);
+        south.add(new Scroller(runInput), BorderLayout.CENTER);
+        panel.add(south, BorderLayout.SOUTH);
+        return panel;
     }
 
     private static class Scroller extends JScrollPane {
@@ -128,6 +157,23 @@ public class ConsoleDock extends JPanel {
 
     public void setAssembly(String text) {
         set(assemblyArea, text);
+    }
+
+    public void setRunOutput(String text) {
+        set(runOutput, text);
+    }
+
+    public void appendRunOutput(String text) {
+        runOutput.append(text == null ? "" : text);
+        runOutput.setCaretPosition(runOutput.getDocument().getLength());
+    }
+
+    public String getRunInput() {
+        return runInput.getText();
+    }
+
+    public void setRunInput(String text) {
+        runInput.setText(text == null ? "" : text);
     }
 
     public void setSummary(String text) {
@@ -195,7 +241,7 @@ public class ConsoleDock extends JPanel {
 
     private JTextArea[] all() {
         return new JTextArea[]{consoleArea, tripletsArea, quadruplesArea, c3dArea, cCodeArea,
-                assemblyArea, summaryArea};
+                assemblyArea, runOutput, summaryArea};
     }
 
     private static void set(JTextArea area, String text) {

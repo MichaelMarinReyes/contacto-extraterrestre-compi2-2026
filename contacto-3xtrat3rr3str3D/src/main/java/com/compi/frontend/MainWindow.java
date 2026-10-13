@@ -41,6 +41,7 @@ public class MainWindow extends JFrame {
     private final JComboBox<String> cModeCombo = new JComboBox<>();
     private final JCheckBox riscvToggle = new JCheckBox();
     private final JToggleButton toolsToggle = new JToggleButton();
+    private final JButton runButton = new JButton();
     private final JButton compileButton = new JButton();
     private final JButton newProjectButton = new JButton();
     private final JButton newFileButton = new JButton();
@@ -147,13 +148,14 @@ public class MainWindow extends JFrame {
         cModeCombo.addItem("Cuartetas");
         cModeCombo.addItem("Tripletes");
         cModeCombo.setSelectedIndex(0);
-        topToolbar = new TopToolbar(optionSelectedLabel, cModeCombo, riscvToggle, compileButton, toolsToggle);
+        topToolbar = new TopToolbar(optionSelectedLabel, cModeCombo, riscvToggle, runButton, compileButton, toolsToggle);
         topToolbar.applyIcons(newFileButton, openFileButton, saveFileButton,
                 astButton, symbolTableButton, stackButton, lexerErrorButton);
         initFileActions();
         initViewActions();
         initToolToggle();
         compileButton.addActionListener(event -> compilation.compile());
+        runButton.addActionListener(event -> compilation.runRiscv());
         cModeCombo.addActionListener(event -> compilation.setMode(
                 "Tripletes".equals(String.valueOf(cModeCombo.getSelectedItem())) ? Mode.TRIPLETS : Mode.QUADRUPLES));
         topToolbar.onRiscvToggled(compilation::setRiscvEnabled);
@@ -245,6 +247,7 @@ public class MainWindow extends JFrame {
         bind("control O", workspace::openFile);
         bind("control S", workspace::save);
         bind("control B", compilation::compile);
+        bind("control R", compilation::runRiscv);
         bind("control W", () -> editorTabs.closeActive());
         bind("control shift S", () -> editorTabs.saveAll());
         bind("control 1", () -> showToolView(ToolWindowDock.View.AST));

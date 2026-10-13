@@ -58,19 +58,9 @@ por defecto, por lo que no cambia el comportamiento del código existente.
 
 ## Pendiente (siguientes incrementos)
 
-Estado al cierre del incremento 3: los seis pendientes originales están
-completos (cada uno en su registro: `Fase-2-semantica-y-despacho.md` para los
-incrementos 1–2 y `Fase-2-riscv.md` para el 3).
-
-Por indicación del curso (12/10/2026), el cronograma continúa con un
-**incremento 4**:
-
-7. **Ejecución interna del ensamblador**: el programa debe compilar y ejecutar
-   su ensamblador RISC-V dentro del IDE, sin terminal ni herramientas externas.
-   El simulador externo (RARS/Venus) queda solo como comprobación opcional.
-
-La planificación detallada (opciones analizadas, decisión de empotrar RARS 1.6,
-pasos y criterios de aceptación) está en
-`informacion/restructuraciones/Fase-2-ejecucion-interna.md`.
-
-La emisión de C del Proyecto 1 se mantiene operativa durante el incremento 4.
+Estado al cierre del incremento 4: los siete pendientes están completos.
+El incremento 4 (ejecución interna con RARS embebido: `RiscvRunner`, botón
+**Ejecutar**, pestaña **Simulador** y `RiscvExecutionTest`) se documenta en
+`Fase-2-ejecucion-interna.md` (decisión, pasos y dos arreglos de compatibilidad
+con RARS: constantes en `.data` y ramas «invertida + `j`»). La emisión de C del
+Proyecto 1 se mantiene operativa en todo momento.

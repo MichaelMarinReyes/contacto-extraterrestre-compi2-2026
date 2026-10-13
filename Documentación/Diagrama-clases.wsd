@@ -70,15 +70,19 @@ package "com.compi.frontend" {
     - currentCMode : Mode
     - lastTargets : List<File>
     - lastFocusFile : File
+    - lastRiscvCode : String
+    - riscvWorker : SwingWorker<RiscvRunner.Result, Void>
     ~ CompilationActions(MainWindow)
     ~ compile() : void
     ~ clearResults() : void
     ~ jumpToError(int) : void
     ~ jumpToSymbol(int) : void
+    ~ runRiscv() : void
     - compileOne(File) : FileResult
     - compileTargets() : List<File>
     - compilationHeader(File, File) : String
     - writeCFile(FileResult) : String
+    - publishRunResult(SwingWorker) : void
   }
   class TopToolbar {
     + {static} BAR_HEIGHT : int
@@ -86,6 +90,7 @@ package "com.compi.frontend" {
     - viewCluster : JPanel
     - navLabel : JLabel
     - cModeBox : JComboBox<String>
+    - runButton : JButton
     - compileButton : JButton
     - sideToggle : JToggleButton
     - projectLabel : JLabel
@@ -1810,6 +1815,25 @@ package "com.compi.backend.riscv" {
     ~ readChar(String) : void
     ~ numberToText(String, String) : void
   }
+  class RiscvRunner {
+    - {static} MAX_STEPS : int
+    + run(String, String) : Result
+  }
+  class "RiscvRunner.Result" as RiscvResult <<record>> {
+    + ok : boolean
+    + stdout : String
+    + stderr : String
+    + reason : String
+    + exitCode : int
+    + elapsedMillis : long
+    + message : String
+  }
+  note right of RiscvRunner
+    Ensambla y ejecuta el .s con el
+    simulador RARS 1.6 embebido
+    (lib/rars1_6.jar, paquete rars.api,
+    licencia MIT).
+  end note
 }
 package "com.compi.backend.errors" {
   class CompilationError {
@@ -2139,6 +2163,7 @@ RiscvTranslator *-- RiscvRuntime
 RiscvFlow ..> RiscvLayout : etiquetas de funciones
 RiscvAccess ..> RiscvConstants
 RiscvAccess ..> RiscvLayout : offsets de frame y globales
+CompilationActions ..> RiscvRunner : ejecuta RARS embebido (SwingWorker)
 FlatEmitter ..> Quadruple
 FlatLayout ..> SymbolTable
 ArrayRuntime ..> C3DGenerator

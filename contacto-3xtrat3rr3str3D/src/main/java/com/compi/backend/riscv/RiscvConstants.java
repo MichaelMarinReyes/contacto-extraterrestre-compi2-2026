@@ -5,7 +5,10 @@ import java.util.Map;
 
 /**
  * Agrupa los literales numéricos del programa en un banco de constantes que se
- * emite una sola vez en la sección {@code .rodata} como valores {@code .double}.
+ * emite una sola vez dentro de la sección {@code .data} como valores
+ * {@code .double}. RARS no reconoce la directiva {@code .rodata}, así que las
+ * constantes viven en datos inicializados para que el ensamblador embebido las
+ * acepte sin advertencias.
  */
 final class RiscvConstants {
 
@@ -28,7 +31,7 @@ final class RiscvConstants {
     }
 
     String section() {
-        StringBuilder sb = new StringBuilder(".rodata\n.align 3\n");
+        StringBuilder sb = new StringBuilder(".align 3\n");
         for (Map.Entry<String, String> entry : labels.entrySet()) {
             sb.append(entry.getValue()).append(": .double ").append(entry.getKey()).append('\n');
         }

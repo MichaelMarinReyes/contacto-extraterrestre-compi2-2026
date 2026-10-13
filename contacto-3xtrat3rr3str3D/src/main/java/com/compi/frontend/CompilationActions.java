@@ -6,6 +6,7 @@ import com.compi.backend.errors.CompilationError;
 import com.compi.backend.errors.ErrorType;
 import com.compi.backend.languages.LanguageCompilerFactory;
 import com.compi.backend.parser.ParseStep;
+import com.compi.backend.riscv.RiscvRunner;
 import com.compi.backend.symbols.Symbol;
 import com.compi.backend.symbols.TypeEntry;
 import java.io.File;
@@ -16,6 +17,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import javax.swing.JOptionPane;
+import javax.swing.SwingWorker;
 
 /** Coordina compilación, publicación de resultados y navegación a sus posiciones. */
 final class CompilationActions {
@@ -24,6 +26,8 @@ final class CompilationActions {
     private Mode currentCMode = Mode.QUADRUPLES;
     private List<File> lastTargets = List.of();
     private File lastFocusFile;
+    private String lastRiscvCode = "";
+    private SwingWorker<RiscvRunner.Result, Void> riscvWorker;
 
     private record FileResult(File file, String language, boolean ok,
                               String astDot, List<Symbol> symbols, List<TypeEntry> types, List<ParseStep> steps,
@@ -118,6 +122,7 @@ final class CompilationActions {
         lastTargets.add(focus.file());
         for (String imported : focus.imports()) lastTargets.add(new File(imported));
         lastFocusFile = focus == null ? null : focus.file();
+        lastRiscvCode = focus == null ? "" : focus.riscvCode();
         publishToolResults(focus, aggregatedSymbols(results), errors);
         publishCode(focus, errors);
         publishStatus(results, errors);
@@ -207,9 +212,70 @@ final class CompilationActions {
         compiler.setRiscvEnabled(enabled);
     }
 
+    /**
+     * Ejecuta el ensamblador RISC-V generado en el simulador interno (RARS
+     * embebido) y publica el resultado en la vista Simulador. Corre en un hilo
+     * de trabajo para no bloquear la interfaz.
+     */
+    void runRiscv() {
+        ConsoleDock console = window.getConsoleDock();
+        console.select(ConsoleDock.View.RUN);
+        if (riscvWorker != null && !riscvWorker.isDone()) {
+            console.setRunOutput("Ya hay una ejecución en curso; espera a que termine.\n");
+            return;
+        }
+        if (lastRiscvCode == null || lastRiscvCode.isBlank()) {
+            console.setRunOutput("No hay ensamblador generado para ejecutar.\n"
+                    + "Compila primero con la casilla RISC-V marcada (botón Compilar).\n");
+            window.navText("Ejecutar: sin ensamblador");
+            return;
+        }
+        String assembly = lastRiscvCode;
+        String input = console.getRunInput();
+        console.setRunOutput("Ejecutando el ensamblador en el simulador interno (RARS)…\n");
+        window.navText("Ejecutando ensamblador…");
+        riscvWorker = new SwingWorker<>() {
+            @Override
+            protected RiscvRunner.Result doInBackground() {
+                return new RiscvRunner().run(assembly, input);
+            }
+
+            @Override
+            protected void done() {
+                publishRunResult(this);
+            }
+        };
+        riscvWorker.execute();
+    }
+
+    private void publishRunResult(SwingWorker<RiscvRunner.Result, Void> worker) {
+        ConsoleDock console = window.getConsoleDock();
+        try {
+            RiscvRunner.Result result = worker.get();
+            if (!result.ok()) {
+                console.appendRunOutput("Error: " + result.message() + "\n");
+                window.navText("Ejecución con errores");
+                return;
+            }
+            console.appendRunOutput(result.stdout());
+            if (result.stderr() != null && !result.stderr().isBlank()) {
+                console.appendRunOutput(result.stderr());
+            }
+            console.appendRunOutput("\n[Ejecución terminada: " + result.reason() + ", código "
+                    + result.exitCode() + ", " + result.elapsedMillis() + " ms]\n");
+            console.setStatus("Ejecución RISC-V: " + result.reason()
+                    + " (código " + result.exitCode() + ")");
+            window.navText("Ejecución: " + result.reason());
+        } catch (Exception e) {
+            console.appendRunOutput("Error interno al ejecutar: " + e + "\n");
+            window.navText("Ejecución con error");
+        }
+    }
+
     void clearResults() {
         lastTargets = List.of();
         lastFocusFile = null;
+        lastRiscvCode = "";
         window.clearToolViews();
         window.getStatusBar().setCounts(0, 0);
         window.getStatusBar().setIdle();

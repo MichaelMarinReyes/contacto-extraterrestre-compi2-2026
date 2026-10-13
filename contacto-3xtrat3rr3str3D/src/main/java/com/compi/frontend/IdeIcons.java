@@ -87,6 +87,20 @@ public final class IdeIcons {
         });
     }
 
+    public static Icon run() {
+        return glyph(SIZE, (g, s, c) -> {
+            g.setColor(c);
+            Path2D play = new Path2D.Double();
+            play.moveTo(s * .26, s * .22);
+            play.lineTo(s * .74, s * .5);
+            play.lineTo(s * .26, s * .78);
+            play.closePath();
+            g.fill(play);
+            g.setStroke(sf(1.6f, s));
+            g.draw(new Line2D.Double(s * .78, s * .24, s * .78, s * .76));
+        });
+    }
+
     public static Icon ast() {
         return glyph(SIZE, (g, s, c) -> {
             g.setColor(c);

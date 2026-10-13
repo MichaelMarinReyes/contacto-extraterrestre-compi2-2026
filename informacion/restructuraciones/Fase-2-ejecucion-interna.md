@@ -1,5 +1,38 @@
 # Proyecto 2 — Incremento 4: ejecución interna del ensamblador
 
+## Estado final (incremento completado)
+
+- `lib/rars1_6.jar` versionado y dependencia `system` en `pom.xml` (comentario
+  con origen y licencia MIT).
+- `RiscvRunner` (nuevo, `com.compi.backend.riscv`): `Program` nuevo por
+  ejecución (`startAtMain=true`, `pseudo=true`, `maxSteps=20M`),
+  `assembleString` → `setup(args, stdin)` → `simulate()`; `Result` con
+  `stdout/stderr/reason/exitCode/elapsedMillis` o diagnóstico conciso de
+  ensamblaje («Línea N: mensaje»).
+- `RiscvExecutionTest` (5 casos): Minimo corre y emite `Hola Mundo`; un
+  programa con `a <<`/`b <<` consume la entrada y suma; la Calculadora completa
+  (imports + funciones) ensambla, ejecuta y termina con `NORMAL_TERMINATION`;
+  instrucción inválida y `.s` vacío reportan error.
+- IDE: botón **Ejecutar** (+ atajo `Ctrl+R`) en `TopToolbar`, pestaña
+  **Simulador** en `ConsoleDock` (salida + campo de entrada), `runRiscv()` en
+  `CompilationActions` con `SwingWorker` (no bloquea la interfaz y evita
+  ejecuciones simultáneas). `initComponents` intacto.
+- Regresión: `mvn clean verify` verde (104 pruebas) y `check_java_size.py` OK
+  (150 fuentes).
+
+### Compatibilidad RARS descubierta al integrar (arreglada en el emisor)
+
+1. RARS **no reconoce `.rodata`**: las constantes pasaron a emitirse dentro de
+   `.data` (valores `.double` inicializados; mis no layout) para no producir
+   advertencias ni asumir sección desconocida.
+2. RARS **no relaja ramas**: las `B_FORMAT` con objetivo a más de ±4096 bytes
+   son error fatal (se comprobó en `ProgramStatement` del propio RARS). Las
+   ramas condicionales del lenguaje ahora se emiten como «condición invertida
+   hacia una etiqueta local + `j` incondicional (±1 MiB)», garantizando que
+   todo `.s` (aun con funciones o ciclos grandes) ensamble.
+   Con esto la Calculadora (~31 mil líneas) pasó de fallar en el paso 16 687 a
+   ensamblar y ejecutar correctamente.
+
 ## Indicación del curso (12/10/2026)
 
 Se indicó hoy que el programa debe **compilar y ejecutar su ensamblador de
@@ -10,19 +43,20 @@ ejecuta; no es el mecanismo de ejecución del IDE.
 
 ## Estado actual (lo que ya se tiene)
 
-- Módulo `com.compi.backend.riscv` completo (11 clases): consume las mismas
+- Módulo `com.compi.backend.riscv` completo (12 clases): consume las mismas
   cuartetas que `FlatEmitter` y emite un `.s` autocontenido para **RARS**
   (`RV32IMF/D`).
 - El `.s` ya es compatible con RARS: comienza en `main`, convención `ecall`
   con servicio en `a7` (1, 3, 4, 5, 7, 8, 10, 11, 12), rutinas de runtime
   inline (`print_string`, `print_char`, `read_text`, `read_char`,
-  `number_to_text`), constantes en `.rodata` con `.double` y
+  `number_to_text`), constantes en `.data` con `.double` y
   `stack`/`heap`/`otype` en `.data`.
-- El IDE ya publica el ensamblador: casilla **RISC-V** en la barra superior,
-  pestaña **Ensamblador** en `ConsoleDock` y `CompilationActions` escribe
-  `Nombre.s` en la raíz del proyecto junto al `.c`.
-- `RiscvAssemblyTest` verifica estructura, determinismo y conmutador de
-  habilitación.
+- El IDE ya publica el ensamblador y lo ejecuta: casilla **RISC-V** y botón
+  **Ejecutar** en la barra superior, pestañas **Ensamblador** y **Simulador**
+  en `ConsoleDock`, y `CompilationActions` escribe `Nombre.s` en la raíz del
+  proyecto junto al `.c`.
+- `RiscvAssemblyTest` y `RiscvExecutionTest` verifican estructura, determinismo
+  y la ejecución interna con el oráculo de los `archivos_calificacion`.
 
 Falta exactamente lo pedido hoy: **ejecutar ese ensamblador dentro del IDE**.
 
@@ -114,26 +148,30 @@ pequeño. RARS/Venus externos quedan documentados como comprobación opcional.
 1. **Dependencia**: copiar `rars1_6.jar` a `contacto-3xtrat3rr3str3D/lib/`,
    declararlo en el `pom.xml` con `system` scope y `systemPath`, agregando un
    comentario con origen y licencia MIT. (Ya descargado y verificado en
-   `/tmp/opencode/rars.jar`.)
+   `/tmp/opencode/rars.jar`.) — **hecho**
 2. **`RiscvRunner`** (backend, una clase corta): dado el texto del `.s`,
    crear `Program` con `Options` (`startAtMain=true`, `maxSteps` alto),
    `assembleString`, `setup` con la entrada del usuario, `simulate` en un hilo
    con timeout, y devolver salida/entrada/`Reason` o el primer error de
    ensamblaje. Sin tocar `initComponents` (métodos nuevos llamados desde el
-   constructor).
+   constructor). — **hecho**
 3. **Prueba unitaria** `RiscvExecutionTest`: ejecutar los `.s` de
    `archivos_calificacion` (y `Minimo.s`) y comparar la salida contra la
    esperada, con el mismo oráculo que las pruebas de C; confirmar que el
-   programa termina con el servicio 10 de `ecall`.
+   programa termina con el servicio 10 de `ecall`. — **hecho** (5 casos,
+   incluida la Calculadora completa con imports)
 4. **Integración IDE**: botón **Ejecutar** en `TopToolbar` y una consola de
    ejecución en `ConsoleDock` que muestre la salida y capture la entrada de los
    programas interactivos (lecturas `<<`, `leer`, `readln`, `ReadInt`,
-   `ReadString`…).
+   `ReadString`…). — **hecho** (pestaña **Simulador** con campo de entrada;
+   entrada adelantada en la API `setup(stdin)`)
 5. **Regresión completa**: `mvn clean verify` verde y `check_java_size.py` OK.
+   — **hecho** (104 pruebas, 150 fuentes)
 6. **Documentación**: actualizar el Manual de usuario (sección Ejecutar y
    atajos), el Manual técnico (submódulo de ejecución y dependencia `lib/`),
    `Fase-2-riscv.md` y el diagrama de clases si la nueva clase lo amerita;
-   nota de licencia del jar.
+   nota de licencia del jar. — **en curso** (manuales y planes; diagrama
+   pendiente de revisar)
 
 ## Criterios de aceptación
 

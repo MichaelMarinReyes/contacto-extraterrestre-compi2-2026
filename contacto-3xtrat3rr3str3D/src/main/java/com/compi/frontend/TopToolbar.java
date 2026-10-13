@@ -33,15 +33,17 @@ public class TopToolbar extends JPanel {
     private final JLabel navLabel;
     private final JComboBox<String> cModeBox;
     private final JCheckBox riscvToggle;
+    private final JButton runButton;
     private final JButton compileButton;
     private final JToggleButton sideToggle;
     private final JLabel projectLabel = new JLabel();
 
     public TopToolbar(JLabel navLabel, JComboBox<String> cModeBox, JCheckBox riscvToggle,
-                      JButton compileButton, JToggleButton sideToggle) {
+                      JButton runButton, JButton compileButton, JToggleButton sideToggle) {
         this.navLabel = navLabel;
         this.cModeBox = cModeBox;
         this.riscvToggle = riscvToggle;
+        this.runButton = runButton;
         this.compileButton = compileButton;
         this.sideToggle = sideToggle;
 
@@ -126,18 +128,26 @@ public class TopToolbar extends JPanel {
         }
         right.add(sideToggle);
 
-        if (compileButton != null) {
-            compileButton.setText("Compilar");
-            compileButton.setIcon(IdeIcons.compile());
-            compileButton.setFocusable(false);
-            compileButton.setFont(UiTheme.sansBold(12));
-            compileButton.setBorder(BorderFactory.createCompoundBorder(
-                    BorderFactory.createLineBorder(UiTheme.accent().darker(), 1, true),
-                    UiTheme.pad(6, 12, 6, 12)));
-            compileButton.setContentAreaFilled(true);
-        }
+        stylePrimary(runButton, "Ejecutar", IdeIcons.run(),
+                "Ejecutar el ensamblador en el simulador interno (RARS)");
+        right.add(runButton);
+
+        stylePrimary(compileButton, "Compilar", IdeIcons.compile(), null);
         right.add(compileButton);
         return right;
+    }
+
+    private void stylePrimary(JButton button, String text, javax.swing.Icon icon, String tooltip) {
+        if (button == null) return;
+        button.setText(text);
+        button.setIcon(icon);
+        button.setToolTipText(tooltip == null ? text : tooltip);
+        button.setFocusable(false);
+        button.setFont(UiTheme.sansBold(12));
+        button.setBorder(BorderFactory.createCompoundBorder(
+                BorderFactory.createLineBorder(UiTheme.accent().darker(), 1, true),
+                UiTheme.pad(6, 12, 6, 12)));
+        button.setContentAreaFilled(true);
     }
 
     private JComponent labelled(String text, JComponent field) {

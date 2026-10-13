@@ -105,25 +105,35 @@ Todas se emiten **inline** en cada punto de uso (sin llamadas), lo que deja libr
   `setRiscvEnabled(boolean)` (la generación de RISC-V es independiente del modo
   Tripletes/Cuartetas).
 - `ConsoleDock`: nueva vista **Ensamblador** (`View.ASSEMBLY`) con su área de
-  texto, entre "Código C" y "Resumen".
+  texto, entre "Código C" y "Resumen"; nueva vista **Simulador** (`View.RUN`)
+  con salida de ejecución y campo de entrada (`setRunOutput`,
+  `appendRunOutput`, `getRunInput`).
 - `CompilationActions`: publica el ensamblador en la vista y, si la compilación
   es exitosa, escribe `nombre.s` en la raíz del proyecto junto al `.c` ya
-  existente (con el mismo manejo de contenedor actual).
-- `TopToolbar`/`MainWindow`: casilla **RISC-V** en la barra superior (activa por
-  defecto) que conmuta la generación; se cablea desde el constructor de
-  `MainWindow` sin tocar `initComponents`.
+  existente (con el mismo manejo de contenedor actual). `runRiscv()` lanza el
+  simulador embebido en un `SwingWorker` y publica salida/razón/tiempo.
+- `TopToolbar`/`MainWindow`: casilla **RISC-V** y botón **Ejecutar** (+ atajo
+  `Ctrl+R`) en la barra superior; `RiscvRunner` ensambla y ejecuta el `.s` con
+  RARS embebido (`rars.api`); se cablean desde el constructor de `MainWindow`
+  sin tocar `initComponents`.
 - Test `RiscvAssemblyTest`: verifica estructura del `.s` (`.globl main`, `main:`,
   `stack/heap/otype`, `ecall`, `L_dispatch`, `L_ret_*`, `fadd.d`/`fdiv.d`,
   `feq.d`, rutinas inline), determinismo de la salida y el conmutador de
   habilitación.
+- Test `RiscvExecutionTest`: oráculo de ejecución interna con el mismo RARS
+  embebido (Minimo → `Hola Mundo`; lectura con `<<`; Calculadora completa con
+  imports y funciones; errores de ensamblaje reportados).
 
 ## Uso (manual breve)
 
 1. Abrir un `.pig` en el IDE, marcar la casilla **RISC-V** y compilar.
 2. El ensamblador queda visible en la pestaña **Ensamblador** y como
    `NombreDelArchivo.s` en la raíz del proyecto.
-3. Abrir el `.s` en RARS (`File › Open`), pulsar *Assemble* y *Run*.
-   RARS arranca en `main` y las salidas (`>>`) se ven en la consola del simulador.
+3. Escribir la entrada (si la hay) en el campo de la pestaña **Simulador** y
+   pulsar **Ejecutar** (o `Ctrl+R`); el IDE ensambla y corre el `.s` con el
+   RARS embebido y muestra la salida en esa pestaña.
+4. (Opcional) Abrir el `.s` en RARS de escritorio (`File › Open`), *Assemble*
+   y *Run* como comprobación externa manual.
 
 ## Notas y limitaciones
 
@@ -131,6 +141,14 @@ Todas se emiten **inline** en cada punto de uso (sin llamadas), lo que deja libr
   cadena se construye carácter a carácter y cada `number_to_text` es inline.
   RARS ensambla programas de ese tamaño sin problema (mucho menores que el
   segmento de texto disponible).
+- Para que RARS ensamble **cualquier** programa generado: las constantes se
+  emiten en `.data` (RARS no reconoce `.rodata`) y las ramas condicionales se
+  emiten como «condición invertida a etiqueta local + `j` incondicional»
+  (RARS declara error fatal las `B_FORMAT` a más de ±4096 bytes y no las
+  relaja; el `j` cubre ±1 MiB).
+- La ejecución interna acota los lazos con `maxSteps = 20 000 000`; si el
+  programa no termina se reporta la razón `MAX_STEPS` sin bloquear el IDE (todo
+  corre en un `SwingWorker`, con una única instancia `Program` activa a la vez).
 - El backend asume dobles en todas las celdas (patrón del Proyecto 1); por eso
   los índices requieren `fcvt.w.d` y los valores pequeños requieren
   `fcvt.d.w`/`fcvt.w.d` al cruzar con enteros.
@@ -140,9 +158,11 @@ Todas se emiten **inline** en cada punto de uso (sin llamadas), lo que deja libr
 
 ## Verificación
 
-- `mvn -q clean verify` verde, incluyendo las regresiones de ejecución de C.
-- `tools/check_java_size.py`: OK, 149 fuentes, máximo 600 líneas por clase y 50
+- `mvn -q clean verify` verde, incluyendo las regresiones de ejecución de C y
+  las nuevas de ejecución interna del ensamblador.
+- `tools/check_java_size.py`: OK, 150 fuentes, máximo 600 líneas por clase y 50
   por método/constructor.
-- Inspección visual de `Minimo.s` (246 líneas) y `Calculadora.s` (~31 000
-  líneas): llamadas con id/`P`/argumentos, `L_dispatch`, `number_to_text` y
-  terminación correctas.
+- `RiscvExecutionTest` ejecuta dentro del RARS embebido el `.s` de Minimo, uno
+  con lectura (`a <<`, `b <<` → suma) y la Calculadora completa (~31 mil líneas;
+  antes fallaba en el paso 16 687 por el rango de rama, hoy ensambla y termina
+  con `NORMAL_TERMINATION`).

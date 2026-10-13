@@ -54,7 +54,8 @@ datos para la visualización de pila.
 | Apariencia | FlatLaf 3.6 (+ temas IntelliJ) | Temas modernos claro/oscuro |
 | Build | Maven | `generate-sources` con `antlr4-maven-plugin` |
 | Procesamiento | Lombok 1.18.34 (`provided`) | Reducción de código repetitivo |
-| Simulador objetivo | RARS (externo) | Ejecución del ensamblador RV32IMF/D |
+| Simulador interno | RARS 1.6 (jar `lib/rars1_6.jar`, MIT) | Ejecución del ensamblador RV32IMF/D dentro del IDE |
+| Simulador externo (opcional) | RARS de escritorio | Comprobación manual del `.s` generado |
 
 ---
 
@@ -63,7 +64,9 @@ datos para la visualización de pila.
 `contacto-3xtrat3rr3str3D/pom.xml` declara:
 
 - Dependencias: `AbsoluteLayout RELEASE260`, `flatlaf 3.6`,
-  `flatlaf-intellij-themes 3.6`, `antlr4 4.13.2`, `lombok 1.18.34` (provided).
+  `flatlaf-intellij-themes 3.6`, `antlr4 4.13.2`, `lombok 1.18.34` (provided) y
+  `rars 1.6` con alcance `system` apuntando a `lib/rars1_6.jar` (RARS no está en
+  Maven Central; el jar se versiona en el repositorio con su licencia MIT).
 - Propiedades: `maven.compiler.source/target = 22`, UTF-8.
 - `maven-compiler-plugin 3.13.0` con `release 22`.
 - `antlr4-maven-plugin 4.13.2` en `generate-sources` (goal `antlr4`, con
@@ -122,9 +125,10 @@ generación).
 - `MainWindow` compone la ventana, cablea acciones y pide compilaciones;
   `TopToolbar` agrupa acciones y controles (incluida la casilla **RISC-V**);
   `FileTreePanel` gestiona la raíz, filtro y árbol; `EditorTabs` administra
-  `EditorPanel` por pestaña; `ConsoleDock` presenta las siete áreas de salida
+  `EditorPanel` por pestaña; `ConsoleDock` presenta las ocho áreas de salida
   (Consola, Tripletes, Cuartetas, Código 3D, Código C, **Ensamblador**,
-  Resumen); `ToolWindow`/`ToolWindowDock` agrupan AST, símbolos, pila y errores;
+  **Simulador**, Resumen); `ToolWindow`/`ToolWindowDock` agrupan AST, símbolos,
+  pila y errores;
   `StatusBar` refleja posición, lenguaje, resultado y contadores.
   `SyntaxHighlighter` y `LineNumberComponent` apoyan la edición.
 
@@ -221,9 +225,10 @@ La semántica es compartida por los tres lenguajes (mismo AST):
 
 ## 9. Back-end de ensamblador RISC-V
 
-Módulo nuevo (`com.compi.backend.riscv`, 11 clases) que consume las mismas
+Módulo nuevo (`com.compi.backend.riscv`, 12 clases) que consume las mismas
 cuartetas que `FlatEmitter` y produce un `.s` funcional para **RARS**
-(`RV32IMF/D`). No reutiliza los emisores de C.
+(`RV32IMF/D`). No reutiliza los emisores de C. Además de generarlo, el módulo
+lo **ensambla y ejecuta internamente** (sección 9.6) sin salir del IDE.
 
 ### 9.1 Clases
 
@@ -232,7 +237,7 @@ cuartetas que `FlatEmitter` y produce un `.s` funcional para **RARS**
 | `RiscvAssembler` | Fachada `generateAssembly(cuartetas, tabla)` → texto `.s` |
 | `RiscvTranslator` | Orquesta: `main`, cuerpo, funciones y secciones |
 | `RiscvLayout` | Clasifica la IR: cuerpos, slots, frames, globales |
-| `RiscvConstants` | Piscina de constantes `.double` en `.rodata` |
+| `RiscvConstants` | Piscina de constantes `.double` inicializadas en `.data` |
 | `RiscvContext` | Estado por compilación (escritor, layout, pila de expresión) |
 | `RiscvAccess` | Helpers: variables, frames, constantes, heap, concat |
 | `RiscvFlow` | Saltos, `CALL`/`RETURN`, despacho por `RA`, fin de programa |
@@ -240,6 +245,14 @@ cuartetas que `FlatEmitter` y produce un `.s` funcional para **RARS**
 | `RiscvMemory` | `HEAP_GET/SET` y `ARRAY_GET/SET` (completitud) |
 | `RiscvRuntime` | Rutinas inline: imprimir, leer, `number_to_text` |
 | `RiscvWriter` | Acumula las líneas del ensamblador |
+| `RiscvRunner` | Ensambla y ejecuta el `.s` con RARS embebido (`rars.api`) |
+
+Nota de compatibilidad RARS: las constantes se emiten dentro de `.data` porque
+RARS no reconoce `.rodata`, y las ramas condicionales del lenguaje se emiten
+como «condición invertida hacia una etiqueta local + `j` incondicional» porque
+RARS marca como error fatal las `B_FORMAT` con objetivo a más de ±4096 bytes y
+no las relaja. Así, cualquier `.s` generado (aun con funciones o ciclos muy
+grandes) ensambla en el simulador interno.
 
 ### 9.2 Modelo de datos (espejo del plano)
 
@@ -274,6 +287,27 @@ Scratch `t0..t2`/`ft0..ft1` en los helpers; estado de rutinas en `s1..s6`,
 (buffer temporal + recorte de `\n`), `read_char`, `number_to_text` (dígitos
 enteros, `.` y hasta 12 fracciones). Todo inline para dejar `ra` libre.
 
+### 9.6 Ejecución interna (`RiscvRunner`)
+
+`com.compi.backend.riscv.RiscvRunner` es el puente hacia el simulador RARS
+embebido (`lib/rars1_6.jar`, paquete público `rars.api`):
+
+1. Crea un `rars.api.Program` nuevo por ejecución con `Options`
+   (`startAtMain = true` — arranca en `main:` —, `pseudo = true` y
+   `maxSteps = 20 000 000` para acotar lazos infinitos).
+2. `assembleString(ensamblador)` ensambla desde el texto; los errores se
+   convierten en un diagnóstico conciso («Línea N: mensaje») en `Result`.
+3. `setup(args, stdin)` inyecta la entrada del usuario (el campo **Entrada** de
+   la vista Simulador) y `simulate()` corre hasta terminar.
+4. `Result(ok, stdout, stderr, reason, exitCode, elapsedMillis, message)`
+   captura la salida con `getSTDOUT()/getSTDERR()` y la razón de terminación
+   (`NORMAL_TERMINATION`, `MAX_STEPS`...).
+
+Solo puede haber un `Program` en `setup` a la vez; por eso cada ejecución crea
+uno nuevo y `CompilationActions` impide lanzamientos simultáneos (corre sobre
+un `SwingWorker` para no bloquear la interfaz). RARS se distribuye con licencia
+MIT y no está en Maven Central, de ahí el `systemPath` al jar versionado.
+
 ---
 
 ## 10. Integración con el IDE
@@ -281,13 +315,17 @@ enteros, `.` y hasta 12 fracciones). Todo inline para dejar `ra` libre.
 - `Compiler`: genera el ensamblador en `publishIntermediate` (junto al C),
   `getRiscvCode()`, `setRiscvEnabled(boolean)`/`isRiscvEnabled()` y limpieza en
   `reset`. La generación es independiente del modo Tripletes/Cuartetas.
-- `ConsoleDock`: vista **Ensamblador** (`View.ASSEMBLY`) entre "Código C" y
-  "Resumen".
+- `ConsoleDock`: vistas **Ensamblador** (`View.ASSEMBLY`) y **Simulador**
+  (`View.RUN`, con salida de ejecución y campo de entrada) entre "Código C" y
+  "Resumen"; `setRunOutput`/`appendRunOutput`/`getRunInput` para el ciclo de
+  ejecución.
 - `CompilationActions`: publica `riscvCode` en la vista y escribe
-  `NombreDelArchivo.s` en la raíz del proyecto junto al `.c`.
-- `TopToolbar`/`MainWindow`: casilla **RISC-V** en la barra superior (activa por
-  defecto), cableada desde el constructor de `MainWindow` (sin tocar
-  `initComponents`).
+  `NombreDelArchivo.s` en la raíz del proyecto junto al `.c`; `runRiscv()`
+  lanza `RiscvRunner` en un `SwingWorker`, selecciona la vista Simulador y
+  publica la salida, la razón de terminación y el estado en la barra inferior.
+- `TopToolbar`/`MainWindow`: casilla **RISC-V** y botón **Ejecutar** en la
+  barra superior (activados por defecto, con atajo `Ctrl+R`), cableados desde
+  el constructor de `MainWindow` (sin tocar `initComponents`).
 
 ---
 
@@ -322,5 +360,10 @@ Regenerar el SVG: `plantuml -tsvg Diagrama-clases.wsd`.
 - `RiscvAssemblyTest`: estructura del `.s` (`.globl main`, `stack/heap/otype`,
   `ecall`, `L_dispatch`, `L_ret_*`, `fadd.d`/`fdiv.d`, rutinas inline),
   determinismo y conmutador de habilitación.
+- `RiscvExecutionTest`: oráculo de ejecución interna — el `.s` de Minimo corre
+  dentro del simulador embebido y produce `Hola Mundo`, un programa con lectura
+  (`a << b <<`) consume la entrada y suma, la Calculadora completa (imports y
+  funciones) ensambla, ejecuta y termina normalmente, y los casos de error
+  (instrucción inválida, ensamblador vacío) se reportan con diagnóstico.
 - Control de tamaño: `contacto-3xtrat3rr3str3D/tools/check_java_size.py`
   (máximo 600 líneas por clase y 50 por método/constructor).

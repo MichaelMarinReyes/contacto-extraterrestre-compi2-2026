@@ -26,10 +26,10 @@ class RiscvAssemblyTest {
         String asm = compile(gradingDirectory.resolve("00_hello_world/Minimo.pig")).getRiscvCode();
         assertTrue(asm.contains(".globl main"));
         assertTrue(asm.contains("main:"));
+        assertTrue(asm.contains(".data"));
         assertTrue(asm.contains("stack: .space 800000"));
         assertTrue(asm.contains("heap:  .space 800000"));
         assertTrue(asm.contains("otype: .space 800000"));
-        assertTrue(asm.contains(".rodata"));
         assertTrue(asm.contains("ecall"));
         assertTrue(asm.contains("L_end:"));
         assertTrue(asm.contains("li a7, 10"));

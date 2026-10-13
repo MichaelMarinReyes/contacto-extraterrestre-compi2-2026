@@ -41,6 +41,19 @@
             <version>1.18.34</version>
             <scope>provided</scope>
         </dependency>
+        <!--
+            Simulador RARS 1.6 empotrado para la ejecución interna del
+            ensamblador RISC-V (incremento 4 de la fase 2). No está en Maven
+            Central; se versiona el jar en lib/ (licencia MIT, proyecto RARS:
+            https://github.com/TheThirdOne/rars). Uso exclusivo de rars.api.
+        -->
+        <dependency>
+            <groupId>rars</groupId>
+            <artifactId>rars</artifactId>
+            <version>1.6</version>
+            <scope>system</scope>
+            <systemPath>${project.basedir}/lib/rars1_6.jar</systemPath>
+        </dependency>
     </dependencies>
 
     <properties>
