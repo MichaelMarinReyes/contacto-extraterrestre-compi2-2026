@@ -1,8 +1,10 @@
 package com.compi.backend;
 
+import com.compi.backend.riscv.InteractiveInput;
 import com.compi.backend.riscv.RiscvRunner;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -89,6 +91,60 @@ class RiscvExecutionTest {
         AtomicInteger checks = new AtomicInteger();
         RiscvRunner.Result result = new RiscvRunner().run(asm, "", () -> checks.incrementAndGet() > 1);
         assertTrue(result.ok(), result.message());
+        assertEquals("DETENIDO", result.reason());
+    }
+
+    @Test
+    void entradaInteractivaSeConsumePorLinea() throws Exception {
+        String source = "VARIABILES>\n"
+                + "esto a : numerus 0;\n"
+                + "esto b : numerus 0;\n"
+                + "MAIOR>\n"
+                + ">> \"Suma: \" ;\n"
+                + "a <<\n"
+                + "b <<\n"
+                + ">> a + b ;\n"
+                + "FINIS;\n";
+        String asm = compileSourceToRiscv(source, temporaryDirectory);
+        InteractiveInput input = new InteractiveInput();
+        input.submit("3");
+        input.submit("4");
+        StringBuilder streamed = new StringBuilder();
+        RiscvRunner.Result result = new RiscvRunner().runInteractive(asm, input,
+                streamed::append, () -> false);
+        assertTrue(result.ok(), result.message());
+        assertTrue(result.stdout().contains("Suma:"), result.stdout());
+        assertTrue(result.stdout().contains("7"), result.stdout());
+        // La salida se publica mientras corre, no solo al terminar.
+        assertTrue(streamed.toString().contains("7"), streamed.toString());
+        assertEquals("NORMAL_TERMINATION", result.reason());
+    }
+
+    @Test
+    void detenerInterrumpeUnaEsperaDeEntrada() throws Exception {
+        String source = "VARIABILES>\n"
+                + "esto n : numerus 0;\n"
+                + "MAIOR>\n"
+                + "dum (verum) {\n"
+                + "  n <<\n"
+                + "} finis;\n"
+                + "FINIS;\n";
+        String asm = compileSourceToRiscv(source, temporaryDirectory);
+        InteractiveInput input = new InteractiveInput();
+        AtomicBoolean stop = new AtomicBoolean(false);
+        Thread stopper = new Thread(() -> {
+            try {
+                Thread.sleep(300);
+            } catch (InterruptedException ignored) {
+                return;
+            }
+            stop.set(true);
+            input.close();
+        });
+        stopper.setDaemon(true);
+        stopper.start();
+        RiscvRunner.Result result = assertTimeoutPreemptively(java.time.Duration.ofSeconds(10),
+                () -> new RiscvRunner().runInteractive(asm, input, text -> { }, stop::get));
         assertEquals("DETENIDO", result.reason());
     }
 

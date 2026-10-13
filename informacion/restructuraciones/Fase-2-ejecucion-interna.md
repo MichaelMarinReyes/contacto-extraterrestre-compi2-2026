@@ -9,11 +9,13 @@
   `assembleString` → `setup(args, stdin)` → `simulate()`; `Result` con
   `stdout/stderr/reason/exitCode/elapsedMillis` o diagnóstico conciso de
   ensamblaje («Línea N: mensaje»).
-- `RiscvExecutionTest` (6 casos): Minimo corre y emite `Hola Mundo`; un
+- `RiscvExecutionTest` (8 casos): Minimo corre y emite `Hola Mundo`; un
   programa con `a <<`/`b <<` consume la entrada y suma; la Calculadora completa
   (imports + funciones) ensambla, ejecuta y termina con `NORMAL_TERMINATION`;
   un bucle infinito se detiene con la solicitud de parada (`DETENIDO`);
-  instrucción inválida y `.s` vacío reportan error.
+  un programa interactivo lee cada línea enviada (y la salida se publica por
+  fragmentos); detener interrumpe una espera de lectura; instrucción inválida y
+  `.s` vacío reportan error.
 - IDE: botón **Ejecutar** (+ atajo `Ctrl+R`) en `TopToolbar`, pestaña
   **Simulador** en `ConsoleDock` (salida + campo de entrada), `runRiscv()` en
   `CompilationActions` con `SwingWorker` (no bloquea la interfaz y evita
@@ -21,8 +23,32 @@
 - Botón **Ejecutar/Detener** reutilizado: no se añaden botones; mientras hay
   una simulación en curso el mismo botón pasa a **Detener** (icono ■) y corta la
   ejecución conservando la salida parcial. Ver «Parada cooperativa».
-- Regresión: `mvn clean verify` verde (105 pruebas) y `check_java_size.py` OK
-  (150 fuentes).
+- Regresión: `mvn clean verify` verde (107 pruebas) y `check_java_size.py` OK
+  (152 fuentes).
+
+### Entrada interactiva (ampliación posterior)
+
+La primera versión recibía la entrada **adelantada** (todo de una vez en
+`setup(args, stdin)`). Como mejora se pasó a **entrada interactiva**: el usuario
+responde a cada lectura mientras el programa corre.
+
+- `InteractiveInput` (`InputStream` con cola): el hilo que simula se bloquea
+  hasta que la interfaz `submit` una línea; `read(byte[],…)` devuelve solo el
+  resto de la línea ya disponible para que `BufferedReader` de RARS vea el fin
+  de línea sin esperar otra. `close()` marca EOF y desbloquea (lo usa
+  **Detener**).
+- `StreamingOutputStream`: publica cada fragmento escrito (además de
+  acumularlo) mediante un `Consumer<String>`, para que el programa muestre sus
+  mensajes —y su petición de datos— **antes** de que el usuario responda.
+- `RiscvRunner.runInteractive(assembly, input, output, stopRequested)` usa
+  `setup(args, null)` (paso directo) y **sustituye temporalmente** `System.in`
+  y `System.out`/`System.err` alrededor del bucle de `simulate()` (los
+  `ecall` de RARS en modo sin GUI los toman de forma perezosa); se restauran en
+  `finally`. No se usa reflexión.
+- IDE: `ConsoleDock` añade **Enter** para enviar la línea (`Mayús+Enter` inserta
+  salto) y un botón **Enviar**; `CompilationActions.submitRunInput()` envía el
+  campo Entrada y `streamRunOutput()` publica los fragmentos; `Detener` cierra
+  el `InteractiveInput` para desbloquear una lectura pendiente.
 
 ### Parada cooperativa (botón Detener)
 
@@ -65,7 +91,7 @@ ejecuta; no es el mecanismo de ejecución del IDE.
 
 ## Estado actual (lo que ya se tiene)
 
-- Módulo `com.compi.backend.riscv` completo (12 clases): consume las mismas
+- Módulo `com.compi.backend.riscv` completo (14 clases): consume las mismas
   cuartetas que `FlatEmitter` y emite un `.s` autocontenido para **RARS**
   (`RV32IMF/D`).
 - El `.s` ya es compatible con RARS: comienza en `main`, convención `ecall`
@@ -186,7 +212,7 @@ pequeño. RARS/Venus externos quedan documentados como comprobación opcional.
    ejecución en `ConsoleDock` que muestre la salida y capture la entrada de los
    programas interactivos (lecturas `<<`, `leer`, `readln`, `ReadInt`,
    `ReadString`…). — **hecho** (pestaña **Simulador** con campo de entrada;
-   entrada adelantada en la API `setup(stdin)`)
+   luego ampliada a entrada interactiva por línea)
 5. **Regresión completa**: `mvn clean verify` verde y `check_java_size.py` OK.
    — **hecho** (105 pruebas, 150 fuentes)
 6. **Documentación**: actualizar el Manual de usuario (sección Ejecutar y

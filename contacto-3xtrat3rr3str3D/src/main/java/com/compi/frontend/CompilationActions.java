@@ -6,6 +6,7 @@ import com.compi.backend.errors.CompilationError;
 import com.compi.backend.errors.ErrorType;
 import com.compi.backend.languages.LanguageCompilerFactory;
 import com.compi.backend.parser.ParseStep;
+import com.compi.backend.riscv.InteractiveInput;
 import com.compi.backend.riscv.RiscvRunner;
 import com.compi.backend.symbols.Symbol;
 import com.compi.backend.symbols.TypeEntry;
@@ -16,6 +17,7 @@ import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicBoolean;
 import javax.swing.JOptionPane;
 import javax.swing.SwingWorker;
 
@@ -29,6 +31,9 @@ final class CompilationActions {
     private String lastRiscvCode = "";
     private SwingWorker<RiscvRunner.Result, Void> riscvWorker;
     private volatile boolean stopRequested;
+    private volatile InteractiveInput runInput;
+    private final StringBuilder pendingRunOutput = new StringBuilder();
+    private final AtomicBoolean runOutputFlushScheduled = new AtomicBoolean();
 
     private record FileResult(File file, String language, boolean ok,
                               String astDot, List<Symbol> symbols, List<TypeEntry> types, List<ParseStep> steps,
@@ -221,6 +226,8 @@ final class CompilationActions {
         if (riscvWorker != null && !riscvWorker.isDone()) {
             if (stopRequested) return;
             stopRequested = true;
+            InteractiveInput input = runInput;
+            if (input != null) input.close();
             window.getConsoleDock().appendRunOutput("\n[Deteniendo ejecución…]\n");
             window.navText("Deteniendo ejecución…");
             return;
@@ -230,8 +237,9 @@ final class CompilationActions {
 
     /**
      * Ejecuta el ensamblador RISC-V generado en el simulador interno (RARS
-     * embebido) y publica el resultado en la vista Simulador. Corre en un hilo
-     * de trabajo para no bloquear la interfaz y puede detenerse desde el botón.
+     * embebido) y publica el resultado en la vista Simulador. La entrada es
+     * interactiva: el programa lee líneas a medida que las pide y el usuario las
+     * envía con Enter. Corre en un hilo de trabajo y puede detenerse con el botón.
      */
     void runRiscv() {
         ConsoleDock console = window.getConsoleDock();
@@ -243,15 +251,20 @@ final class CompilationActions {
             return;
         }
         String assembly = lastRiscvCode;
-        String input = console.getRunInput();
         stopRequested = false;
-        console.setRunOutput("Ejecutando el ensamblador en el simulador interno (RARS)…\n");
+        runInput = new InteractiveInput();
+        console.setOnRunInputSubmit(this::submitRunInput);
+        console.setRunInteractive(true);
+        console.setRunOutput("Ejecutando el ensamblador en el simulador interno (RARS)…\n"
+                + "Escribe la entrada y pulsa Enter cuando el programa la pida.\n\n");
+        submitRunInput();
         window.navText("Ejecutando ensamblador…");
         window.setRunningState(true);
         riscvWorker = new SwingWorker<>() {
             @Override
             protected RiscvRunner.Result doInBackground() {
-                return new RiscvRunner().run(assembly, input, () -> stopRequested);
+                return new RiscvRunner().runInteractive(assembly, runInput,
+                        CompilationActions.this::streamRunOutput, () -> stopRequested);
             }
 
             @Override
@@ -262,19 +275,68 @@ final class CompilationActions {
         riscvWorker.execute();
     }
 
+    /** Envía al simulador lo escrito en el campo Entrada, una línea por lectura. */
+    private void submitRunInput() {
+        if (runInput == null) return;
+        ConsoleDock console = window.getConsoleDock();
+        String text = console.getRunInput();
+        console.setRunInput("");
+        if (text == null || text.isEmpty()) return;
+        String[] lines = text.split("\n", -1);
+        for (int i = 0; i < lines.length; i++) {
+            String line = lines[i];
+            if (line.endsWith("\r")) line = line.substring(0, line.length() - 1);
+            if (line.isEmpty() && i == lines.length - 1) continue;
+            console.appendRunOutput("> " + line + "\n");
+            runInput.submit(line);
+        }
+    }
+
+    /**
+     * Acumula la salida que el programa produce durante la corrida y la vuelca
+     * al EDT por ráfagas, para no saturar la interfaz si el programa imprime en
+     * un ciclo muy rápido.
+     */
+    private void streamRunOutput(String text) {
+        if (text == null || text.isEmpty()) return;
+        synchronized (pendingRunOutput) {
+            pendingRunOutput.append(text);
+        }
+        if (runOutputFlushScheduled.compareAndSet(false, true)) {
+            javax.swing.SwingUtilities.invokeLater(() -> flushRunOutput(true));
+        }
+    }
+
+    private void flushRunOutput(boolean reschedule) {
+        String chunk;
+        synchronized (pendingRunOutput) {
+            chunk = pendingRunOutput.toString();
+            pendingRunOutput.setLength(0);
+        }
+        runOutputFlushScheduled.set(false);
+        if (!chunk.isEmpty()) {
+            window.getConsoleDock().appendRunOutput(chunk);
+        }
+        if (reschedule) {
+            synchronized (pendingRunOutput) {
+                if (pendingRunOutput.length() > 0 && runOutputFlushScheduled.compareAndSet(false, true)) {
+                    javax.swing.SwingUtilities.invokeLater(() -> flushRunOutput(true));
+                }
+            }
+        }
+    }
+
     private void publishRunResult(SwingWorker<RiscvRunner.Result, Void> worker) {
         ConsoleDock console = window.getConsoleDock();
+        flushRunOutput(false);
         try {
             RiscvRunner.Result result = worker.get();
             if (!result.ok()) {
-                console.appendRunOutput("Error: " + result.message() + "\n");
+                console.appendRunOutput("\nError: " + result.message() + "\n");
                 window.navText("Ejecución con errores");
                 return;
             }
-            console.appendRunOutput(result.stdout());
-            if (result.stderr() != null && !result.stderr().isBlank()) {
-                console.appendRunOutput(result.stderr());
-            }
+            // La salida del programa ya se publicó por fragmentos durante la corrida.
             String label = reasonLabel(result.reason());
             console.appendRunOutput("\n[Ejecución " + label + ", código "
                     + result.exitCode() + ", " + result.elapsedMillis() + " ms]\n");
@@ -282,10 +344,12 @@ final class CompilationActions {
                     + " (código " + result.exitCode() + ")");
             window.navText("Ejecución: " + label);
         } catch (Exception e) {
-            console.appendRunOutput("Error interno al ejecutar: " + e + "\n");
+            console.appendRunOutput("\nError interno al ejecutar: " + e + "\n");
             window.navText("Ejecución con error");
         } finally {
             window.setRunningState(false);
+            console.setRunInteractive(false);
+            runInput = null;
         }
     }
 

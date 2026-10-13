@@ -189,25 +189,29 @@ Es el equivalente a pulsar **Run** en IntelliJ o NetBeans.
 1. Compile con la casilla **RISC-V** marcada (botón **Compilar** o `Ctrl+B`).
 2. En la pestaña **Ensamblador** pueden leerse línea por línea las instrucciones
    generadas; ahí se ve **qué** se generó.
-3. Si el programa lee entrada (`<<`, `leer`, `readln`), escríbala en el campo
-   **Entrada del programa** de la pestaña **Simulador** antes de ejecutar.
-4. Pulse **Ejecutar** (o `Ctrl+R`). La pestaña **Simulador** se selecciona sola
+3. Pulse **Ejecutar** (o `Ctrl+R`). La pestaña **Simulador** se selecciona sola
    y muestra en su área de salida la ejecución del programa (**cómo** corre),
    igual que la consola de RARS. Mientras corre, el propio botón cambia a
    **Detener**: púlselo para interrumpir la ejecución sin añadir más botones.
+4. Si el programa lee datos (`<<`, `leer`, `readln`), aparecerá su mensaje en la
+   salida y el simulador **esperará**; escriba el valor en el campo **Entrada
+   del programa** y pulse **Enter** (o **Enviar**). Cada lectura consume una
+   línea y la salida se muestra a medida que se produce.
 5. Al terminar se indica la razón de terminación (p. ej. `NORMAL_TERMINATION`),
    el código de salida y el tiempo en milisegundos. Si el programa excede el
    límite de pasos se reporta un posible lazo infinito.
 
 Consejos:
 
-- **Entrada adelantada**: el simulador embebido recibe la entrada de una vez;
-  escriba todos los valores (números, texto, opciones de menú) separados por
-  saltos de línea en el campo **Entrada** antes de pulsar **Ejecutar**.
+- **Entrada interactiva**: el programa recibe una línea por cada lectura, en el
+  orden en que las pide. Escriba en el campo **Entrada** y confirme con
+  **Enter**; para escribir varias líneas de una vez use `Mayús+Enter` dentro del
+  campo y luego **Enviar**. También puede escribir de antemano todos los valores
+  antes de pulsar **Ejecutar**.
 - **Detener una ejecución**: mientras el programa corre, el botón **Ejecutar**
   pasa a llamarse **Detener** (mismo botón, también `Ctrl+R`). Al pulsarlo se
-  corta la simulación y se conserva la salida producida hasta ese punto, con la
-  razón `DETENIDO`. Es útil para un lazo infinito o una espera larga.
+  corta la simulación —incluso si el programa está esperando datos— y se
+  conserva la salida producida hasta ese punto, con la razón `DETENIDO`.
 - **Errores de ensamblaje**: si el `.s` no ensambla, en la pestaña **Simulador**
   se listan los diagnósticos con su número de línea.
 - **Ver generado y ver ejecución**: las pestañas **Ensamblador** y **Simulador**
@@ -265,10 +269,9 @@ Abra la ventana flotante mediante **Herramientas** o los atajos `Ctrl+1` a
   errores) y que consulta la pestaña correcta.
 - **Ejecutar no hace nada o dice «sin ensamblador»**: primero compile con la
   casilla **RISC-V** marcada; el botón **Ejecutar** usa el último `.s` generado.
-- **El programa pide entrada y avanza directo al final**: el simulador recibe
-  la entrada adelantada; escriba en el campo **Entrada** de la pestaña
-  **Simulador** todos los valores que el programa leerá, uno por línea, y
-  vuelva a pulsar **Ejecutar**.
+- **El programa pide entrada y no avanza**: el simulador quedó esperando datos;
+  escriba el valor en el campo **Entrada** de la pestaña **Simulador** y pulse
+  **Enter**. Si no hay campo visible, seleccione la pestaña **Simulador**.
 - **Sale «Límite de pasos superado»**: el programa quedó en un lazo infinito o
   es demasiado largo; revise la lógica de sus ciclos, o detenga antes con el
   botón **Detener** mientras corre.
@@ -288,7 +291,8 @@ Abra la ventana flotante mediante **Herramientas** o los atajos `Ctrl+1` a
 5. Revise Consola y Resumen; consulte Tripletes, Cuartetas, Código 3D, Código C
    o **Ensamblador** según lo que necesite.
 6. Si hay errores, corríjalos y vuelva a compilar.
-7. Para ver el programa correr, escriba la entrada (si la hay) en la pestaña
-   **Simulador** y pulse **Ejecutar** (`Ctrl+R`); la salida aparece en esa
-   pestaña y el estado en la barra inferior.
+7. Para ver el programa correr, pulse **Ejecutar** (`Ctrl+R`) y, cuando el
+   programa pida datos, escríbalos en el campo **Entrada** de la pestaña
+   **Simulador** y pulse **Enter**; la salida aparece en esa pestaña y el estado
+   en la barra inferior.
 8. Use AST, Símbolos y Pila para inspeccionar el análisis del archivo enfocado.

@@ -225,7 +225,7 @@ La semántica es compartida por los tres lenguajes (mismo AST):
 
 ## 9. Back-end de ensamblador RISC-V
 
-Módulo nuevo (`com.compi.backend.riscv`, 12 clases) que consume las mismas
+Módulo nuevo (`com.compi.backend.riscv`, 14 clases) que consume las mismas
 cuartetas que `FlatEmitter` y produce un `.s` funcional para **RARS**
 (`RV32IMF/D`). No reutiliza los emisores de C. Además de generarlo, el módulo
 lo **ensambla y ejecuta internamente** (sección 9.6) sin salir del IDE.
@@ -246,6 +246,8 @@ lo **ensambla y ejecuta internamente** (sección 9.6) sin salir del IDE.
 | `RiscvRuntime` | Rutinas inline: imprimir, leer, `number_to_text` |
 | `RiscvWriter` | Acumula las líneas del ensamblador |
 | `RiscvRunner` | Ensambla y ejecuta el `.s` con RARS embebido; admite parada cooperativa por tramos |
+| `InteractiveInput` | `InputStream` bloqueante para la entrada interactiva (una línea por lectura; `close()` desbloquea) |
+| `StreamingOutputStream` | `ByteArrayOutputStream` que publica cada fragmento de salida en cuanto se produce |
 
 Nota de compatibilidad RARS: las constantes se emiten dentro de `.data` porque
 RARS no reconoce `.rodata`, y las ramas condicionales del lenguaje se emiten
@@ -297,11 +299,11 @@ embebido (`lib/rars1_6.jar`, paquete público `rars.api`):
    `maxSteps = 500 000` **por tramo**; el total se acota a 20 000 000).
 2. `assembleString(ensamblador)` ensambla desde el texto; los errores se
    convierten en un diagnóstico conciso («Línea N: mensaje») en `Result`.
-3. `setup(args, stdin)` inyecta la entrada del usuario (el campo **Entrada** de
-   la vista Simulador) y `simulate()` corre por tramos hasta terminar.
+3. `setup(args, stdin)` inyecta la entrada del usuario y `simulate()` corre por
+   tramos hasta terminar.
 4. `Result(ok, stdout, stderr, reason, exitCode, elapsedMillis, message)`
-   captura la salida con `getSTDOUT()/getSTDERR()` y la razón de terminación
-   (`NORMAL_TERMINATION`, `MAX_STEPS`, `DETENIDO`...).
+   captura la salida y la razón de terminación (`NORMAL_TERMINATION`,
+   `MAX_STEPS`, `DETENIDO`...).
 
 **Parada cooperativa** (`run(assembly, input, stopRequested)`): en vez de una
 sola llamada a `simulate()`, se ejecuta en tramos de `CHUNK_STEPS` (500 000
@@ -314,6 +316,31 @@ actual, acumulando la salida; cuando la solicitud es verdadera se devuelve
 `reason = "DETENIDO"` con la salida parcial. `CompilationActions` mantiene la
 bandera `volatile stopRequested` (escrita en el EDT, leída en el hilo de
 trabajo, sin tocar estructuras de RARS desde varios hilos).
+
+**Entrada y salida interactivas** (`runInteractive(assembly, input, output,
+stopRequested)`): en vez de una entrada fija, la lectura se sirve bajo demanda.
+RARS atiende los `ecall` de lectura por `SystemIO.getInputReader()` y los de
+impresión por `SystemIO.getOutputWriter()`; ambos son perezosos y, sin GUI de
+RARS, se crean sobre `System.in`/`System.out`. Por eso la variante interactiva
+llama a `setup(args, null)` (paso directo) y **sustituye temporalmente**
+`System.in` por un `InteractiveInput` y `System.out`/`System.err` por
+`StreamingOutputStream` alrededor del bucle de `simulate()`, restaurándolos en
+`finally`:
+
+- `InteractiveInput` es un `InputStream` respaldado por una cola: el hilo que
+  simula se bloquea hasta que la interfaz `submit` una línea; `read(byte[],…)`
+  devuelve solo el resto de la línea ya disponible para que `BufferedReader`
+  vea el fin de línea sin esperar otra. `close()` marca EOF y desbloquea la
+  lectura (lo invoca **Detener**), de modo que también se puede detener un
+  programa que está esperando datos.
+- `StreamingOutputStream` publica cada fragmento escrito (vía `Consumer<String>`)
+  además de acumularlo: así el usuario ve los mensajes del programa —y en
+  particular la petición de datos— **antes** de responder.
+
+No se usa reflexión: es el propio diseño de RARS en modo sin GUI el que toma
+`System.in`/`System.out` de forma perezosa. La sustitución de los flujos
+estándar es segura porque las ejecuciones ya están serializadas (un `Program`
+en `setup` a la vez, sobre un `SwingWorker`).
 
 Solo puede haber un `Program` en `setup` a la vez; por eso cada ejecución crea
 uno nuevo y `CompilationActions` impide lanzamientos simultáneos (corre sobre
@@ -330,13 +357,17 @@ MIT y no está en Maven Central, de ahí el `systemPath` al jar versionado.
 - `ConsoleDock`: vistas **Ensamblador** (`View.ASSEMBLY`) y **Simulador**
   (`View.RUN`, con salida de ejecución y campo de entrada) entre "Código C" y
   "Resumen"; `setRunOutput`/`appendRunOutput`/`getRunInput` para el ciclo de
-  ejecución.
+  ejecución y `setOnRunInputSubmit`/`setRunInteractive` para la entrada
+  interactiva (Enter envía la línea; `Mayús+Enter` inserta salto; botón
+  **Enviar**).
 - `CompilationActions`: publica `riscvCode` en la vista y escribe
   `NombreDelArchivo.s` en la raíz del proyecto junto al `.c`; `runOrStopRiscv()`
-  (botón **Ejecutar/Detener** y `Ctrl+R`) arranca `runRiscv()` o marca
-  `stopRequested` si ya hay una ejecución; `runRiscv()` lanza `RiscvRunner` en un
-  `SwingWorker`, selecciona la vista Simulador y publica la salida, la razón de
-  terminación y el estado en la barra inferior.
+  (botón **Ejecutar/Detener** y `Ctrl+R`) arranca `runRiscv()` o, si ya hay una
+  ejecución, marca `stopRequested` y cierra el `InteractiveInput` para
+  desbloquear una lectura pendiente; `runRiscv()` lanza `runInteractive` en un
+  `SwingWorker`, selecciona la vista Simulador y publica por fragmentos la
+  salida (`streamRunOutput`), además de la razón de terminación y el estado en
+  la barra inferior.
 - `TopToolbar`/`MainWindow`: casilla **RISC-V** y botón **Ejecutar** en la
   barra superior (activados por defecto, con atajo `Ctrl+R`), cableados desde
   el constructor de `MainWindow` (sin tocar `initComponents`). `setRunningState`
@@ -379,7 +410,9 @@ Regenerar el SVG: `plantuml -tsvg Diagrama-clases.wsd`.
 - `RiscvExecutionTest`: oráculo de ejecución interna — el `.s` de Minimo corre
   dentro del simulador embebido y produce `Hola Mundo`, un programa con lectura
   (`a << b <<`) consume la entrada y suma, la Calculadora completa (imports y
-  funciones) ensambla, ejecuta y termina normalmente, y los casos de error
+  funciones) ensambla, ejecuta y termina normalmente, la **entrada interactiva**
+  consume cada línea enviada (y la publica por fragmentos antes de terminar),
+  **Detener** interrumpe una espera de lectura, y los casos de error
   (instrucción inválida, ensamblador vacío) se reportan con diagnóstico.
 - Control de tamaño: `contacto-3xtrat3rr3str3D/tools/check_java_size.py`
   (máximo 600 líneas por clase y 50 por método/constructor).

@@ -73,6 +73,7 @@ package "com.compi.frontend" {
     - lastRiscvCode : String
     - riscvWorker : SwingWorker<RiscvRunner.Result, Void>
     - stopRequested : volatile boolean
+    - runInput : volatile InteractiveInput
     ~ CompilationActions(MainWindow)
     ~ compile() : void
     ~ clearResults() : void
@@ -80,6 +81,8 @@ package "com.compi.frontend" {
     ~ jumpToSymbol(int) : void
     ~ runOrStopRiscv() : void
     ~ runRiscv() : void
+    - submitRunInput() : void
+    - streamRunOutput(String) : void
     - compileOne(File) : FileResult
     - compileTargets() : List<File>
     - compilationHeader(File, File) : String
@@ -203,6 +206,11 @@ package "com.compi.frontend" {
     - c3dArea : JTextArea
     - cCodeArea : JTextArea
     - summaryArea : JTextArea
+    - runOutput : JTextArea
+    - runInput : JTextArea
+    - runSendButton : JButton
+    - runInputSubmit : Runnable
+    - runInteractive : boolean
     - statusLabel : JLabel
     + ConsoleDock()
     + addView(String, Component) : void
@@ -210,7 +218,16 @@ package "com.compi.frontend" {
     + applyTheme() : void
     + clearAll() : void
     + select(View) : void
+    + getRunInput() : String
+    + setRunInput(String) : void
+    + appendRunOutput(String) : void
+    + setRunOutput(String) : void
+    + setOnRunInputSubmit(Runnable) : void
+    + setRunInteractive(boolean) : void
     - buildStatusBar() : JPanel
+    - buildRunPanel() : JPanel
+    - buildRunInputHeader() : JPanel
+    - installRunInputKeys() : void
   }
   class StatusBar {
     - positionLabel : JLabel
@@ -1822,6 +1839,7 @@ package "com.compi.backend.riscv" {
     - {static} CHUNK_STEPS : int
     + run(String, String) : Result
     + run(String, String, BooleanSupplier) : Result
+    + runInteractive(String, InteractiveInput, Consumer<String>, BooleanSupplier) : Result
   }
   class "RiscvRunner.Result" as RiscvResult <<record>> {
     + ok : boolean
@@ -1832,6 +1850,20 @@ package "com.compi.backend.riscv" {
     + elapsedMillis : long
     + message : String
   }
+  class InteractiveInput {
+    - pending : LinkedBlockingQueue<String>
+    - current : byte[]
+    - closed : boolean
+    + submit(String) : void
+    + read() : int
+    + read(byte[], int, int) : int
+    + close() : void
+  }
+  class StreamingOutputStream {
+    - listener : Consumer<String>
+    + write(int) : void
+    + write(byte[], int, int) : void
+  }
   note right of RiscvRunner
     Ensambla y ejecuta el .s con el
     simulador RARS 1.6 embebido
@@ -1839,6 +1871,12 @@ package "com.compi.backend.riscv" {
     licencia MIT). Ejecuta por tramos
     (CHUNK_STEPS) y admite una solicitud
     de parada cooperativa ("DETENIDO").
+  end note
+  note right of InteractiveInput
+    Entrada interactiva: bloquea al
+    simulador hasta que la interfaz
+    envía una línea; close() marca EOF
+    y desbloquea (botón Detener).
   end note
 }
 package "com.compi.backend.errors" {

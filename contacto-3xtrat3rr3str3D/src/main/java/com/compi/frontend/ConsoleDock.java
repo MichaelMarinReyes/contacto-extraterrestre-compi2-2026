@@ -3,12 +3,20 @@ package com.compi.frontend;
 import java.awt.BorderLayout;
 import java.awt.Component;
 import java.awt.Dimension;
+import java.awt.event.ActionEvent;
+import java.awt.event.InputEvent;
+import java.awt.event.KeyEvent;
+import javax.swing.AbstractAction;
+import javax.swing.Action;
 import javax.swing.BorderFactory;
+import javax.swing.JButton;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
 import javax.swing.JScrollPane;
 import javax.swing.JTabbedPane;
 import javax.swing.JTextArea;
+import javax.swing.KeyStroke;
+import javax.swing.text.DefaultEditorKit;
 
 public class ConsoleDock extends JPanel {
 
@@ -51,6 +59,9 @@ public class ConsoleDock extends JPanel {
     private final JTextArea summaryArea = area();
 
     private final JLabel statusLabel = new JLabel(" ");
+    private final JButton runSendButton = new JButton("Enviar");
+    private Runnable runInputSubmit;
+    private boolean runInteractive;
 
     public ConsoleDock() {
         setLayout(new BorderLayout());
@@ -70,6 +81,8 @@ public class ConsoleDock extends JPanel {
 
         add(tabs, BorderLayout.CENTER);
         add(buildStatusBar(), BorderLayout.SOUTH);
+        installRunInputKeys();
+        setRunInteractive(false);
     }
 
     private JPanel buildStatusBar() {
@@ -103,7 +116,7 @@ public class ConsoleDock extends JPanel {
         return a;
     }
 
-    /** Panel del simulador interno: salida de la ejecución y campo de entrada. */
+    /** Panel del simulador interno: salida de la ejecución y entrada interactiva. */
     private JPanel buildRunPanel() {
         JPanel panel = new JPanel(new BorderLayout());
         panel.setBackground(UiTheme.editorBg());
@@ -112,13 +125,30 @@ public class ConsoleDock extends JPanel {
         JPanel south = new JPanel(new BorderLayout(0, 2));
         south.setBackground(UiTheme.editorBg());
         south.setBorder(UiTheme.pad(3, 8, 3, 8));
-        JLabel label = new JLabel("Entrada del programa (escríbela antes de Ejecutar):");
-        label.setFont(UiTheme.sans(11));
-        label.setForeground(UiTheme.dim());
-        south.add(label, BorderLayout.NORTH);
+        south.add(buildRunInputHeader(), BorderLayout.NORTH);
         south.add(new Scroller(runInput), BorderLayout.CENTER);
         panel.add(south, BorderLayout.SOUTH);
         return panel;
+    }
+
+    private JPanel buildRunInputHeader() {
+        JPanel header = new JPanel(new BorderLayout());
+        header.setOpaque(false);
+        JLabel label = new JLabel("Entrada del programa (Enter la envía durante la ejecución):");
+        label.setFont(UiTheme.sans(11));
+        label.setForeground(UiTheme.dim());
+        header.add(label, BorderLayout.WEST);
+        runSendButton.setFont(UiTheme.sans(11));
+        runSendButton.setFocusable(false);
+        runSendButton.setEnabled(false);
+        UiTheme.asButton(runSendButton);
+        runSendButton.addActionListener(e -> {
+            if (runInputSubmit != null) {
+                runInputSubmit.run();
+            }
+        });
+        header.add(runSendButton, BorderLayout.EAST);
+        return header;
     }
 
     private static class Scroller extends JScrollPane {
@@ -174,6 +204,38 @@ public class ConsoleDock extends JPanel {
 
     public void setRunInput(String text) {
         runInput.setText(text == null ? "" : text);
+    }
+
+    /** Registra la acción que envía la entrada escrita al programa en ejecución. */
+    public void setOnRunInputSubmit(Runnable action) {
+        this.runInputSubmit = action;
+    }
+
+    /** Habilita el envío por Enter y el botón Enviar mientras hay una ejecución. */
+    public void setRunInteractive(boolean running) {
+        this.runInteractive = running;
+        runSendButton.setEnabled(running);
+        runInput.setToolTipText(running
+                ? "Escribe una línea y pulsa Enter para enviarla al programa."
+                : "Entrada que se enviará al ejecutar el programa.");
+    }
+
+    private void installRunInputKeys() {
+        Action submit = new AbstractAction() {
+            @Override
+            public void actionPerformed(ActionEvent event) {
+                if (runInteractive && runInputSubmit != null) {
+                    runInputSubmit.run();
+                } else {
+                    runInput.replaceSelection("\n");
+                }
+            }
+        };
+        runInput.getActionMap().put("runInputEnter", submit);
+        runInput.getInputMap().put(KeyStroke.getKeyStroke(KeyEvent.VK_ENTER, 0), "runInputEnter");
+        runInput.getInputMap().put(
+                KeyStroke.getKeyStroke(KeyEvent.VK_ENTER, InputEvent.SHIFT_DOWN_MASK),
+                DefaultEditorKit.insertBreakAction);
     }
 
     public void setSummary(String text) {
