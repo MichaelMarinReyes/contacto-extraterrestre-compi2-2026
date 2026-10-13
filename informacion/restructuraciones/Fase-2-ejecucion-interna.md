@@ -33,6 +33,27 @@ salir del IDE: botón **Ejecutar**, consola de salida y de entrada integrada,
 con las mismas garantías del resto (clases ≤ 600 líneas, métodos ≤ 50, no tocar
 `initComponents`, explicaciones en español).
 
+## Flujo del usuario (equivalente a «Run» de IntelliJ/NetBeans)
+
+La experiencia buscada es la del botón **Run** de los IDEs de propósito general,
+pero dentro de nuestra aplicación:
+
+1. **Compilar** (ya existe): la casilla **RISC-V** publica el `.s` en la
+   pestaña **Ensamblador** y lo escribe en la raíz del proyecto. Es la *vista*
+   del código, igual que hoy la pestaña **Código C** muestra el `.c`.
+2. **Ejecutar** (nuevo, este incremento): al pulsar **Ejecutar**, el IDE
+   ensambla el `.s` **automáticamente con el RARS embebido** (equivalente
+   interno al `gcc` del sistema; no hay paso manual en la terminal) y lo
+   ejecuta en ese simulador embebido. La salida del programa aparece en una
+   **consola integrada** del IDE, y las lecturas (`<<`, `leer`, `readln`,
+   `ReadInt`, `ReadString`…) se escriben en esa misma consola.
+
+Diferencia con la ruta de C actual: para C el IDE solo *genera* el `.c` y quien
+quiere ejecutarlo usa `gcc` en la terminal del sistema operativo. Para RISC-V
+ese paso externo **desaparece**: compilar y ejecutar ocurren dentro del IDE al
+pulsar Ejecutar. Abrir el `.s` en RARS o Venus de forma manual queda solo como
+comprobación externa opcional, no como mecanismo de ejecución.
+
 ## Opciones analizadas
 
 ### A. Empotrar RARS como librería (recomendada)
