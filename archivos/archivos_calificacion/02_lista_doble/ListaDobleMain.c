@@ -4,6 +4,7 @@
 #include <string.h>
 double stack[100000];
 double heap[100000];
+double otype[100000];
 double H = 0;
 double P = 0;
 double RET = 0;
@@ -28,6 +29,7 @@ int main(void) {
     heap[(int)stack[(int)P + 4]] = 0;
     stack[(int)P + 5] = stack[(int)P + 2] + 2;
     heap[(int)stack[(int)P + 5]] = 0;
+    otype[(int)stack[(int)P + 2]] = 2;
     stack[(int)P + 180] = stack[(int)P + 2];
     stack[(int)P + 178] = 1;
     stack[(int)P + 179] = P;
@@ -43,6 +45,7 @@ L_ret_1:;
     heap[(int)stack[(int)P + 8]] = 0;
     stack[(int)P + 9] = stack[(int)P + 6] + 2;
     heap[(int)stack[(int)P + 9]] = 0;
+    otype[(int)stack[(int)P + 6]] = 2;
     stack[(int)P + 180] = stack[(int)P + 6];
     stack[(int)P + 181] = 7;
     stack[(int)P + 178] = 2;
@@ -2861,6 +2864,7 @@ LF_ListaDoble_insertarInicio_a1:
     heap[(int)stack[(int)P + 6]] = 0;
     stack[(int)P + 7] = stack[(int)P + 4] + 2;
     heap[(int)stack[(int)P + 7]] = 0;
+    otype[(int)stack[(int)P + 4]] = 1;
     stack[(int)P + 8] = stack[(int)P + 3];
     stack[(int)P + 21] = stack[(int)P + 4];
     stack[(int)P + 22] = stack[(int)P + 8];
@@ -2904,6 +2908,7 @@ LF_ListaDoble_insertarFinal_a1:
     heap[(int)stack[(int)P + 6]] = 0;
     stack[(int)P + 7] = stack[(int)P + 4] + 2;
     heap[(int)stack[(int)P + 7]] = 0;
+    otype[(int)stack[(int)P + 4]] = 1;
     stack[(int)P + 8] = stack[(int)P + 3];
     stack[(int)P + 25] = stack[(int)P + 4];
     stack[(int)P + 26] = stack[(int)P + 8];
@@ -3048,6 +3053,7 @@ L_ret_43:;
     heap[(int)stack[(int)P + 24]] = 0;
     stack[(int)P + 25] = stack[(int)P + 22] + 2;
     heap[(int)stack[(int)P + 25]] = 0;
+    otype[(int)stack[(int)P + 22]] = 1;
     stack[(int)P + 26] = stack[(int)P + 4];
     stack[(int)P + 42] = stack[(int)P + 22];
     stack[(int)P + 43] = stack[(int)P + 26];
