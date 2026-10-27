@@ -69,6 +69,23 @@ class RiscvExecutionTest {
     }
 
     @Test
+    void decimalesConservanSuParteEnteraYFraccion() throws Exception {
+        String source = "VARIABILES>\n"
+                + "esto a : decimalis 77.5;\n"
+                + "esto b : decimalis 0.75;\n"
+                + "esto c : decimalis -0.5;\n"
+                + "MAIOR>\n"
+                + ">> a;\n"
+                + ">> b;\n"
+                + ">> c;\n"
+                + "FINIS;\n";
+        String asm = compileSourceToRiscv(source, temporaryDirectory);
+        RiscvRunner.Result result = new RiscvRunner().run(asm, "");
+        assertTrue(result.ok(), result.message());
+        assertEquals("77.5\n0.75\n-0.5", result.stdout().trim());
+    }
+
+    @Test
     void calculadoraConImportsEjecutaYTermina() throws Exception {
         String asm = compileToRiscv(gradingDirectory.resolve("01_calculadora/Calculadora.pig"));
         // Nombre y opción 0 (salir) bastan para recorrer el menú completo.

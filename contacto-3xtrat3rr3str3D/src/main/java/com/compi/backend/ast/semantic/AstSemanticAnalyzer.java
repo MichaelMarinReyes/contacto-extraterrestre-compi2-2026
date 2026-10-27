@@ -107,8 +107,14 @@ public final class AstSemanticAnalyzer extends AbstractASTVisitor<Type> {
 
     /**
      * Comprueba la visibilidad de un miembro respecto de la clase actual:
-     * {@code private} solo desde su clase y {@code protected} desde su clase o
-     * una subclase.
+     * {@code private} solo desde su clase, {@code protected} desde su clase o
+     * una subclase y {@code default} (sin modificador) desde cualquier clase
+     * del mismo paquete.
+     *
+     * <p>Zetariano no declara paquetes: todas las clases de una compilación
+     * pertenecen al mismo paquete, tal como se asume en el enunciado. Por eso
+     * {@code default} es accesible entre todas las clases del programa; no se
+     * debe confundir con {@code private}.</p>
      */
     void checkAccess(Symbol member, ASTNode node) {
         if (member == null || member.getAccess() == null) return;
@@ -124,6 +130,10 @@ public final class AstSemanticAnalyzer extends AbstractASTVisitor<Type> {
                 if (!isSubclass(currentClass, declaring))
                     report("El miembro «" + member.getName() + "» es protegido y solo se accede desde «"
                             + declaring.getName() + "» o sus subclases", node);
+            }
+            case "DEFAULT" -> {
+                // Acceso de paquete (package-private). Como el lenguaje no
+                // permite declarar paquetes, todas las clases comparten uno.
             }
             default -> {
             }

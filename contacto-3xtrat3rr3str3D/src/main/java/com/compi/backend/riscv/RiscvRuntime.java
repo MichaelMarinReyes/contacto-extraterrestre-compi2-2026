@@ -151,7 +151,7 @@ final class RiscvRuntime {
         access.heapAppendImmediate('-');
         ctx.out.line("fsub.d fa0, ft3, fa0");
         ctx.out.label(positive);
-        ctx.out.line("fcvt.w.d s3, fa0");
+        ctx.out.line("fcvt.w.d s3, fa0, rtz");
         ctx.out.line("fcvt.d.w ft4, s3");
         ctx.out.line("fsub.d ft5, fa0, ft4");
         integerDigits("s3");

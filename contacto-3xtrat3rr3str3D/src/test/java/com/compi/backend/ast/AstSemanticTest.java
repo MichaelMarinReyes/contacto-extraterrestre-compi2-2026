@@ -244,6 +244,41 @@ class AstSemanticTest {
     }
 
     @Test
+    void defaultMembersArePackagePrivateAndReachableFromEveryClassInTheProgram() {
+        Compiler compiler = new Compiler();
+        assertTrue(compiler.compile("""
+                class Base {
+                    int valor;
+                    Base() { }
+                    int leer() { return valor; }
+                }
+                class Otra {
+                    int leer(Base base) { return base.valor + base.leer(); }
+                    Base crear() { return new Base(); }
+                }
+                class Hija extends Base {
+                    int leerHeredado() { return valor; }
+                }
+                """, "zet"), compiler.getErrors().toString());
+    }
+
+    @Test
+    void overrideAnnotationMayPrecedeOrFollowTheAccessModifier() {
+        Compiler compiler = new Compiler();
+        assertTrue(compiler.compile("""
+                class Base {
+                    public void primero() { }
+                    public void segundo() { }
+                }
+                class Hija extends Base {
+                    @Override
+                    public void primero() { }
+                    public @Override void segundo() { }
+                }
+                """, "zet"), compiler.getErrors().toString());
+    }
+
+    @Test
     void duplicateNamedFieldsAreNotLostWhenLeavingTheParseTree() throws Exception {
         Files.writeString(directory.resolve("Datos.y"), "%estructuras\nestructura Datos:\n    entero valor\n%funciones\ndefinir f():\n    imprimir(1)\n");
         Compiler compiler = new Compiler();

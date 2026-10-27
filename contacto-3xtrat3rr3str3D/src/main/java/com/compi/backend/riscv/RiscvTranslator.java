@@ -26,6 +26,25 @@ final class RiscvTranslator {
         memory = new RiscvMemory(ctx);
     }
 
+    private static String header() {
+        return "# Ensamblador RISC-V\n\n";
+    }
+
+    private static String dataSection() {
+        return """
+                .data
+                .align 3
+                stack: .space 800000
+                heap:  .space 800000
+                otype: .space 800000
+                H:     .double 0.0
+                P:     .double 0.0
+                RET:   .double 0.0
+                RA:    .double 0.0
+                _txt:  .space 4096
+                \n""";
+    }
+
     String build() {
         generateBody();
         return header() + dataSection() + ctx.constants.section() + textSection();
@@ -80,8 +99,7 @@ final class RiscvTranslator {
 
     private void emitOne(Quadruple q) {
         switch (q.getOp()) {
-            case LABEL, GOTO, IF_TRUE, IF_FALSE, IF_EQ, IF_NE, IF_LT, IF_LE, IF_GT, IF_GE ->
-                    flow.control(q);
+            case LABEL, GOTO, IF_TRUE, IF_FALSE, IF_EQ, IF_NE, IF_LT, IF_LE, IF_GT, IF_GE -> flow.control(q);
             case PARAM, CALL, RETURN, STACK_SET -> flow.function(q);
             case ASSIGN -> arithmetic.assign(q);
             case ADD, SUB, MUL, DIV, INT_DIV, MOD, AND, OR, NOT, NEG -> arithmetic.operation(q);
@@ -93,27 +111,6 @@ final class RiscvTranslator {
             case READ_CHAR -> runtime.readChar(q.getArg1());
             default -> memory.simple(q);
         }
-    }
-
-    private static String header() {
-        return "# Ensamblador RISC-V (RV32IMF/D) generado por Contacto 3xtrat3rr3str3D\n"
-                + "# Compatible con RARS: el numero de servicio va en a7 y los argumentos en a0.\n"
-                + "# Pila: stack (frames por invocacion). Monticulo: heap. Marcas: otype.\n";
-    }
-
-    private static String dataSection() {
-        return """
-                .data
-                .align 3
-                stack: .space 800000
-                heap:  .space 800000
-                otype: .space 800000
-                H:     .double 0.0
-                P:     .double 0.0
-                RET:   .double 0.0
-                RA:    .double 0.0
-                _txt:  .space 4096
-                """;
     }
 
     private String textSection() {

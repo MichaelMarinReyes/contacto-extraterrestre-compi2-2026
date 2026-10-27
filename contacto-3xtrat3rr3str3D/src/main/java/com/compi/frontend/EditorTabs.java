@@ -9,6 +9,7 @@ import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.function.Consumer;
 import javax.swing.JTabbedPane;
@@ -44,7 +45,14 @@ public class EditorTabs extends JTabbedPane {
     public EditorPanel openFile(File file) {
         String lang = LanguageCompilerFactory.detectLanguageId(file.getName());
         if (lang == null) {
-            return null;
+            String lower = file.getName().toLowerCase(Locale.ROOT);
+            if (lower.endsWith(".c")) {
+                lang = "pig";
+            } else if (lower.endsWith(".s") || lower.endsWith(".asm")) {
+                lang = "pig";
+            } else {
+                return null;
+            }
         }
         EditorPanel existing = open.get(file);
         if (existing != null) {

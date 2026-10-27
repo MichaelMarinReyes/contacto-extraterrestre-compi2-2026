@@ -16,7 +16,7 @@ atributoDef: modificadorAcceso? tipoDato ID (LBRACK RBRACK)* (ASSIGN expresion)?
 
 constructorDef: modificadorAcceso? ID LPAREN parametros? RPAREN bloque;
 
-metodoDef: modificadorAcceso? OVERRIDE? tipoDato ID LPAREN parametros? RPAREN bloque;
+metodoDef: (OVERRIDE modificadorAcceso? | modificadorAcceso OVERRIDE?)? tipoDato ID LPAREN parametros? RPAREN bloque;
 
 modificadorAcceso: PUBLIC | PRIVATE | PROTECTED;
 

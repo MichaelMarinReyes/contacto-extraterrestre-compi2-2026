@@ -10,6 +10,7 @@ import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.io.File;
 import java.io.IOException;
+import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.LinkedHashSet;
@@ -20,7 +21,10 @@ import java.util.function.Consumer;
 import javax.swing.BorderFactory;
 import javax.swing.JButton;
 import javax.swing.JLabel;
+import javax.swing.JMenuItem;
+import javax.swing.JOptionPane;
 import javax.swing.JPanel;
+import javax.swing.JPopupMenu;
 import javax.swing.JScrollPane;
 import javax.swing.SwingConstants;
 import javax.swing.JTextField;
@@ -488,7 +492,79 @@ public class FileTreePanel extends JPanel {
     }
 
     private static boolean isSourceFile(File file) {
-        return LanguageCompilerFactory.hasAllowedExtension(file.getName());
+        if (file == null) {
+            return false;
+        }
+        String name = file.getName().toLowerCase(Locale.ROOT);
+        if (LanguageCompilerFactory.hasAllowedExtension(file.getName())) {
+            return true;
+        }
+        // Permitir abrir archivos generados (.c y .s) directamente desde el árbol
+        return name.endsWith(".c") || name.endsWith(".s") || name.endsWith(".asm");
+    }
+
+    private void showContextMenu(MouseEvent e, TreePath path) {
+        if (root == null) {
+            return;
+        }
+        Object last = path == null ? null : path.getLastPathComponent();
+        File target = null;
+        if (last instanceof DefaultMutableTreeNode node && node.getUserObject() instanceof File file) {
+            target = file;
+        }
+        if (target == null || !target.exists()) {
+            return;
+        }
+        if (target.equals(root) || !target.getAbsolutePath().startsWith(root.getAbsolutePath())) {
+            return;
+        }
+        JPopupMenu menu = new JPopupMenu();
+        JMenuItem delete = new JMenuItem("Eliminar");
+        final File fileToDelete = target;
+        delete.addActionListener(ev -> deleteFile(fileToDelete));
+        menu.add(delete);
+        menu.show(tree, e.getX(), e.getY());
+    }
+
+    private void deleteFile(File target) {
+        if (target == null || !target.exists()) {
+            return;
+        }
+        String name = target.getName();
+        int confirm = JOptionPane.showConfirmDialog(this,
+                "¿Eliminar \"" + name + "\"?\nEsta acción no se puede deshacer.",
+                "Eliminar archivo",
+                JOptionPane.YES_NO_OPTION,
+                JOptionPane.WARNING_MESSAGE);
+        if (confirm != JOptionPane.YES_OPTION) {
+            return;
+        }
+        try {
+            if (target.isDirectory()) {
+                deleteRecursively(target);
+            } else {
+                Files.deleteIfExists(target.toPath());
+            }
+        } catch (IOException ex) {
+            JOptionPane.showMessageDialog(this,
+                    "No se pudo eliminar el archivo:\n" + ex.getMessage(),
+                    "Error al eliminar",
+                    JOptionPane.ERROR_MESSAGE);
+            return;
+        }
+        reload();
+    }
+
+    private void deleteRecursively(File file) throws IOException {
+        if (file.isDirectory()) {
+            File[] children = file.listFiles();
+            if (children != null) {
+                for (File child : children) {
+                    deleteRecursively(child);
+                }
+            }
+        }
+        Files.deleteIfExists(file.toPath());
     }
 
     private static class FileCellRenderer extends DefaultTreeCellRenderer {
@@ -537,18 +613,27 @@ public class FileTreePanel extends JPanel {
         tree.addMouseListener(new MouseAdapter() {
             @Override
             public void mouseClicked(MouseEvent e) {
-                if (e.getClickCount() != 2 || !javax.swing.SwingUtilities.isLeftMouseButton(e)) {
+                if (e.getClickCount() == 2 && SwingUtilities.isLeftMouseButton(e)) {
+                    TreePath path = tree.getPathForLocation(e.getX(), e.getY());
+                    if (path == null) {
+                        return;
+                    }
+                    Object obj = path.getLastPathComponent();
+                    if (obj instanceof DefaultMutableTreeNode node
+                            && node.getUserObject() instanceof File file && file.isFile()
+                            && isSourceFile(file) && onFileSelected != null) {
+                        onFileSelected.accept(file);
+                    }
                     return;
                 }
-                TreePath path = tree.getPathForLocation(e.getX(), e.getY());
-                if (path == null) {
-                    return;
-                }
-                Object obj = path.getLastPathComponent();
-                if (obj instanceof DefaultMutableTreeNode node
-                        && node.getUserObject() instanceof File file && file.isFile()
-                        && isSourceFile(file) && onFileSelected != null) {
-                    onFileSelected.accept(file);
+                if (SwingUtilities.isRightMouseButton(e)) {
+                    TreePath path = tree.getPathForLocation(e.getX(), e.getY());
+                    if (path == null) {
+                        tree.clearSelection();
+                    } else {
+                        tree.setSelectionPath(path);
+                    }
+                    showContextMenu(e, path);
                 }
             }
         });

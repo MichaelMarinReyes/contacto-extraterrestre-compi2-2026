@@ -12,6 +12,7 @@ import java.awt.event.MouseEvent;
 import java.io.File;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import javax.swing.AbstractAction;
 import javax.swing.JButton;
 import javax.swing.JCheckBox;
@@ -450,8 +451,13 @@ public class MainWindow extends JFrame {
     public void openInEditor(File file) {
         EditorPanel editor = editorTabs.openFile(file);
         if (editor == null) {
-            if (!LanguageCompilerFactory.hasAllowedExtension(file.getName())) workspace.warnWrongExtension(file);
-            else promptInfo("No se pudo leer el archivo:\n" + file.getAbsolutePath(), "Error de lectura", JOptionPane.ERROR_MESSAGE);
+            String lower = file.getName().toLowerCase(Locale.ROOT);
+            if (!LanguageCompilerFactory.hasAllowedExtension(file.getName())
+                    && !lower.endsWith(".c") && !lower.endsWith(".s") && !lower.endsWith(".asm")) {
+                workspace.warnWrongExtension(file);
+                return;
+            }
+            promptInfo("No se pudo leer el archivo:\n" + file.getAbsolutePath(), "Error de lectura", JOptionPane.ERROR_MESSAGE);
             return;
         }
         revealInTree(file);

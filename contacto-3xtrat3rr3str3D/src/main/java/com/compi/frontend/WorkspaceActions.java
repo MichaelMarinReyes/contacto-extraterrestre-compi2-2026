@@ -7,6 +7,7 @@ import java.nio.file.Files;
 import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import javax.swing.JOptionPane;
 
 /** Gestiona archivos y cambios de proyecto del área de trabajo. */
@@ -93,7 +94,9 @@ final class WorkspaceActions {
     void openFile() {
         File file = window.promptSourceFile();
         if (file == null) return;
-        if (!LanguageCompilerFactory.hasAllowedExtension(file.getName())) {
+        String lower = file.getName().toLowerCase(Locale.ROOT);
+        if (!LanguageCompilerFactory.hasAllowedExtension(file.getName())
+                && !lower.endsWith(".c") && !lower.endsWith(".s") && !lower.endsWith(".asm")) {
             warnWrongExtension(file);
             return;
         }

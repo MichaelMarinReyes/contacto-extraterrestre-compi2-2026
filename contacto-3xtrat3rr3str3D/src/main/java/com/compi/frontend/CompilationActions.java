@@ -189,6 +189,7 @@ final class CompilationActions {
         File target = new File(container, (point > 0 ? name.substring(0, point) : name) + ".c");
         try {
             Files.writeString(target.toPath(), principal.cCode());
+            window.getFileTree().reload();
             return "\nC generado: " + target.getPath() + "\n";
         } catch (IOException e) {
             return "\nNo se pudo escribir el C en la raiz del proyecto: " + e.getMessage() + "\n";
@@ -208,6 +209,7 @@ final class CompilationActions {
         File target = new File(container, (point > 0 ? name.substring(0, point) : name) + ".s");
         try {
             Files.writeString(target.toPath(), principal.riscvCode());
+            window.getFileTree().reload();
             return "\nEnsamblador RISC-V generado: " + target.getPath() + "\n";
         } catch (IOException e) {
             return "\nNo se pudo escribir el ensamblador en la raiz del proyecto: " + e.getMessage() + "\n";

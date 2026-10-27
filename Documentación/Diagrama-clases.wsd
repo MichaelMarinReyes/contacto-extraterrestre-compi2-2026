@@ -1,5 +1,5 @@
-@startuml Diagrama de clases - Contacto 3xtrat3rr3str3D
-' Arquitectura implementada: semántica y generación C3D sobre el AST.
+@startuml Class Diagram - Contacto 3xtrat3rr3str3D
+' Implemented architecture: semantics and C3D generation over the AST.
 skinparam dpi 120
 skinparam shadowing false
 skinparam classAttributeIconSize 10
@@ -13,13 +13,14 @@ skinparam class {
   FontSize 11
 }
 legend right
-  **Arquitectura implementada**
-  ..|> implementación · --|> herencia
-  *-- composición · o-- agregación · ..> dependencia
-  ParseTree → constructores → AST propio → semántica → C3D → C.
-  + público · - privado · # protegido · ~ acceso de paquete
-  Se muestran atributos y operaciones propios de cada clase.
-  Los miembros heredados se consultan en sus clases base.
+  **Implemented architecture**
+  ..|> implementation · --|> inheritance
+  *-- composition · o-- aggregation · ..> dependency
+  ParseTree → AST builders → project AST → semantics → C3D → C.
+  + public · - private · # protected · ~ package-private
+  Attributes and operations are shown per class.
+  Inherited members are listed in their base classes.
+  Zetariano has no package declarations: every class shares one package.
 endlegend
 
 package "com.compi" {
@@ -792,6 +793,11 @@ package "com.compi.backend.ast" {
     + {static} valueOf(String) : AccessModifier
     + {static} values() : AccessModifier[]
   }
+  note right of AccessModifier
+    DEFAULT (no modifier) is package-private.
+    Since Zetariano declares no packages,
+    all classes belong to the same package.
+  end note
 }
 package "com.compi.backend.ast.semantic" {
   class AstSemanticAnalyzer {
@@ -878,7 +884,7 @@ package "com.compi.backend.ast.semantic" {
     ~ scope(ASTNode, Scope) : void
   }
 }
-package "com.compi.backend.ast.stmt" {
+package "com.compi.backend.ast.statements" {
   class ProgramNodeAST {
     - imports : List<ImportNodeAST>
     - definitions : List<AbstractDefinitionNodeAST>
@@ -1052,7 +1058,7 @@ package "com.compi.backend.ast.stmt" {
     + path() : String
   }
 }
-package "com.compi.backend.ast.expr" {
+package "com.compi.backend.ast.exprressions" {
   class LiteralNodeAST {
     - value : Object
     - kind : LiteralKind
@@ -1236,7 +1242,7 @@ package "com.compi.backend.ast.expr" {
     + {static} values() : ReadKind[]
   }
 }
-package "com.compi.backend.ast.decl" {
+package "com.compi.backend.ast.declarations" {
   class FunctionDefinitionNodeAST {
     - returnType : Type
     - name : String
@@ -1865,18 +1871,18 @@ package "com.compi.backend.riscv" {
     + write(byte[], int, int) : void
   }
   note right of RiscvRunner
-    Ensambla y ejecuta el .s con el
-    simulador RARS 1.6 embebido
-    (lib/rars1_6.jar, paquete rars.api,
-    licencia MIT). Ejecuta por tramos
-    (CHUNK_STEPS) y admite una solicitud
-    de parada cooperativa ("DETENIDO").
+    Assembles and runs the .s with the
+    embedded RARS 1.6 simulator
+    (lib/rars1_6.jar, rars.api package,
+    MIT license). Runs in chunks
+    (CHUNK_STEPS) and accepts a cooperative
+    stop request ("DETENIDO").
   end note
   note right of InteractiveInput
-    Entrada interactiva: bloquea al
-    simulador hasta que la interfaz
-    envía una línea; close() marca EOF
-    y desbloquea (botón Detener).
+    Interactive input: blocks the
+    simulator until the UI sends one
+    line; close() marks EOF and unblocks
+    it (Stop button).
   end note
 }
 package "com.compi.backend.errors" {
@@ -2016,7 +2022,7 @@ MainWindow *-- CompilationActions
 CompilationActions *-- Compiler
 WorkspaceActions ..> MainWindow
 CompilationActions ..> MainWindow
-CompilationActions ..> PigLatinCompiler : entrada .pig seleccionada
+CompilationActions ..> PigLatinCompiler : selected .pig entry
 MainWindow *-- TopToolbar
 MainWindow *-- FileTreePanel
 MainWindow *-- EditorTabs
@@ -2046,7 +2052,7 @@ SymbolTablePanel *-- TableFilterBar
 ErrorTablePanel *-- TableFilterBar
 TypeTablePanel *-- TableFilterBar
 TypeTablePanel ..> TypeEntry
-CompilationActions ..> TypeEntry : instantánea por archivo
+CompilationActions ..> TypeEntry : per-file snapshot
 SymbolTablePanel ..> Symbol
 ErrorTablePanel ..> CompilationError
 StackVisualizerPanel ..> ParseStep
@@ -2056,10 +2062,10 @@ Compiler *-- IntermediateCodeManager
 Compiler ..> LanguageCompilerFactory
 Compiler ..> LanguageCompiler
 Compiler ..> ASTDotGenerator
-Compiler o-- ProgramNodeAST : principal e importados
+Compiler o-- ProgramNodeAST : main and imported programs
 Compiler ..> ParseTrace
 Compiler ..> CCodeEmitter
-Compiler ..> RiscvAssembler : módulo nuevo, independiente del C
+Compiler ..> RiscvAssembler : new module, independent from C
 Compiler ..> StackSimulator
 AbstractLanguageCompiler ..|> LanguageCompiler
 PigLatinCompiler --|> AbstractLanguageCompiler
@@ -2072,7 +2078,7 @@ YCompiler ..> YIndentLexer
 ZetarianoCompiler ..> ZetarianoAstBuilder
 AbstractLanguageCompiler ..> AstSemanticAnalyzer
 AbstractLanguageCompiler o-- SemanticModel
-Compiler o-- SemanticModel : principal e importados
+Compiler o-- SemanticModel : main and imported programs
 AstSemanticAnalyzer --|> AbstractASTVisitor
 AstSemanticAnalyzer *-- AstExpressionAnalyzer
 AstSemanticAnalyzer *-- AstDeclarationAnalyzer
@@ -2083,7 +2089,7 @@ SemanticModel ..> ASTNode
 SemanticModel o-- Type
 SemanticModel o-- Symbol
 SemanticModel o-- Scope
-SymbolTable ..> ASTNode : ámbitos por identidad
+SymbolTable ..> ASTNode : scopes by identity
 AbstractLanguageCompiler ..> AstCodeGenerator
 AbstractASTVisitor <|-- AstCodeGenerator
 AstCodeGenerator o-- SemanticModel
@@ -2172,29 +2178,29 @@ package "com.compi.backend.ast.build" {
 PigLatinAstBuilder --|> AbstractAstBuilder
 YAstBuilder --|> AbstractAstBuilder
 ZetarianoAstBuilder --|> AbstractAstBuilder
-AbstractAstBuilder ..> ProgramNodeAST : construye
+AbstractAstBuilder ..> ProgramNodeAST : builds
 SymbolTable *-- Scope
 SymbolTable *-- TypeTable
 TypeTable o-- TypeEntry
 TypeTable ..> Scope
 TypeEntry o-- Type
-TypeEntry ..> TypeEntry : tipo base / padre por ID
+TypeEntry ..> TypeEntry : base type / parent by ID
 Scope o-- Symbol
 Symbol o-- Type
-Symbol o-- Symbol : superclase / clase dueña
+Symbol o-- Symbol : superclass / owner class
 Type ..> DataType
 Symbol ..> SymbolCategory
-Symbol ..> AccessModifier : visibilidad declarada
-PigLatinCompiler o-- PendingGeneration : generación diferida
+Symbol ..> AccessModifier : declared visibility
+PigLatinCompiler o-- PendingGeneration : deferred generation
 MethodDefinitionNodeAST ..> AccessModifier
 ConstructorDefinitionNodeAST ..> AccessModifier
 AttributeDefinitionNodeAST ..> AccessModifier
 C3DGenerator o-- Quadruple
 Quadruple ..> QuadrupleOp
 IntermediateCodeManager o-- Triplet
-CCodeEmitter ..> FlatEmitter : delega
+CCodeEmitter ..> FlatEmitter : delegates
 FlatEmitter *-- FlatLayout
-RiscvAssembler ..> RiscvTranslator : delega
+RiscvAssembler ..> RiscvTranslator : delegates
 RiscvTranslator *-- RiscvContext
 RiscvContext *-- RiscvLayout
 RiscvContext *-- RiscvWriter
@@ -2204,10 +2210,10 @@ RiscvTranslator *-- RiscvFlow
 RiscvTranslator *-- RiscvArithmetic
 RiscvTranslator *-- RiscvMemory
 RiscvTranslator *-- RiscvRuntime
-RiscvFlow ..> RiscvLayout : etiquetas de funciones
+RiscvFlow ..> RiscvLayout : function labels
 RiscvAccess ..> RiscvConstants
-RiscvAccess ..> RiscvLayout : offsets de frame y globales
-CompilationActions ..> RiscvRunner : ejecuta RARS embebido (SwingWorker)
+RiscvAccess ..> RiscvLayout : frame and global offsets
+CompilationActions ..> RiscvRunner : runs embedded RARS (SwingWorker)
 FlatEmitter ..> Quadruple
 FlatLayout ..> SymbolTable
 ArrayRuntime ..> C3DGenerator
