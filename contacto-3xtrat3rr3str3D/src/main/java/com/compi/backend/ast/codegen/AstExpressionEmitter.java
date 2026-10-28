@@ -112,7 +112,17 @@ final class AstExpressionEmitter {
         if (callable == null) throw new IllegalStateException("Llamada sin símbolo semántico");
         String name = callable.getName();
         int count = n.arguments().size();
-        if (callable.getCategory() == SymbolCategory.METHOD) {
+        if (callable.getCategory() == SymbolCategory.CONSTRUCTOR) {
+            // Una llamada super(...) reutiliza el objeto que ya está construyendo
+            // la subclase. A diferencia de `new`, no reserva otro objeto, pero sí
+            // debe invocar la etiqueta completa del constructor padre y pasar this.
+            Symbol owner = callable.getOwnerClass();
+            name = FunctionRuntime.name(owner.getName(), callable.getName(), count);
+            Symbol receiver = g.table.resolve("this");
+            if (receiver == null) throw new IllegalStateException("super(...) fuera de un constructor");
+            g.c3d.emit(QuadrupleOp.PARAM, g.memory.capture(receiver.getStorageName()), null, null);
+            count++;
+        } else if (callable.getCategory() == SymbolCategory.METHOD) {
             Symbol owner;
             String receiver;
             if (n.callee() instanceof MemberAccessNodeAST member) {

@@ -1,5 +1,5 @@
 @startuml Class Diagram - Contacto 3xtrat3rr3str3D
-' Implemented architecture: semantics and C3D generation over the AST.
+' Implemented architecture: AST, semantics, C3D, RISC-V and embedded execution.
 skinparam dpi 120
 skinparam shadowing false
 skinparam classAttributeIconSize 10
@@ -16,11 +16,13 @@ legend right
   **Implemented architecture**
   ..|> implementation · --|> inheritance
   *-- composition · o-- aggregation · ..> dependency
-  ParseTree → AST builders → project AST → semantics → C3D → C.
+  ParseTree → AST builders → project AST → semantics → C3D.
+  C3D → C (triplets/quadruples) and C3D → RISC-V → embedded RARS.
   + public · - private · # protected · ~ package-private
   Attributes and operations are shown per class.
   Inherited members are listed in their base classes.
-  Zetariano has no package declarations: every class shares one package.
+  A .z package is derived from its source directory/import path.
+  protected: same package or subclass; default: same package between .z classes.
 endlegend
 
 package "com.compi" {
@@ -75,6 +77,8 @@ package "com.compi.frontend" {
     - riscvWorker : SwingWorker<RiscvRunner.Result, Void>
     - stopRequested : volatile boolean
     - runInput : volatile InteractiveInput
+    - pendingRunOutput : StringBuilder
+    - runOutputFlushScheduled : AtomicBoolean
     ~ CompilationActions(MainWindow)
     ~ compile() : void
     ~ clearResults() : void
@@ -82,8 +86,10 @@ package "com.compi.frontend" {
     ~ jumpToSymbol(int) : void
     ~ runOrStopRiscv() : void
     ~ runRiscv() : void
+    ~ runAssemblyFile(File) : void
     - submitRunInput() : void
     - streamRunOutput(String) : void
+    - flushRunOutput(boolean) : void
     - compileOne(File) : FileResult
     - compileTargets() : List<File>
     - compilationHeader(File, File) : String
@@ -116,6 +122,7 @@ package "com.compi.frontend" {
     - root : File
     - onFileSelected : Consumer<File>
     - onDirectorySelected : Consumer<File>
+    - onAssemblyRun : Consumer<File>
     + FileTreePanel()
     + allSourceFiles() : List<File>
     + codeFolders() : List<File>
@@ -124,6 +131,9 @@ package "com.compi.frontend" {
     + loadDirectory(File) : void
     + projectRoot() : File
     + reload() : void
+    + setOnAssemblyRun(Consumer<File>) : void
+    ~ contextMenuFor(File) : JPopupMenu
+    ~ {static} isAssemblyFile(File) : boolean
   }
   class EditorTabs {
     - open : Map<File, EditorPanel>
@@ -206,6 +216,7 @@ package "com.compi.frontend" {
     - quadruplesArea : JTextArea
     - c3dArea : JTextArea
     - cCodeArea : JTextArea
+    - assemblyArea : JTextArea
     - summaryArea : JTextArea
     - runOutput : JTextArea
     - runInput : JTextArea
@@ -225,6 +236,7 @@ package "com.compi.frontend" {
     + setRunOutput(String) : void
     + setOnRunInputSubmit(Runnable) : void
     + setRunInteractive(boolean) : void
+    + setAssembly(String) : void
     - buildStatusBar() : JPanel
     - buildRunPanel() : JPanel
     - buildRunInputHeader() : JPanel
@@ -795,8 +807,9 @@ package "com.compi.backend.ast" {
   }
   note right of AccessModifier
     DEFAULT (no modifier) is package-private.
-    Since Zetariano declares no packages,
-    all classes belong to the same package.
+    The compiler derives the package from
+    the .z source directory/import path.
+    PROTECTED also permits subclasses.
   end note
 }
 package "com.compi.backend.ast.semantic" {
@@ -814,6 +827,10 @@ package "com.compi.backend.ast.semantic" {
     ~ switchDepth : int
     ~ callable : boolean
     + AstSemanticAnalyzer(SymbolTable, String, List<CompilationError>)
+    ~ checkAccess(Symbol, ASTNode) : void
+    ~ isSubclass(Symbol, Symbol) : boolean
+    - samePackage(Symbol, Symbol) : boolean
+    - packageOf(Symbol) : String
     + analyze(ProgramNodeAST) : SemanticModel
     + visit(ProgramNodeAST) : Type
     + visit(DeclarationNodeAST) : Type
@@ -1835,6 +1852,7 @@ package "com.compi.backend.riscv" {
     ~ isRuntime(String) : boolean
     ~ call(String, String) : void
     ~ writeString(String, String) : void
+    - {static} escapeCode(char) : Integer
     ~ printStringOps(Quadruple) : void
     ~ readText(String) : void
     ~ readChar(String) : void
@@ -1867,8 +1885,10 @@ package "com.compi.backend.riscv" {
   }
   class StreamingOutputStream {
     - listener : Consumer<String>
+    + StreamingOutputStream(Consumer<String>)
     + write(int) : void
     + write(byte[], int, int) : void
+    + text() : String
   }
   note right of RiscvRunner
     Assembles and runs the .s with the
@@ -1883,6 +1903,10 @@ package "com.compi.backend.riscv" {
     simulator until the UI sends one
     line; close() marks EOF and unblocks
     it (Stop button).
+  end note
+  note right of RiscvRuntime
+    String literals decode supported escapes
+    exactly once: \n, \t, \r, \\ and \".
   end note
 }
 package "com.compi.backend.errors" {
@@ -2211,9 +2235,16 @@ RiscvTranslator *-- RiscvArithmetic
 RiscvTranslator *-- RiscvMemory
 RiscvTranslator *-- RiscvRuntime
 RiscvFlow ..> RiscvLayout : function labels
+AstExpressionEmitter ..> FunctionRuntime : constructor/method labels
 RiscvAccess ..> RiscvConstants
 RiscvAccess ..> RiscvLayout : frame and global offsets
 CompilationActions ..> RiscvRunner : runs embedded RARS (SwingWorker)
+FileTreePanel ..> CompilationActions : execute selected .s
+CompilationActions o-- InteractiveInput : interactive stdin
+RiscvRunner ..> RiscvResult : execution result
+RiscvRunner ..> StreamingOutputStream : streamed stdout/stderr
+InteractiveInput --|> InputStream
+StreamingOutputStream --|> ByteArrayOutputStream
 FlatEmitter ..> Quadruple
 FlatLayout ..> SymbolTable
 ArrayRuntime ..> C3DGenerator

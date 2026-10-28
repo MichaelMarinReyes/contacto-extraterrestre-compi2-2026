@@ -134,7 +134,7 @@ public class ConsoleDock extends JPanel {
     private JPanel buildRunInputHeader() {
         JPanel header = new JPanel(new BorderLayout());
         header.setOpaque(false);
-        JLabel label = new JLabel("Entrada del programa (Enter la envía durante la ejecución):");
+        JLabel label = new JLabel("Entrada opcional del programa (Enter envía una línea):");
         label.setFont(UiTheme.sans(11));
         label.setForeground(UiTheme.dim());
         header.add(label, BorderLayout.WEST);
@@ -216,8 +216,8 @@ public class ConsoleDock extends JPanel {
         this.runInteractive = running;
         runSendButton.setEnabled(running);
         runInput.setToolTipText(running
-                ? "Escribe una línea y pulsa Enter para enviarla al programa."
-                : "Entrada que se enviará al ejecutar el programa.");
+                ? "Se usa solo si el programa ejecuta una instrucción de lectura."
+                : "Entrada opcional para programas que contienen instrucciones de lectura.");
     }
 
     private void installRunInputKeys() {

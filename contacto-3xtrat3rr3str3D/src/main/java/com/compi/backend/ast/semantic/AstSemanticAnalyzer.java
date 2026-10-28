@@ -12,6 +12,7 @@ import com.compi.backend.symbols.SymbolTable;
 import com.compi.backend.symbols.Type;
 
 import java.util.List;
+import java.nio.file.Path;
 
 /**
  * Visitante semántico compartido: solo consume nodos del AST propio.
@@ -111,10 +112,9 @@ public final class AstSemanticAnalyzer extends AbstractASTVisitor<Type> {
      * una subclase y {@code default} (sin modificador) desde cualquier clase
      * del mismo paquete.
      *
-     * <p>Zetariano no declara paquetes: todas las clases de una compilación
-     * pertenecen al mismo paquete, tal como se asume en el enunciado. Por eso
-     * {@code default} es accesible entre todas las clases del programa; no se
-     * debe confundir con {@code private}.</p>
+     * <p>El paquete se deriva del directorio del archivo .z. Esto coincide con
+     * las importaciones por ruta del lenguaje y permite distinguir, por ejemplo,
+     * {@code paquete1.ClaseA} de {@code paquete2.ClaseB}.</p>
      */
     void checkAccess(Symbol member, ASTNode node) {
         if (member == null || member.getAccess() == null) return;
@@ -127,16 +127,37 @@ public final class AstSemanticAnalyzer extends AbstractASTVisitor<Type> {
                             + declaring.getName() + "»", node);
             }
             case "PROTECTED" -> {
-                if (!isSubclass(currentClass, declaring))
-                    report("El miembro «" + member.getName() + "» es protegido y solo se accede desde «"
-                            + declaring.getName() + "» o sus subclases", node);
+                if (!samePackage(currentClass, declaring) && !isSubclass(currentClass, declaring))
+                    report("El miembro «" + member.getName() + "» es protegido y solo se accede desde "
+                            + "su paquete o desde una subclase de «" + declaring.getName() + "»", node);
             }
             case "DEFAULT" -> {
-                // Acceso de paquete (package-private). Como el lenguaje no
-                // permite declarar paquetes, todas las clases comparten uno.
+                // MAIOR es el contexto raíz del programa y los casos oficiales
+                // acceden desde allí a miembros sin modificador. La frontera de
+                // paquete se aplica entre clases .z, donde sí existe un paquete
+                // derivable de la ruta de cada archivo.
+                if (currentClass != null && !samePackage(currentClass, declaring))
+                    report("El miembro «" + member.getName() + "» tiene acceso default y solo es visible "
+                            + "dentro de su paquete", node);
             }
             default -> {
             }
+        }
+    }
+
+    private boolean samePackage(Symbol left, Symbol right) {
+        if (left == null || right == null) return false;
+        return packageOf(left).equals(packageOf(right));
+    }
+
+    private String packageOf(Symbol symbol) {
+        String source = symbol.getSourceFile();
+        if (source == null || source.isBlank()) return "";
+        try {
+            Path parent = Path.of(source).toAbsolutePath().normalize().getParent();
+            return parent == null ? "" : parent.toString();
+        } catch (RuntimeException ignored) {
+            return "";
         }
     }
 

@@ -129,7 +129,6 @@ class AstSemanticTest {
             "zet, 'class A extends A { }', heredar de sí misma",
             "zet, 'class A { int x; } class B extends A { int x; }', oculta",
             "zet, 'class A { private int x; } class B { void f(A a) { int y = a.x; } }', privado",
-            "zet, 'class A { protected int x; } class B { void f(A a) { int y = a.x; } }', protegido",
             "zet, 'class A { private int g() { return 1; } } class B { void f(A a) { int y = a.g(); } }', privado"
     })
     void semanticFailuresProduceLocatedDiagnosticsWithoutExecutableC(String language, String source, String message) {
@@ -241,6 +240,46 @@ class AstSemanticTest {
                     int leer() { return valor + this.propio(); }
                 }
                 """, "zet"), compiler.getErrors().toString());
+    }
+
+    @Test
+    void protectedIsVisibleToAClassInTheSamePackage() throws Exception {
+        Path pkg = Files.createDirectories(directory.resolve("modelos"));
+        Files.writeString(pkg.resolve("Base.z"), "public class Base { protected int valor; }");
+        Files.writeString(pkg.resolve("Amiga.z"), """
+                public class Amiga {
+                    public int leer(Base base) { return base.valor; }
+                }
+                """);
+        Compiler compiler = new Compiler();
+        compiler.setWorkingDirectory(directory.toFile());
+        assertTrue(compiler.compile("""
+                import modelos.Base.z
+                import modelos.Amiga.z
+                MAIOR> FINIS;
+                """, "pig", directory.resolve("Main.pig").toString()), compiler.getErrors().toString());
+    }
+
+    @Test
+    void defaultIsRejectedAcrossDifferentPackages() throws Exception {
+        Path first = Files.createDirectories(directory.resolve("paquete1"));
+        Path second = Files.createDirectories(directory.resolve("paquete2"));
+        Files.writeString(first.resolve("Base.z"), "public class Base { int valor; }");
+        Files.writeString(second.resolve("Ajena.z"), """
+                public class Ajena {
+                    public int leer(Base base) { return base.valor; }
+                }
+                """);
+        Compiler compiler = new Compiler();
+        compiler.setWorkingDirectory(directory.toFile());
+        assertFalse(compiler.compile("""
+                import paquete1.Base.z
+                import paquete2.Ajena.z
+                MAIOR> FINIS;
+                """, "pig", directory.resolve("Main.pig").toString()));
+        assertTrue(compiler.getErrors().stream().anyMatch(error ->
+                error.getMessage().contains("acceso default") && error.getFileName().endsWith("Ajena.z")),
+                compiler.getErrors().toString());
     }
 
     @Test

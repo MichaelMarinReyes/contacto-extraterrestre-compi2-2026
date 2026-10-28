@@ -6,6 +6,9 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import static org.junit.jupiter.api.Assertions.*;
@@ -86,6 +89,42 @@ class RiscvExecutionTest {
     }
 
     @Test
+    void escapesDeTextoSeConsumenUnaSolaVez() throws Exception {
+        String asm = compileSourceToRiscv("MAIOR> >> \"A\\nB\\tC\\\\D\"; FINIS;", temporaryDirectory);
+        RiscvRunner.Result result = new RiscvRunner().run(asm, "");
+        assertTrue(result.ok(), result.message());
+        assertEquals("A\nB\tC\\D\n", result.stdout());
+        assertFalse(result.stdout().contains("\nnB"), result.stdout());
+    }
+
+    @Test
+    void superInvocaLaEtiquetaEspecializadaDelConstructorPadre() throws Exception {
+        Files.writeString(temporaryDirectory.resolve("Animal.z"), """
+                public class Animal {
+                    protected String nombre;
+                    public Animal(String nombre) { this.nombre = nombre; }
+                    public String presentarse() { return nombre; }
+                }
+                """);
+        Files.writeString(temporaryDirectory.resolve("Perro.z"), """
+                public class Perro extends Animal {
+                    public Perro(String nombre) { super(nombre); }
+                }
+                """);
+        String asm = compileSourceToRiscv("""
+                import Animal.z
+                import Perro.z
+                VARIABILES> esto perro : novus Perro("Rex") : Animal;
+                MAIOR> >> perro.presentarse(); FINIS;
+                """, temporaryDirectory);
+        assertTrue(asm.contains("LF_Animal_Animal_a1:"), asm);
+        assertTrue(asm.contains("j LF_Animal_Animal_a1"), asm);
+        RiscvRunner.Result result = new RiscvRunner().run(asm, "");
+        assertTrue(result.ok(), result.message());
+        assertEquals("Rex\n", result.stdout());
+    }
+
+    @Test
     void calculadoraConImportsEjecutaYTermina() throws Exception {
         String asm = compileToRiscv(gradingDirectory.resolve("01_calculadora/Calculadora.pig"));
         // Nombre y opción 0 (salir) bastan para recorrer el menú completo.
@@ -135,6 +174,30 @@ class RiscvExecutionTest {
         // La salida se publica mientras corre, no solo al terminar.
         assertTrue(streamed.toString().contains("7"), streamed.toString());
         assertEquals("NORMAL_TERMINATION", result.reason());
+    }
+
+    @Test
+    void ejecucionInteractivaEsperaTextoAntesDeContinuar() throws Exception {
+        String asm = compileSourceToRiscv("""
+                VARIABILES> esto nombre : textum "";
+                MAIOR>
+                >> "Nombre:";
+                nombre <<
+                >> "Hola " >> nombre;
+                FINIS;
+                """, temporaryDirectory);
+        InteractiveInput input = new InteractiveInput();
+        StringBuffer streamed = new StringBuffer();
+        CompletableFuture<RiscvRunner.Result> execution = CompletableFuture.supplyAsync(
+                () -> new RiscvRunner().runInteractive(asm, input, streamed::append, () -> false));
+
+        assertThrows(TimeoutException.class, () -> execution.get(250, TimeUnit.MILLISECONDS),
+                "El ejecutable no debe avanzar sin recibir la línea solicitada");
+        input.submit("Ada");
+        RiscvRunner.Result result = execution.get(10, TimeUnit.SECONDS);
+        assertTrue(result.ok(), result.message());
+        assertTrue(result.stdout().contains("Hola Ada"), result.stdout());
+        assertTrue(streamed.toString().contains("Hola Ada"), streamed.toString());
     }
 
     @Test

@@ -50,6 +50,7 @@ public class FileTreePanel extends JPanel {
     private File root;
     private Consumer<File> onFileSelected;
     private Consumer<File> onDirectorySelected;
+    private Consumer<File> onAssemblyRun;
     private Runnable onDirectoryChanged;
     private Consumer<List<File>> onFilesIgnored;
 
@@ -184,6 +185,11 @@ public class FileTreePanel extends JPanel {
 
     public void setOnDirectorySelected(Consumer<File> consumer) {
         this.onDirectorySelected = consumer;
+    }
+
+    /** Acción del menú contextual para ejecutar un archivo RISC-V .s. */
+    public void setOnAssemblyRun(Consumer<File> consumer) {
+        this.onAssemblyRun = consumer;
     }
 
     public void setOnDirectoryChanged(Runnable consumer) {
@@ -518,12 +524,31 @@ public class FileTreePanel extends JPanel {
         if (target.equals(root) || !target.getAbsolutePath().startsWith(root.getAbsolutePath())) {
             return;
         }
+        JPopupMenu menu = contextMenuFor(target);
+        menu.show(tree, e.getX(), e.getY());
+    }
+
+    /** Construye el menú por separado para poder verificar sus opciones. */
+    JPopupMenu contextMenuFor(File target) {
         JPopupMenu menu = new JPopupMenu();
+        if (isAssemblyFile(target)) {
+            JMenuItem run = new JMenuItem("Ejecutar");
+            run.addActionListener(ev -> {
+                if (onAssemblyRun != null) onAssemblyRun.accept(target);
+            });
+            menu.add(run);
+            menu.addSeparator();
+        }
         JMenuItem delete = new JMenuItem("Eliminar");
         final File fileToDelete = target;
         delete.addActionListener(ev -> deleteFile(fileToDelete));
         menu.add(delete);
-        menu.show(tree, e.getX(), e.getY());
+        return menu;
+    }
+
+    static boolean isAssemblyFile(File file) {
+        return file != null && file.isFile()
+                && file.getName().toLowerCase(Locale.ROOT).endsWith(".s");
     }
 
     private void deleteFile(File target) {

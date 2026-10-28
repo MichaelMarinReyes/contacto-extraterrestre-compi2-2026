@@ -136,6 +136,7 @@ public class MainWindow extends JFrame {
 
     private void wireFileTree() {
         fileTreePanelInstance.setOnFileSelected(this::openInEditor);
+        fileTreePanelInstance.setOnAssemblyRun(compilation::runAssemblyFile);
         fileTreePanelInstance.setOnDirectoryChanged(() -> {
             File root = fileTreePanelInstance.getRoot();
             if (topToolbar != null) topToolbar.setProjectName(root == null ? "" : root.getName());

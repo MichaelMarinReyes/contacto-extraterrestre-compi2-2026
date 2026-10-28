@@ -46,25 +46,29 @@ final class RiscvRuntime {
             access.store(result, "ft2");
         }
         for (int i = 0; i < content.length(); i++) {
-            access.heapAppendImmediate(characterCode(content, i));
+            char value = content.charAt(i);
+            if (value == '\\' && i + 1 < content.length()) {
+                Integer escaped = escapeCode(content.charAt(i + 1));
+                if (escaped != null) {
+                    access.heapAppendImmediate(escaped);
+                    i++; // la letra del escape forma parte de la misma unidad
+                    continue;
+                }
+            }
+            access.heapAppendImmediate(value);
         }
         access.heapAppendImmediate(0);
     }
 
-    private static int characterCode(String content, int index) {
-        char value = content.charAt(index);
-        if (value == '\\' && index + 1 < content.length()) {
-            char next = content.charAt(index + 1);
-            return switch (next) {
-                case 'n' -> '\n';
-                case 't' -> '\t';
-                case 'r' -> '\r';
-                case '\\' -> '\\';
-                case '"' -> '"';
-                default -> '\\';
-            };
-        }
-        return value;
+    private static Integer escapeCode(char value) {
+        return switch (value) {
+            case 'n' -> (int) '\n';
+            case 't' -> (int) '\t';
+            case 'r' -> (int) '\r';
+            case '\\' -> (int) '\\';
+            case '"' -> (int) '"';
+            default -> null;
+        };
     }
 
     private void charToText(String argument, String result) {

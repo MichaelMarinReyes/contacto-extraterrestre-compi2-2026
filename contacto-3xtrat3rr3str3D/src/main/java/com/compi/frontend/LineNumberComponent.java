@@ -5,12 +5,16 @@ import java.awt.Dimension;
 import java.awt.FontMetrics;
 import java.awt.Graphics;
 import java.awt.Graphics2D;
+import java.awt.Point;
 import java.awt.Rectangle;
 import java.awt.RenderingHints;
+import java.awt.geom.Rectangle2D;
 import javax.swing.JComponent;
 import javax.swing.event.DocumentEvent;
 import javax.swing.event.DocumentListener;
 import javax.swing.text.JTextComponent;
+import javax.swing.text.BadLocationException;
+import javax.swing.text.Element;
 
 public class LineNumberComponent extends JComponent {
 
@@ -85,27 +89,30 @@ public class LineNumberComponent extends JComponent {
         g2.setFont(getFont());
         g2.setColor(getForeground());
 
-        FontMetrics fm = g2.getFontMetrics();
-        int lineHeight = fm.getHeight();
-        if (lineHeight <= 0) {
-            g2.dispose();
-            return;
-        }
-
-        int total = lineCount();
         Rectangle clip = g2.getClipBounds();
-        int firstLine = 1;
-        int lastLine = total;
-        if (clip != null) {
-            firstLine = Math.max(1, 1 + clip.y / lineHeight);
-            lastLine = Math.min(total, 1 + (clip.y + clip.height) / lineHeight);
+        Element root = textArea.getDocument().getDefaultRootElement();
+        int first = 0;
+        int last = root.getElementCount() - 1;
+        if (clip != null && textArea.getWidth() > 0 && textArea.getHeight() > 0) {
+            first = root.getElementIndex(textArea.viewToModel2D(new Point(0, Math.max(0, clip.y))));
+            last = root.getElementIndex(textArea.viewToModel2D(
+                    new Point(0, Math.min(textArea.getHeight(), clip.y + clip.height))));
         }
 
-        for (int i = firstLine; i <= lastLine; i++) {
-            String number = String.valueOf(i);
-            int x = getWidth() - MARGIN - fm.stringWidth(number);
-            int y = i * lineHeight;
-            g2.drawString(number, Math.max(2, x), y + fm.getAscent());
+        FontMetrics fm = g2.getFontMetrics();
+        for (int index = Math.max(0, first); index <= Math.min(last, root.getElementCount() - 1); index++) {
+            try {
+                Rectangle2D row = textArea.modelToView2D(root.getElement(index).getStartOffset());
+                if (row == null) continue;
+                String number = String.valueOf(index + 1);
+                int x = getWidth() - MARGIN - fm.stringWidth(number);
+                float baseline = (float) (row.getY()
+                        + Math.max(0, (row.getHeight() - fm.getHeight()) / 2.0)
+                        + fm.getAscent());
+                g2.drawString(number, Math.max(2, x), baseline);
+            } catch (BadLocationException ignored) {
+                // El documento pudo cambiar entre el cálculo del rango y el pintado.
+            }
         }
         g2.dispose();
     }

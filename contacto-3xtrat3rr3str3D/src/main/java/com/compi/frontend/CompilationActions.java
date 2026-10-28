@@ -243,6 +243,39 @@ final class CompilationActions {
         runRiscv();
     }
 
+    /** Carga y ejecuta directamente un ensamblador seleccionado en el árbol. */
+    void runAssemblyFile(File file) {
+        ConsoleDock console = window.getConsoleDock();
+        console.select(ConsoleDock.View.RUN);
+        if (riscvWorker != null && !riscvWorker.isDone()) {
+            console.appendRunOutput("\nYa hay un programa en ejecución. Deténlo antes de ejecutar otro archivo.\n");
+            window.navText("Ejecución en curso");
+            return;
+        }
+        if (file == null || !file.isFile() || !FileTreePanel.isAssemblyFile(file)) {
+            console.setRunOutput("El archivo seleccionado no es un ensamblador .s válido.\n");
+            window.navText("Ejecutar: archivo no válido");
+            return;
+        }
+        try {
+            String assembly = Files.readString(file.toPath());
+            if (assembly.isBlank()) {
+                console.setRunOutput("El archivo ensamblador está vacío:\n" + file.getAbsolutePath() + "\n");
+                window.navText("Ejecutar: ensamblador vacío");
+                return;
+            }
+            lastRiscvCode = assembly;
+            lastFocusFile = file;
+            console.setAssembly(assembly);
+            console.setStatus("Ensamblador cargado: " + file.getName());
+            window.navText("Ejecutando " + file.getName());
+            runRiscv();
+        } catch (IOException e) {
+            console.setRunOutput("No se pudo leer el ensamblador:\n" + e.getMessage() + "\n");
+            window.navText("Error al leer " + file.getName());
+        }
+    }
+
     /**
      * Ejecuta el ensamblador RISC-V generado en el simulador interno (RARS
      * embebido) y publica el resultado en la vista Simulador. La entrada es
@@ -263,8 +296,7 @@ final class CompilationActions {
         runInput = new InteractiveInput();
         console.setOnRunInputSubmit(this::submitRunInput);
         console.setRunInteractive(true);
-        console.setRunOutput("Ejecutando el ensamblador en el simulador interno (RARS)…\n"
-                + "Escribe la entrada y pulsa Enter cuando el programa la pida.\n\n");
+        console.setRunOutput("Ejecutando el ensamblador en el simulador interno (RARS)…\n\n");
         submitRunInput();
         window.navText("Ejecutando ensamblador…");
         window.setRunningState(true);
