@@ -181,8 +181,11 @@ final class CompilationActions {
     }
 
     private String writeCFile(FileResult principal) {
-        File container = window.currentContainer();
-        if (container == null) container = principal.file().getAbsoluteFile().getParentFile();
+        if (principal == null || principal.file() == null) return "";
+        File container = principal.file().getAbsoluteFile().getParentFile();
+        if (container == null && window.currentContainer() != null) {
+            container = window.currentContainer();
+        }
         if (!principal.ok() || principal.cCode() == null || principal.cCode().isBlank()) return "";
         String name = principal.file().getName();
         int point = name.lastIndexOf('.');
@@ -201,8 +204,11 @@ final class CompilationActions {
     }
 
     private String writeAssemblyFile(FileResult principal) {
-        File container = window.currentContainer();
-        if (container == null) container = principal.file().getAbsoluteFile().getParentFile();
+        if (principal == null || principal.file() == null) return "";
+        File container = principal.file().getAbsoluteFile().getParentFile();
+        if (container == null && window.currentContainer() != null) {
+            container = window.currentContainer();
+        }
         if (!principal.ok() || principal.riscvCode() == null || principal.riscvCode().isBlank()) return "";
         String name = principal.file().getName();
         int point = name.lastIndexOf('.');

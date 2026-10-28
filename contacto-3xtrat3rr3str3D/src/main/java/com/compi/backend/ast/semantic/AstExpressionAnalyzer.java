@@ -171,7 +171,12 @@ final class AstExpressionAnalyzer {
             if (method != null) a.checkAccess(method, n.callee());
         } else if (n.callee() instanceof IdentifierNodeAST id) {
             if (List.of("print", "println").contains(id.name()) && a.language.equals("zet")) return Type.VOID;
-            if (a.currentClass != null) method = a.currentClass.resolveMethod(id.name(), args.size());
+            if ("super".equals(id.name()) && a.currentClass != null && a.currentClass.getParentClass() != null) {
+                Symbol parent = a.currentClass.getParentClass();
+                method = parent.getCallable(parent.getName(), args.size());
+            } else if (a.currentClass != null) {
+                method = a.currentClass.resolveMethod(id.name(), args.size());
+            }
             if (method == null) method = a.table.getFunction(id.name());
         }
         if (method == null) {
