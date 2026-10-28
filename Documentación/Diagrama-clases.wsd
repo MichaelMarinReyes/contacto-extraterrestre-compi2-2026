@@ -1,5 +1,4 @@
-@startuml Class Diagram - Contacto 3xtrat3rr3str3D
-' Implemented architecture: AST, semantics, C3D, RISC-V and embedded execution.
+@startuml Diagrama de clases
 skinparam dpi 120
 skinparam shadowing false
 skinparam classAttributeIconSize 10
